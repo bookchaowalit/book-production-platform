@@ -4,6 +4,7 @@ INVALID_GLB = "invalid_glb"
 UNSUPPORTED_GLB_FEATURE = "unsupported_glb_feature"
 UNSAFE_GLB_RESOURCE = "unsafe_glb_resource"
 RESOURCE_CAP_EXCEEDED = "resource_cap_exceeded"
+INVALID_RENDER = "invalid_render"
 
 
 class SceneInputError(ValueError):
