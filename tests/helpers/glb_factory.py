@@ -137,4 +137,9 @@ def with_texture(
         {"buffer": 0, "byteOffset": len(TRIANGLE_BINARY), "byteLength": len(image)}
     )
     document["images"] = [{"bufferView": 2, "mimeType": mime_type}]
+    document["textures"] = [{"source": 0}]
+    document["materials"] = [
+        {"pbrMetallicRoughness": {"baseColorTexture": {"index": 0}}}
+    ]
+    document["meshes"][0]["primitives"][0]["material"] = 0
     return document, binary
