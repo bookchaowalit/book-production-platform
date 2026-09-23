@@ -1,5 +1,10 @@
 """Stable, safe error types shared by the 3D scene pipeline."""
 
+INVALID_GLB = "invalid_glb"
+UNSUPPORTED_GLB_FEATURE = "unsupported_glb_feature"
+UNSAFE_GLB_RESOURCE = "unsafe_glb_resource"
+RESOURCE_CAP_EXCEEDED = "resource_cap_exceeded"
+
 
 class SceneInputError(ValueError):
     """A rejected SceneIR or asset with a machine-readable failure code."""
