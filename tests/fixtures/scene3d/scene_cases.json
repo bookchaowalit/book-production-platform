@@ -1,0 +1,25 @@
+{
+  "schema_version": "scene3d.acceptance-cases.v1",
+  "cases": [
+    {"id": "golden-box", "kind": "accept", "shape": "box", "color": [0.24, 0.55, 0.82], "render_profile": "square-1024.v1"},
+    {"id": "golden-canister", "kind": "accept", "shape": "canister", "color": [0.87, 0.42, 0.18], "render_profile": "landscape-1920x1080.v1"},
+    {"id": "golden-bottle", "kind": "accept", "shape": "bottle", "color": [0.20, 0.58, 0.36], "render_profile": "square-1024.v1"},
+    {"id": "golden-sphere", "kind": "accept", "shape": "sphere", "color": [0.86, 0.66, 0.19], "render_profile": "square-1024.v1"},
+    {"id": "golden-hourglass", "kind": "accept", "shape": "hourglass", "color": [0.48, 0.33, 0.75], "render_profile": "landscape-1920x1080.v1"},
+    {"id": "replay-box", "kind": "replay", "reference": "golden-box"},
+    {"id": "replay-canister", "kind": "replay", "reference": "golden-canister"},
+    {"id": "replay-bottle", "kind": "replay", "reference": "golden-bottle"},
+    {"id": "replay-sphere", "kind": "replay", "reference": "golden-sphere"},
+    {"id": "replay-hourglass", "kind": "replay", "reference": "golden-hourglass"},
+    {"id": "reject-extra-field", "kind": "reject", "mutation": "extra_field", "expected_error": "invalid_scene_ir"},
+    {"id": "reject-schema-version", "kind": "reject", "mutation": "schema_version", "expected_error": "invalid_scene_ir"},
+    {"id": "reject-path-traversal", "kind": "reject", "mutation": "path_traversal", "expected_error": "invalid_scene_ir"},
+    {"id": "reject-external-buffer", "kind": "reject", "mutation": "external_buffer", "expected_error": "unsafe_glb_resource"},
+    {"id": "reject-extension", "kind": "reject", "mutation": "extension", "expected_error": "unsupported_glb_feature"},
+    {"id": "reject-animation", "kind": "reject", "mutation": "animation", "expected_error": "unsupported_glb_feature"},
+    {"id": "reject-non-triangle", "kind": "reject", "mutation": "non_triangle", "expected_error": "unsupported_glb_feature"},
+    {"id": "reject-buffer-bounds", "kind": "reject", "mutation": "buffer_bounds", "expected_error": "invalid_glb"},
+    {"id": "qa-tamper-box", "kind": "tamper_replay", "reference": "golden-box", "expected_error": "replay_integrity_error"},
+    {"id": "qa-tamper-bottle", "kind": "tamper_replay", "reference": "golden-bottle", "expected_error": "replay_integrity_error"}
+  ]
+}
