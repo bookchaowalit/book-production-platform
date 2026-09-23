@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "scene-ir.v1.schema.json",
+  "title": "SceneIR v1",
+  "description": "Deterministic local product-hero scene request.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "asset",
+    "recipe",
+    "composition",
+    "lighting",
+    "background",
+    "material_preset",
+    "render_profile"
+  ],
+  "properties": {
+    "schema_version": { "const": "scene-ir.v1" },
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 5,
+          "pattern": "^(?!/)(?![A-Za-z]:)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*://)[^\\\\:]+\\.glb$"
+        }
+      }
+    },
+    "recipe": { "const": "product-hero.studio.v1" },
+    "composition": { "const": "three-quarter.v1" },
+    "lighting": { "const": "softbox-three-point.v1" },
+    "background": { "const": "studio-neutral.v1" },
+    "material_preset": { "const": "preserve-source.v1" },
+    "render_profile": {
+      "enum": ["square-1024.v1", "landscape-1920x1080.v1"]
+    }
+  }
+}
