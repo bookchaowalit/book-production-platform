@@ -123,7 +123,7 @@ def _read_chunks(data: bytes) -> tuple[dict[str, Any], bytes]:
     json_data = chunks[0][1]
     try:
         document_value = json.loads(json_data.decode("utf-8").rstrip("\x00 \t\r\n"))
-    except (UnicodeDecodeError, json.JSONDecodeError):
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError):
         _reject(INVALID_GLB, "GLB JSON chunk is invalid")
     document = _mapping(document_value, "GLB JSON")
     binary_chunks = [payload for kind, payload in chunks if kind == BIN_CHUNK]
@@ -138,7 +138,9 @@ def _reject_external_or_extension_features(document: dict[str, Any]) -> None:
         if values:
             _reject(UNSUPPORTED_GLB_FEATURE, "GLB extensions are not supported")
 
-    def visit(value: Any) -> None:
+    pending = [document]
+    while pending:
+        value = pending.pop()
         if isinstance(value, dict):
             if "uri" in value:
                 _reject(UNSAFE_GLB_RESOURCE, "external GLB resources are not supported")
@@ -148,13 +150,9 @@ def _reject_external_or_extension_features(document: dict[str, Any]) -> None:
                     _reject(INVALID_GLB, "GLB extensions field is invalid")
                 if extension_value:
                     _reject(UNSUPPORTED_GLB_FEATURE, "GLB extensions are not supported")
-            for child in value.values():
-                visit(child)
+            pending.extend(value.values())
         elif isinstance(value, list):
-            for child in value:
-                visit(child)
-
-    visit(document)
+            pending.extend(value)
     for field in ("animations", "skins"):
         values = document.get(field, [])
         if not isinstance(values, list):

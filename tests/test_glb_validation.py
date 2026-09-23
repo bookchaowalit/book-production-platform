@@ -1,4 +1,5 @@
 from pathlib import Path
+import struct
 
 import pytest
 
@@ -160,6 +161,20 @@ def test_inspect_glb_rejects_buffer_view_outside_declared_buffer(tmp_path: Path)
     document = triangle_document()
     document["bufferViews"][0]["byteLength"] = 1000
     asset = write_glb(tmp_path / "bad-view.glb", document)
+
+    with pytest.raises(SceneInputError) as error:
+        glb.inspect_glb(asset)
+
+    assert error.value.code == "invalid_glb"
+
+
+def test_inspect_glb_rejects_excessively_nested_json_with_stable_error(tmp_path: Path) -> None:
+    json_data = b'{"asset":{"version":"2.0"},"nested":' + b"[" * 1100 + b"null" + b"]" * 1100 + b"}"
+    json_data += b" " * (-len(json_data) % 4)
+    chunk = struct.pack("<II", len(json_data), glb.JSON_CHUNK) + json_data
+    total_length = 12 + len(chunk)
+    asset = tmp_path / "deeply-nested.glb"
+    asset.write_bytes(struct.pack("<4sII", b"glTF", 2, total_length) + chunk)
 
     with pytest.raises(SceneInputError) as error:
         glb.inspect_glb(asset)
