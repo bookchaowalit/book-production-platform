@@ -48,6 +48,8 @@ def test_inspect_glb_rejects_malformed_container(
         (lambda doc: doc.update(skins=[{}]), "unsupported_glb_feature"),
         (lambda doc: doc["meshes"][0]["primitives"][0].update(mode=1), "unsupported_glb_feature"),
         (lambda doc: doc["buffers"][0].update(byteLength=1000), "invalid_glb"),
+        (lambda doc: doc["accessors"][0].update(type=[]), "invalid_glb"),
+        (lambda doc: doc["accessors"][0].update(type={}), "invalid_glb"),
     ],
 )
 def test_inspect_glb_rejects_unsafe_or_unsupported_features(
@@ -174,6 +176,20 @@ def test_inspect_glb_rejects_excessively_nested_json_with_stable_error(tmp_path:
     chunk = struct.pack("<II", len(json_data), glb.JSON_CHUNK) + json_data
     total_length = 12 + len(chunk)
     asset = tmp_path / "deeply-nested.glb"
+    asset.write_bytes(struct.pack("<4sII", b"glTF", 2, total_length) + chunk)
+
+    with pytest.raises(SceneInputError) as error:
+        glb.inspect_glb(asset)
+
+    assert error.value.code == "invalid_glb"
+
+
+def test_inspect_glb_rejects_integer_beyond_json_parser_limit(tmp_path: Path) -> None:
+    json_data = b'{"oversized":' + b"9" * 5000 + b"}"
+    json_data += b" " * (-len(json_data) % 4)
+    chunk = struct.pack("<II", len(json_data), glb.JSON_CHUNK) + json_data
+    total_length = 12 + len(chunk)
+    asset = tmp_path / "oversized-integer.glb"
     asset.write_bytes(struct.pack("<4sII", b"glTF", 2, total_length) + chunk)
 
     with pytest.raises(SceneInputError) as error:

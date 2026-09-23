@@ -7,6 +7,7 @@ import hashlib
 import json
 import math
 import os
+import tempfile
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -28,10 +29,13 @@ if os.name == "nt":
 else:
     import fcntl
 
-COMPOSER_VERSION = "scene-composer.v1a.1"
+COMPOSER_VERSION = "scene-composer.v1a.2"
 MANIFEST_SCHEMA = "scene3d.qa.v1"
+RECEIPT_SCHEMA = "scene3d.receipt.v1"
+RECEIPT_FIELDS = frozenset({"schema_version", "fingerprint", "hashes"})
 ARTIFACT_NAMES = frozenset({"scene.blend", "render.png", "qa-manifest.json"})
 MAX_MANIFEST_BYTES = 1024 * 1024
+MAX_RECEIPT_BYTES = 4096
 MANIFEST_FIELDS = frozenset(
     {
         "schema_version",
@@ -92,6 +96,42 @@ def sha256_file(path: Path) -> str:
         for block in iter(lambda: source.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _publish_receipt(output_root: Path, fingerprint: str, hashes: dict[str, str]) -> None:
+    receipt_dir = output_root / ".receipts"
+    if receipt_dir.is_symlink():
+        raise SceneInputError("unsafe_output_path", "job receipt path is unsafe")
+    try:
+        receipt_dir.mkdir(exist_ok=True)
+        if not receipt_dir.is_dir():
+            raise SceneInputError("unsafe_output_path", "job receipt path is not a directory")
+        receipt_path = receipt_dir / f"{fingerprint}.json"
+        if receipt_path.is_symlink():
+            raise SceneInputError("unsafe_output_path", "job receipt path is unsafe")
+        receipt = {
+            "schema_version": RECEIPT_SCHEMA,
+            "fingerprint": fingerprint,
+            "hashes": hashes,
+        }
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=f".{fingerprint}.",
+            suffix=".tmp",
+            dir=receipt_dir,
+        )
+        temporary_path = Path(temporary_name)
+        try:
+            with os.fdopen(descriptor, "wb") as output:
+                output.write(canonical_json_bytes(receipt) + b"\n")
+                output.flush()
+                os.fsync(output.fileno())
+            os.replace(temporary_path, receipt_path)
+        finally:
+            temporary_path.unlink(missing_ok=True)
+    except SceneInputError:
+        raise
+    except OSError as error:
+        raise SceneInputError("publication_failed", "job integrity receipt cannot be published") from error
 
 
 def scene_fingerprint(
@@ -251,6 +291,7 @@ def create_manifest(
 def verify_replay(
     artifact_dir: Path,
     *,
+    receipt_path: Path,
     fingerprint: str,
     scene_ir_sha256: str,
     source_asset_sha256: str,
@@ -267,10 +308,27 @@ def verify_replay(
             fail()
         if {item.name for item in artifact_dir.iterdir()} != ARTIFACT_NAMES:
             fail()
+        if receipt_path.parent.is_symlink() or receipt_path.is_symlink() or not receipt_path.is_file():
+            fail()
+        if receipt_path.stat().st_size > MAX_RECEIPT_BYTES:
+            fail()
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        if (
+            not isinstance(receipt, dict)
+            or set(receipt) != RECEIPT_FIELDS
+            or receipt.get("schema_version") != RECEIPT_SCHEMA
+            or receipt.get("fingerprint") != fingerprint
+            or not isinstance(receipt.get("hashes"), dict)
+            or set(receipt["hashes"]) != ARTIFACT_NAMES
+        ):
+            fail()
+        receipt_hashes = receipt["hashes"]
         manifest_path = artifact_dir / "qa-manifest.json"
         if any((artifact_dir / name).is_symlink() for name in ARTIFACT_NAMES):
             fail()
         if manifest_path.stat().st_size > MAX_MANIFEST_BYTES:
+            fail()
+        if sha256_file(manifest_path) != receipt_hashes["qa-manifest.json"]:
             fail()
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         if not isinstance(manifest, dict) or set(manifest) != MANIFEST_FIELDS:
@@ -335,11 +393,12 @@ def verify_replay(
             }
             if not isinstance(details, dict) or set(details) != expected_fields:
                 fail()
-            if details.get("sha256") != sha256_file(path):
+            actual_hash = sha256_file(path)
+            if details.get("sha256") != actual_hash or receipt_hashes[name] != actual_hash:
                 fail()
             if details.get("bytes") != path.stat().st_size:
                 fail()
-            artifact_hashes[name] = details["sha256"]
+            artifact_hashes[name] = actual_hash
         if manifest["bytes_written"] != sum(
             manifest["outputs"][name]["bytes"] for name in ("scene.blend", "render.png")
         ):
@@ -348,11 +407,11 @@ def verify_replay(
         if render_details.get("width") != width or render_details.get("height") != height:
             fail()
         verify_png(artifact_dir / "render.png", (width, height))
-        artifact_hashes["qa-manifest.json"] = sha256_file(manifest_path)
+        artifact_hashes["qa-manifest.json"] = receipt_hashes["qa-manifest.json"]
         return artifact_hashes
     except SceneInputError as error:
         if error.code == "replay_integrity_error":
             raise
         raise SceneInputError("replay_integrity_error", "existing job artifacts failed integrity checks") from error
-    except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError) as error:
+    except (OSError, ValueError, TypeError, KeyError, RecursionError) as error:
         raise SceneInputError("replay_integrity_error", "existing job artifacts failed integrity checks") from error

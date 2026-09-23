@@ -51,5 +51,5 @@ def parse_scene_ir(value: object) -> SceneIR:
     """Validate an untrusted JSON-like value against the strict SceneIR v1 contract."""
     try:
         return SceneIR.model_validate(value)
-    except (ValidationError, TypeError, ValueError) as error:
+    except (ValidationError, TypeError, ValueError, RecursionError) as error:
         raise SceneInputError("invalid_scene_ir") from error

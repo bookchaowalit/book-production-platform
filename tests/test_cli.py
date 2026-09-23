@@ -6,6 +6,7 @@ import pytest
 from book_production_platform import cli
 from book_production_platform.scene3d.errors import SceneInputError
 from book_production_platform.scene3d.jobs import JobResult
+from tests.test_scene_ir import valid_scene
 
 
 def test_cli_help_describes_scene_commands(capsys: pytest.CaptureFixture[str]) -> None:
@@ -42,6 +43,45 @@ def test_cli_invalid_scene_returns_stable_json_error(
         "error": "invalid_scene_ir",
         "status": "rejected",
     }
+
+
+@pytest.mark.parametrize(
+    "suffix",
+    [
+        b',"nested":' + b"[" * 10000 + b"null" + b"]" * 10000 + b"}",
+        b',"oversized":' + b"9" * 5000 + b"}",
+    ],
+    ids=["deeply-nested-json", "oversized-integer"],
+)
+def test_cli_malformed_scene_json_returns_stable_error(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    suffix: bytes,
+) -> None:
+    scene = tmp_path / "scene.json"
+    scene.write_bytes(json.dumps(valid_scene()).encode("utf-8")[:-1] + suffix)
+
+    exit_code = cli.main(
+        [
+            "scene",
+            "compose",
+            "--scene",
+            str(scene),
+            "--input-root",
+            str(tmp_path),
+            "--output-root",
+            str(tmp_path / "output"),
+            "--blender",
+            str(tmp_path / "blender.exe"),
+        ]
+    )
+
+    assert exit_code == 2
+    assert json.loads(capsys.readouterr().out) == {
+        "error": "invalid_scene_ir",
+        "status": "rejected",
+    }
+    assert not (tmp_path / "output").exists()
 
 
 def test_cli_accepted_job_returns_json_result(

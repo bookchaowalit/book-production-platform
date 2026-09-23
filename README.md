@@ -62,6 +62,10 @@ book-production scene compose `
 - `qa-manifest.json` — input hash, Blender build, preset, QA, output hash,
   เวลา, ขนาดไฟล์, `model_calls: 0` และ monetary cost ที่ระบุเป็น `unknown`
 
+ระบบเก็บ `output-root/.receipts/<fingerprint>.json` แยกจากโฟลเดอร์ผลลัพธ์
+เพื่อ pin hash ของ artifact ทั้งสาม รวมถึง manifest เอง; replay จะปฏิเสธ
+manifest หรือ artifact ที่ถูกแก้ไข และคืน hash เดิมจาก receipt ที่ตรวจผ่าน
+
 การเรียกซ้ำด้วย SceneIR, asset และ Blender build เดิมจะตรวจ hash แล้วตอบ
 `replayed` โดยไม่สร้างไฟล์ใหม่ หาก artifact เดิมถูกแก้ไขจะปฏิเสธด้วย
 `replay_integrity_error` และจะไม่เขียนทับงานเดิม

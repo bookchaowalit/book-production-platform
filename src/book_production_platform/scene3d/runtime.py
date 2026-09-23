@@ -16,6 +16,7 @@ from typing import Any
 from book_production_platform.scene3d.errors import SceneInputError
 from book_production_platform.scene3d.glb import inspect_glb
 from book_production_platform.scene3d.jobs import (
+    _publish_receipt,
     ARTIFACT_NAMES,
     JobResult,
     create_manifest,
@@ -159,7 +160,7 @@ def _read_scene_ir(scene_path: Path) -> Any:
         return json.loads(scene_path.read_text(encoding="utf-8"))
     except SceneInputError:
         raise
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+    except (OSError, UnicodeDecodeError, ValueError, RecursionError) as error:
         raise SceneInputError("invalid_scene_ir", "scene description is invalid") from error
 
 
@@ -215,6 +216,7 @@ def compose_scene(
         if final_dir.exists() or final_dir.is_symlink():
             hashes = verify_replay(
                 final_dir,
+                receipt_path=root / ".receipts" / f"{fingerprint}.json",
                 fingerprint=fingerprint,
                 scene_ir_sha256=scene_ir_sha256,
                 source_asset_sha256=source_asset_sha256,
@@ -311,6 +313,7 @@ def compose_scene(
             }
             if final_dir.exists() or final_dir.is_symlink():
                 raise SceneInputError("publication_conflict", "content-addressed output already exists")
+            _publish_receipt(root, fingerprint, hashes)
             try:
                 os.rename(staging, final_dir)
             except OSError as error:

@@ -109,6 +109,8 @@ def test_exact_replay_verifies_hashes_without_running_blender(
     assert second.replay is True
     assert second.fingerprint == first.fingerprint
     assert second.artifact_hashes == first_hashes
+    receipt = output_root / ".receipts" / f"{first.fingerprint}.json"
+    assert json.loads(receipt.read_text(encoding="utf-8"))["hashes"] == first_hashes
 
 
 def test_changed_source_bytes_create_a_new_fingerprint(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -145,6 +147,62 @@ def test_tampered_replay_is_rejected_without_overwriting_existing_output(
     assert len(calls) == 2
 
 
+def test_tampered_replay_manifest_is_rejected_without_rerendering(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    scene_path, input_root, output_root, blender_bin = create_inputs(tmp_path)
+    calls = install_fake_workers(monkeypatch)
+    first = runtime.compose_scene(scene_path, input_root, output_root, blender_bin)
+    manifest_path = first.artifact_dir / "qa-manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["timing_seconds"]["wall"] = 999
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(SceneInputError) as error:
+        runtime.compose_scene(scene_path, input_root, output_root, blender_bin)
+
+    assert error.value.code == "replay_integrity_error"
+    assert len(calls) == 2
+    assert json.loads(manifest_path.read_text(encoding="utf-8"))["timing_seconds"]["wall"] == 999
+
+
+def test_missing_replay_receipt_is_rejected_without_rerendering(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    scene_path, input_root, output_root, blender_bin = create_inputs(tmp_path)
+    calls = install_fake_workers(monkeypatch)
+    first = runtime.compose_scene(scene_path, input_root, output_root, blender_bin)
+    (output_root / ".receipts" / f"{first.fingerprint}.json").unlink()
+
+    with pytest.raises(SceneInputError) as error:
+        runtime.compose_scene(scene_path, input_root, output_root, blender_bin)
+
+    assert error.value.code == "replay_integrity_error"
+    assert len(calls) == 2
+
+
+def test_deeply_nested_replay_manifest_has_stable_error_without_rerendering(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    scene_path, input_root, output_root, blender_bin = create_inputs(tmp_path)
+    calls = install_fake_workers(monkeypatch)
+    first = runtime.compose_scene(scene_path, input_root, output_root, blender_bin)
+    manifest_path = first.artifact_dir / "qa-manifest.json"
+    original = manifest_path.read_text(encoding="utf-8").rstrip()
+    nested = ",\"nested\":" + "[" * 10000 + "null" + "]" * 10000
+    manifest_path.write_text(original[:-1] + nested + "}\n", encoding="utf-8")
+    receipt_path = output_root / ".receipts" / f"{first.fingerprint}.json"
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["hashes"]["qa-manifest.json"] = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+    receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+
+    with pytest.raises(SceneInputError) as error:
+        runtime.compose_scene(scene_path, input_root, output_root, blender_bin)
+
+    assert error.value.code == "replay_integrity_error"
+    assert len(calls) == 2
+
+
 def test_timeout_removes_staging_and_never_publishes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     scene_path, input_root, output_root, blender_bin = create_inputs(tmp_path)
     monkeypatch.setattr(runtime, "_blender_identity", lambda *_: BLENDER_IDENTITY)
@@ -159,6 +217,28 @@ def test_timeout_removes_staging_and_never_publishes(tmp_path: Path, monkeypatch
     assert error.value.code == "deadline_exceeded"
     assert not any("staging" in child.name for child in output_root.iterdir())
     assert not any(child.is_dir() and child.name != ".locks" for child in output_root.iterdir())
+
+
+@pytest.mark.parametrize("accessor_type", [[], {}], ids=["array-type", "object-type"])
+def test_malformed_glb_accessor_is_rejected_before_blender(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    accessor_type: object,
+) -> None:
+    document = triangle_document()
+    document["accessors"][0]["type"] = accessor_type
+    scene_path, input_root, output_root, blender_bin = create_inputs(tmp_path, document=document)
+
+    def unexpected_runtime(*_: Any, **__: Any) -> Any:
+        pytest.fail("invalid GLB must be rejected before Blender starts")
+
+    monkeypatch.setattr(runtime, "_blender_identity", unexpected_runtime)
+    monkeypatch.setattr(runtime, "_run_worker", unexpected_runtime)
+    with pytest.raises(SceneInputError) as error:
+        runtime.compose_scene(scene_path, input_root, output_root, blender_bin)
+
+    assert error.value.code == "invalid_glb"
+    assert not output_root.exists()
 
 
 def test_symlinked_asset_is_rejected_before_worker_invocation(

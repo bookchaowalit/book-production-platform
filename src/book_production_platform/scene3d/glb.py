@@ -123,7 +123,7 @@ def _read_chunks(data: bytes) -> tuple[dict[str, Any], bytes]:
     json_data = chunks[0][1]
     try:
         document_value = json.loads(json_data.decode("utf-8").rstrip("\x00 \t\r\n"))
-    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError):
+    except (UnicodeDecodeError, ValueError, RecursionError):
         _reject(INVALID_GLB, "GLB JSON chunk is invalid")
     document = _mapping(document_value, "GLB JSON")
     binary_chunks = [payload for kind, payload in chunks if kind == BIN_CHUNK]
@@ -251,7 +251,7 @@ def _inspect_document(document: dict[str, Any], binary_chunk: bytes) -> GlbSumma
         component_type = _integer(accessor.get("componentType"), "accessor.componentType")
         component_size = _COMPONENT_BYTES.get(component_type)
         accessor_type = accessor.get("type")
-        component_count = _TYPE_COMPONENTS.get(accessor_type)
+        component_count = _TYPE_COMPONENTS.get(accessor_type) if isinstance(accessor_type, str) else None
         count = _integer(accessor.get("count"), "accessor.count")
         relative_offset = _integer(accessor.get("byteOffset", 0), "accessor.byteOffset")
         if component_size is None or component_count is None:
