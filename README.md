@@ -232,6 +232,18 @@ book-production game benchmark `
   --unity "C:\Program Files\Unity\Hub\Editor\6000.6.2f1\Editor\Unity.exe"
 ```
 
+Latest local benchmark (2026-09-24): 5 builds and 5 exact replays passed; all
+9 invalid fixtures and the tampered-artifact replay were rejected, with zero
+unexpected outcomes. Unity `6000.6.2f1` passed EditMode 10/10 and PlayMode 5/5;
+the executable SHA-256 was
+`6ffd6192620a1b6c82d78b24c8881041c2b22dafbee4ee404a6156c3bb7946b2`. Fresh
+build latency was 39.7–56.4 s (median 50.6 s, p95 56.4 s); exact replay was
+155–364 ms (median 252 ms, p95 364 ms). Published Unity projects were 1.12–1.20 MB.
+`model_calls: 0`; monetary cost is unknown. The report is saved locally at
+`.runtime/game-production/benchmark-final.json`. Automated acceptance passed, while
+`manual_scene_review` remains `pending`, so the pilot is not marked fully
+reviewed yet.
+
 ### V1A limits and error codes
 
 GameIR input is limited to 256 KiB, worlds to 64 × 64 cells, walls to 192

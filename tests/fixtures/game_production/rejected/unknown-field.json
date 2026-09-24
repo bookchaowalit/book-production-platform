@@ -1,0 +1,12 @@
+{
+  "schema_version": "game-ir.v1",
+  "scene_id": "unknown-field",
+  "template": "top-down-collect.v1",
+  "palette": "palette-minimal.v1",
+  "world": {"width": 8, "height": 6, "tile_size": 1.0},
+  "player": {"id": "runner", "spawn": [1, 1], "speed": 4.0},
+  "walls": [],
+  "objectives": [{"id": "key", "cell": [4, 1]}],
+  "exit": {"id": "gate", "cell": [6, 1]},
+  "script": "System.IO.File.Delete(\"important\")"
+}

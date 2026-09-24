@@ -1,0 +1,20 @@
+{
+  "schema_version": "game-ir.v1",
+  "scene_id": "larger-valid-room",
+  "template": "top-down-collect.v1",
+  "palette": "palette-minimal.v1",
+  "world": {"width": 24, "height": 16, "tile_size": 1.0},
+  "player": {"id": "runner", "spawn": [1, 1], "speed": 4.0},
+  "walls": [
+    {"id": "west-shelves", "cells": [[8, 3], [8, 4], [8, 5], [8, 6], [8, 7]]},
+    {"id": "east-shelves", "cells": [[14, 8], [14, 9], [14, 10], [14, 11], [14, 12]]},
+    {"id": "north-blocks", "cells": [[18, 3], [19, 3], [20, 3], [21, 3]]}
+  ],
+  "objectives": [
+    {"id": "amber", "cell": [4, 4]},
+    {"id": "blue", "cell": [11, 9]},
+    {"id": "green", "cell": [18, 8]},
+    {"id": "violet", "cell": [20, 12]}
+  ],
+  "exit": {"id": "moon-gate", "cell": [22, 14]}
+}

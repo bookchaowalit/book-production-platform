@@ -1,0 +1,14 @@
+{
+  "schema_version": "game-ir.v1",
+  "scene_id": "multi-wall-route",
+  "template": "top-down-collect.v1",
+  "palette": "palette-minimal.v1",
+  "world": {"width": 12, "height": 8, "tile_size": 1.0},
+  "player": {"id": "runner", "spawn": [1, 1], "speed": 4.0},
+  "walls": [
+    {"id": "west-pillar", "cells": [[3, 1], [3, 2], [3, 3]]},
+    {"id": "east-pillar", "cells": [[7, 4], [7, 5]]}
+  ],
+  "objectives": [{"id": "crystal", "cell": [5, 2]}],
+  "exit": {"id": "gate", "cell": [10, 5]}
+}

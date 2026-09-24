@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from book_production_platform.game_production import cli
+from book_production_platform.game_production import benchmark, cli
 from book_production_platform.game_production.errors import GameJobError
 from book_production_platform.game_production.jobs import GameJobResult
 
@@ -79,6 +79,58 @@ def test_benchmark_requires_all_inputs(capsys) -> None:
 
     assert exit_code == 2
     assert json.loads(capsys.readouterr().out) == {"status": "rejected", "error": "invalid_cli_arguments"}
+
+
+def test_benchmark_command_emits_json_report(tmp_path: Path, monkeypatch, capsys) -> None:
+    expected = {"status": "passed", "model_calls": 0}
+    calls: list[tuple[Path, Path, Path]] = []
+
+    def fake_benchmark(fixtures: Path, output: Path, unity: Path) -> dict[str, object]:
+        calls.append((fixtures, output, unity))
+        return expected
+
+    monkeypatch.setattr(benchmark, "run_benchmark", fake_benchmark)
+    fixtures = tmp_path / "fixtures"
+    output = tmp_path / "report.json"
+
+    exit_code = cli.game_main(
+        ["benchmark", "--fixtures", str(fixtures), "--output", str(output), "--unity", "Unity.exe"]
+    )
+
+    assert exit_code == 0
+    assert json.loads(capsys.readouterr().out) == expected
+    assert calls == [(fixtures, output, Path("Unity.exe"))]
+
+
+def test_benchmark_rejects_directory_outputs_before_running_jobs(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    def unexpected_job(*args, **kwargs):
+        raise AssertionError("invalid output path reached a Unity job")
+
+    monkeypatch.setattr(benchmark, "compose_game_scene", unexpected_job)
+    fixtures = Path(__file__).resolve().parents[1] / "fixtures" / "game_production"
+
+    for output in (Path("."), tmp_path):
+        exit_code = cli.game_main(
+            [
+                "benchmark",
+                "--fixtures",
+                str(fixtures),
+                "--output",
+                str(output),
+                "--unity",
+                "MissingUnity.exe",
+            ]
+        )
+
+        assert exit_code == 2
+        assert json.loads(capsys.readouterr().out) == {
+            "status": "rejected",
+            "error": "unsafe_output_path",
+        }
 
 
 def test_timeout_over_cap_is_rejected_before_file_or_unity_access(capsys) -> None:
