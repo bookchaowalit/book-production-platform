@@ -19,6 +19,13 @@ book-production = "book_production_platform.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+book_production_platform = [
+    "game_production/templates/unity_project/.gitattributes",
+    "game_production/templates/unity_project/.book-production/worker-input.json",
+    "game_production/templates/unity_project/**/*",
+]
+
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]

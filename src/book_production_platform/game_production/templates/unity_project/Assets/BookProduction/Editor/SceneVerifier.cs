@@ -26,7 +26,6 @@ namespace BookProduction.Editor
             get
             {
                 return PlayerCount == 1
-                    && WallColliderCount > 0
                     && ObjectiveCount > 0
                     && ExitCount == 1
                     && UniqueEntityIds

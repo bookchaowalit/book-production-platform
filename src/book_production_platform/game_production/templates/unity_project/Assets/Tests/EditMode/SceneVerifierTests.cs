@@ -1,8 +1,10 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using BookProduction.Editor;
 using NUnit.Framework;
+using UnityEngine;
 
 namespace BookProduction.Tests.EditMode
 {
@@ -18,10 +20,12 @@ namespace BookProduction.Tests.EditMode
         public void GeneratedSceneHasExpectedGameplayHierarchy()
         {
             SceneVerificationReport report = SceneVerifier.VerifyGeneratedScene();
+            string inputPath = Path.Combine(Directory.GetCurrentDirectory(), ".book-production", "worker-input.json");
+            UnityWorkerIR input = JsonUtility.FromJson<UnityWorkerIR>(File.ReadAllText(inputPath));
 
             Assert.That(report.PlayerCount, Is.EqualTo(1));
-            Assert.That(report.WallColliderCount, Is.GreaterThan(0));
-            Assert.That(report.ObjectiveCount, Is.EqualTo(1));
+            Assert.That(report.WallColliderCount, Is.EqualTo(input.walls.Sum(wall => wall.cells.Length)));
+            Assert.That(report.ObjectiveCount, Is.EqualTo(input.objectives.Length));
             Assert.That(report.ExitCount, Is.EqualTo(1));
             Assert.That(report.UniqueEntityIds, Is.True);
             Assert.That(report.ExternalResourceCount, Is.Zero);
