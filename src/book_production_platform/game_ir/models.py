@@ -12,7 +12,7 @@ from .errors import GameInputError
 MAX_GAME_IR_BYTES = 256 * 1024
 GAME_IR_SCHEMA_VERSION = "game-ir.v1"
 GAME_TEMPLATE = "top-down-collect.v1"
-GAME_PALETTE = "palette-minimal.v1"
+GAME_PALETTE: Literal["palette-minimal.v1"] = "palette-minimal.v1"
 
 
 def _array_to_tuple(value: object) -> object:

@@ -15,12 +15,26 @@ from .models import (
     WorldIR,
     parse_game_ir,
 )
+from .validation import (
+    MAX_GAME_ENTITIES,
+    MAX_GAME_WALL_CELLS,
+    canonical_game_ir_bytes,
+    canonicalize_game_ir,
+    collect_entity_ids,
+    game_ir_sha256,
+    reachable_cells,
+    to_unity_worker_json,
+    validate_game_ir,
+    worker_dto_with_cell_objects,
+)
 
 __all__ = [
     "GAME_IR_SCHEMA_VERSION",
     "GAME_PALETTE",
     "GAME_TEMPLATE",
+    "MAX_GAME_ENTITIES",
     "MAX_GAME_IR_BYTES",
+    "MAX_GAME_WALL_CELLS",
     "Cell",
     "ExitIR",
     "GameIR",
@@ -29,5 +43,13 @@ __all__ = [
     "PlayerIR",
     "WallIR",
     "WorldIR",
+    "canonical_game_ir_bytes",
+    "canonicalize_game_ir",
+    "collect_entity_ids",
+    "game_ir_sha256",
     "parse_game_ir",
+    "reachable_cells",
+    "to_unity_worker_json",
+    "validate_game_ir",
+    "worker_dto_with_cell_objects",
 ]
