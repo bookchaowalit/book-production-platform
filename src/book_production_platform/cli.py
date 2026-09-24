@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from book_production_platform.audio_production.cli import main as audio_main
+from book_production_platform.data_pipeline.cli import main as data_main
 from book_production_platform.game_production.cli import game_main
 from book_production_platform.graphics_production.cli import main as graphics_main
 from book_production_platform.scene3d.benchmark import run_benchmark
@@ -68,6 +69,8 @@ def _parser() -> argparse.ArgumentParser:
     spreadsheet.add_argument("spreadsheet_args", nargs=argparse.REMAINDER)
     audio = groups.add_parser("audio", help="Audio Master V1A WAV operations")
     audio.add_argument("audio_args", nargs=argparse.REMAINDER)
+    data = groups.add_parser("data", help="Data SQL/Pipeline Builder V1A operations")
+    data.add_argument("data_args", nargs=argparse.REMAINDER)
     return parser
 
 
@@ -77,6 +80,8 @@ def _emit(value: dict[str, Any]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
+    if args.family == "data":
+        return data_main(args.data_args)
     if args.family == "game":
         return game_main(args.game_args)
     if args.family == "graphics":
