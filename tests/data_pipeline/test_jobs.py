@@ -205,6 +205,30 @@ def test_concurrent_identical_jobs_publish_once_and_replay_the_second(
     assert sorted(result.bytes_written for result in results) == [0, max(result.bytes_written for result in results)]
 
 
+def test_transient_publish_permission_error_retries_once(
+    tmp_path: Path,
+    valid_pipeline_request: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_rename = Path.rename
+    attempts = 0
+
+    def transient_rename(path: Path, target: str | Path) -> Path:
+        nonlocal attempts
+        if ".staging-" in path.name and path.parent.name == "jobs":
+            attempts += 1
+            if attempts == 1:
+                raise PermissionError(13, "transient directory sharing lock")
+        return original_rename(path, target)
+
+    monkeypatch.setattr(Path, "rename", transient_rename)
+
+    result = run_pipeline_job(valid_pipeline_request, tmp_path)
+
+    assert result.status == "accepted"
+    assert attempts == 2
+
+
 def test_symlinked_output_root_is_rejected(tmp_path: Path, valid_pipeline_request: dict[str, Any]) -> None:
     real_root = tmp_path / "real-output"
     real_root.mkdir()

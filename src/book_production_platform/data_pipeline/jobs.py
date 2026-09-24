@@ -48,6 +48,7 @@ PRE_MANIFEST_NAMES = frozenset({"pipeline.sql", "parameters.json", "report.json"
 MAX_MANIFEST_BYTES = MAX_ARTIFACT_BYTES
 MAX_RECEIPT_BYTES = 8192
 LOCK_TIMEOUT_SECONDS = 15.0
+PUBLISH_RETRIES = 2
 _MANIFEST_FIELDS = frozenset(
     {
         "schema_version",
@@ -355,10 +356,16 @@ def _publish_job(staging_dir: Path, artifact_dir: Path, receipt_path: Path, rece
         raise PipelineJobError("replay_integrity_error")
     if {path.name for path in staging_dir.iterdir()} != ARTIFACT_NAMES:
         raise PipelineJobError("artifact_set_mismatch")
-    try:
-        staging_dir.rename(artifact_dir)
-    except OSError:
-        raise PipelineJobError("artifact_publish_failed") from None
+    for attempt in range(PUBLISH_RETRIES + 1):
+        try:
+            staging_dir.rename(artifact_dir)
+            break
+        except PermissionError:
+            if os.name != "nt" or attempt == PUBLISH_RETRIES:
+                raise PipelineJobError("artifact_publish_failed") from None
+            time.sleep(0.025 * (attempt + 1))
+        except OSError:
+            raise PipelineJobError("artifact_publish_failed") from None
     _write_receipt_exclusive(receipt_path, receipt)
 
 
