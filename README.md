@@ -242,7 +242,10 @@ build latency was 39.7–56.4 s (median 50.6 s, p95 56.4 s); exact replay was
 `model_calls: 0`; monetary cost is unknown. The report is saved locally at
 `.runtime/game-production/benchmark-final.json`. Automated acceptance passed, while
 `manual_scene_review` remains `pending`, so the pilot is not marked fully
-reviewed yet.
+reviewed yet. To finish the visual check, take `artifact_root` and an accepted
+fingerprint from that report, open
+`.runtime/game-production/<artifact_root>/<fingerprint>/project` in Unity, then
+inspect the Player/Walls/Objectives/Exit hierarchy and play one collection loop.
 
 ### V1A limits and error codes
 

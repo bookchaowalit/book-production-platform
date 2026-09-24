@@ -29,3 +29,11 @@ latency, project byte totals, Unity test totals, trace-event summaries, the
 Unity executable hash, and `model_calls: 0`. It contains no absolute paths or
 input payloads. Unity/editor availability failures are reported with
 `runtime_acceptance: "blocked"` and their stable error codes.
+
+## Latest local evidence
+
+The 2026-09-24 run at `.runtime/game-production/benchmark-final.json` passed
+5 builds, 5 exact replays, 9 invalid-input rejections, and 1 tampered-replay
+rejection. EditMode passed 10/10 and PlayMode passed 5/5 with
+`model_calls: 0`. `manual_scene_review` remains `pending`; automated gameplay
+checks do not stand in for opening and visually reviewing the Unity scene.
