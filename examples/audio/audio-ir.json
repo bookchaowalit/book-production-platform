@@ -1,0 +1,6 @@
+{
+  "schema_version": "audio-ir.v1",
+  "audio_id": "synthetic-podcast-demo",
+  "source_path": "synthetic-voice.wav",
+  "preset": "podcast-mono.v1"
+}

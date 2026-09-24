@@ -21,6 +21,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 book_production_platform = [
+    "audio_ir/*.json",
     "game_production/templates/unity_project/.gitattributes",
     "game_production/templates/unity_project/.book-production/worker-input.json",
     "game_production/templates/unity_project/**/*",

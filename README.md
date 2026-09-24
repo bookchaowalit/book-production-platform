@@ -174,6 +174,49 @@ The HTTP interface is available from
 does not call an LLM; future semantic column mapping or anomaly explanations
 remain optional adapters and cannot replace formula evaluation.
 
+## Audio Master V1A
+
+Audio Master converts one local PCM WAV and a versioned `audio-ir.v1` request
+into an integrity-checked 24-bit/48 kHz WAV master plus `qa-manifest.json`.
+The request selects one of three fixed presets: `podcast-mono.v1`,
+`podcast-stereo.v1`, or `music-stereo.v1`. The adapter owns the FFmpeg filter
+graph; arbitrary filter strings and direct numeric overrides are rejected. The
+normal path uses FFmpeg loudness analysis, double-pass `loudnorm`, and a second
+measurement of the output. Python validates the IR, paths, WAV format, channel
+count, duration, loudness, true peak, and replay receipt. It reports
+`model_calls: 0`; there is no LLM, speech recognition, audio generation, or
+network access in the mastering path.
+The filter behavior follows the [FFmpeg `loudnorm` documentation](https://ffmpeg.org/ffmpeg-filters.html#loudnorm).
+
+Generate a synthetic modulated-tone fixture and master it locally:
+
+```powershell
+py -3.12 .\examples\audio\generate_fixture.py `
+  --output .\.runtime\audio-master-demo\input\synthetic-voice.wav
+
+book-production audio master `
+  --audio-ir .\examples\audio\audio-ir.json `
+  --input-root .\.runtime\audio-master-demo\input `
+  --output-root .\.runtime\audio-master-demo\jobs
+```
+
+The example intentionally uses synthesized tones rather than a recording of a
+person. Accepted output is published under a content fingerprint with
+`master.wav`, `qa-manifest.json`, and `.receipt.json`; an exact replay verifies
+the stored hashes and skips analysis/rendering. Changing the source, AudioIR,
+preset, recipe, or FFmpeg build generates a separate fingerprint. Source audio
+is never modified. The local pilot accepts mono or stereo PCM WAV up to 2 GiB
+and two hours, checks that the selected preset matches the channel count, strips
+container metadata, rejects silent input, and never overwrites an existing
+artifact. It is not an OS sandbox for files from untrusted users.
+
+Initial preset targets are fixed in the adapter: mono podcast at -19 LUFS / -1.5
+dBTP, stereo podcast at -16 LUFS / -1.5 dBTP, and stereo music at -14 LUFS / -1.0
+dBTP. These are pilot recipes, not a claim that one mastering target fits every
+platform or creative brief. Numerical QA does not prove speech intelligibility
+or subjective quality; human listening review remains a separate product gate.
+Without an approved local rate card, monetary cost is reported as `unknown`.
+
 ## Game Scene Prototype Builder V1A
 
 Game V1A converts a validated `game-ir.v1` into a native, editable Unity 2D

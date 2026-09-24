@@ -9,6 +9,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from book_production_platform.audio_production.cli import main as audio_main
 from book_production_platform.game_production.cli import game_main
 from book_production_platform.graphics_production.cli import main as graphics_main
 from book_production_platform.scene3d.benchmark import run_benchmark
@@ -65,6 +66,8 @@ def _parser() -> argparse.ArgumentParser:
     game.add_argument("game_args", nargs=argparse.REMAINDER)
     spreadsheet = groups.add_parser("spreadsheet", help="Spreadsheet V1A workbook operations")
     spreadsheet.add_argument("spreadsheet_args", nargs=argparse.REMAINDER)
+    audio = groups.add_parser("audio", help="Audio Master V1A WAV operations")
+    audio.add_argument("audio_args", nargs=argparse.REMAINDER)
     return parser
 
 
@@ -80,6 +83,8 @@ def main(argv: list[str] | None = None) -> int:
         return graphics_main(args.graphics_args)
     if args.family == "spreadsheet":
         return spreadsheet_main(args.spreadsheet_args)
+    if args.family == "audio":
+        return audio_main(args.audio_args)
     try:
         if args.family == "scene" and args.command == "compose":
             result = compose_scene(
