@@ -143,6 +143,33 @@ python -m book_production_platform.graphics_production.scripts.benchmark `
 ```
 
 The root `scripts/check.py` entrypoint runs the full repository test suite,
-Ruff and strict mypy for the Graphics modules. Graphics remains an adapter
-inside this shared product repository and does not create another agent or
-model runtime.
+Ruff and strict mypy for the Graphics and Spreadsheet modules. These remain
+domain adapters inside this shared product repository and do not create another
+agent or model runtime.
+
+## Spreadsheet V1A Workbook Builder
+
+Spreadsheet V1A converts explicit typed tables into editable XLSX workbooks
+with `Summary` and `Detail` sheets. Its `WorkbookIR` uses typed values,
+allowlisted `SUM`, `COUNT`, and `IF` formulas, named ranges, and source
+lineage. A deterministic evaluator computes cached values before XlsxWriter
+creates the file; ZIP/XML reopen QA checks the result. Text beginning with
+`=`, `+`, `-`, or `@` stays text. The standard path reports `model_calls=0`.
+
+Build a workbook and run the 20-case synthetic benchmark:
+
+```powershell
+book-production spreadsheet build `
+  --input .\examples\spreadsheet\workbook.json `
+  --output .\.runtime\spreadsheet\output `
+  --idempotency-key spreadsheet-demo-1
+
+book-production spreadsheet benchmark `
+  --fixture .\tests\spreadsheet_production\fixtures\workbooks_20.json `
+  --output-dir .\.runtime\spreadsheet\benchmark
+```
+
+The HTTP interface is available from
+`book_production_platform.spreadsheet_production.main:app` for local use. It
+does not call an LLM; future semantic column mapping or anomaly explanations
+remain optional adapters and cannot replace formula evaluation.

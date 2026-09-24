@@ -13,6 +13,7 @@ from book_production_platform.graphics_production.cli import main as graphics_ma
 from book_production_platform.scene3d.benchmark import run_benchmark
 from book_production_platform.scene3d.errors import SceneInputError
 from book_production_platform.scene3d.runtime import MAX_TIMEOUT_SECONDS, compose_scene
+from book_production_platform.spreadsheet_production.cli import main as spreadsheet_main
 
 _LOCAL_BLENDER = (
     Path.home()
@@ -59,6 +60,8 @@ def _parser() -> argparse.ArgumentParser:
 
     graphics = groups.add_parser("graphics", help="Graphics V1A template batch operations")
     graphics.add_argument("graphics_args", nargs=argparse.REMAINDER)
+    spreadsheet = groups.add_parser("spreadsheet", help="Spreadsheet V1A workbook operations")
+    spreadsheet.add_argument("spreadsheet_args", nargs=argparse.REMAINDER)
     return parser
 
 
@@ -70,6 +73,8 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if args.family == "graphics":
         return graphics_main(args.graphics_args)
+    if args.family == "spreadsheet":
+        return spreadsheet_main(args.spreadsheet_args)
     try:
         if args.family == "scene" and args.command == "compose":
             result = compose_scene(

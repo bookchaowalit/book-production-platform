@@ -1,0 +1,20 @@
+{
+  "workbook_id": "example-001",
+  "title": "ตัวอย่างยอดขาย",
+  "locale": "th-TH",
+  "tables": [
+    {
+      "name": "Orders",
+      "source_ref": "example:orders",
+      "columns": [
+        {"key": "item", "label": "รายการ", "data_type": "text", "required": true},
+        {"key": "amount", "label": "ยอดรวม", "data_type": "decimal", "required": true},
+        {"key": "sold_on", "label": "วันที่", "data_type": "date"}
+      ],
+      "rows": [
+        {"item": "สินค้า A", "amount": "1250.50", "sold_on": "2026-09-22"},
+        {"item": "=SUM(A1:A2)", "amount": "800.00", "sold_on": "2026-09-23"}
+      ]
+    }
+  ]
+}
