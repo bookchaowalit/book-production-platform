@@ -54,7 +54,7 @@ namespace BookProduction.Editor
                 .ToArray();
             string[] entityIds = identities.Select(identity => identity.EntityId).ToArray();
 
-            return new SceneVerificationReport
+            var report = new SceneVerificationReport
             {
                 PlayerCount = identities.Count(identity => identity.EntityType == "player"),
                 WallColliderCount = identities.Count(identity =>
@@ -74,6 +74,11 @@ namespace BookProduction.Editor
                     return !path.StartsWith("Assets/BookProduction/Art/", StringComparison.Ordinal);
                 })
             };
+            if (!report.IsValid)
+            {
+                throw new InvalidDataException("generated_scene_verification_failed");
+            }
+            return report;
         }
 
         private static int CountDisallowedComponents(IEnumerable<Component> components)
