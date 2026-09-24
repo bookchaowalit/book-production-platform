@@ -1,0 +1,16 @@
+{
+  "items": [
+    {
+      "request_id": "demo-announcement",
+      "template_id": "announcement",
+      "variant": "square",
+      "canvas": {"width": 1080, "height": 1080},
+      "brand": {"primary": "#14213D", "accent": "#FCA311", "foreground": "#111111"},
+      "content": {
+        "headline": "ประกาศสำคัญ",
+        "body": "รายละเอียดที่ชัดเจนสำหรับทุกคน",
+        "cta": "ดูเพิ่มเติม"
+      }
+    }
+  ]
+}

@@ -9,6 +9,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from book_production_platform.graphics_production.cli import main as graphics_main
 from book_production_platform.scene3d.benchmark import run_benchmark
 from book_production_platform.scene3d.errors import SceneInputError
 from book_production_platform.scene3d.runtime import MAX_TIMEOUT_SECONDS, compose_scene
@@ -55,6 +56,9 @@ def _parser() -> argparse.ArgumentParser:
     benchmark.add_argument("--output", type=Path, required=True)
     benchmark.add_argument("--blender", type=Path, default=None)
     benchmark.add_argument("--timeout-s", type=int, default=MAX_TIMEOUT_SECONDS)
+
+    graphics = groups.add_parser("graphics", help="Graphics V1A template batch operations")
+    graphics.add_argument("graphics_args", nargs=argparse.REMAINDER)
     return parser
 
 
@@ -64,6 +68,8 @@ def _emit(value: dict[str, Any]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
+    if args.family == "graphics":
+        return graphics_main(args.graphics_args)
     try:
         if args.family == "scene" and args.command == "compose":
             result = compose_scene(

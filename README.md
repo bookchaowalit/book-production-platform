@@ -113,3 +113,36 @@ book-production scene benchmark `
 ```powershell
 py -3 -m pytest -q
 ```
+
+## Graphics V1A Template Batch
+
+Graphics V1A turns validated JSON and brand tokens into editable SVG and PNG
+artifacts using `GraphicIR`, fixed templates, replay checks, and local QA. Its
+standard path is deterministic and reports `model_calls=0`; no model is used
+for layout or rendering. The three templates are `quote_card`, `product_card`,
+and `announcement`, with square, portrait, and story sizes.
+
+Python 3.12 or newer and a local Microsoft Edge or Google Chrome installation
+are required. A headless local browser rasterizes SVG so Thai marks are shaped
+correctly; assets never leave the machine. Custom TTF/OTF files are embedded in
+SVG outputs under a content-derived family name. Configure
+`GRAPHICS_PRODUCTION_BROWSER` to select a browser executable, or
+`GRAPHICS_PRODUCTION_BROWSER_PROFILE` to relocate its isolated local profile.
+
+Run a batch and the 30-output synthetic benchmark:
+
+```powershell
+book-production graphics batch `
+  --input .\examples\graphics\batch.json `
+  --output .\.runtime\graphics\output `
+  --idempotency-key graphics-demo-1
+
+python -m book_production_platform.graphics_production.scripts.benchmark `
+  --fixture .\tests\graphics\fixtures\batch_30.json `
+  --output-dir .\.runtime\graphics\benchmark
+```
+
+The root `scripts/check.py` entrypoint runs the full repository test suite,
+Ruff and strict mypy for the Graphics modules. Graphics remains an adapter
+inside this shared product repository and does not create another agent or
+model runtime.
