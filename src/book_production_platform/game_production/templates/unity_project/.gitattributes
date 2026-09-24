@@ -1,0 +1,7 @@
+*.asmdef text eol=lf
+*.cs text eol=lf
+*.json text eol=lf
+*.meta text eol=lf
+*.png binary
+*.txt text eol=lf
+*.unity text eol=lf

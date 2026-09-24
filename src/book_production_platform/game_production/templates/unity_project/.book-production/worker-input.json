@@ -1,0 +1,15 @@
+{
+  "schema_version": "game-ir.v1",
+  "scene_id": "smoke-room",
+  "template": "top-down-collect.v1",
+  "palette": "palette-minimal.v1",
+  "world": { "width": 8, "height": 6, "tile_size": 1.0 },
+  "player": { "id": "player", "spawn": { "x": 1, "y": 1 }, "speed": 4.0 },
+  "walls": [
+    { "id": "wall-a", "cells": [{ "x": 3, "y": 1 }] }
+  ],
+  "objectives": [
+    { "id": "objective-a", "cell": { "x": 4, "y": 1 } }
+  ],
+  "exit": { "id": "exit", "cell": { "x": 6, "y": 1 } }
+}

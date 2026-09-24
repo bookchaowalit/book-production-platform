@@ -1,0 +1,11 @@
+{
+  "exit": { "cell": [6, 1], "id": "exit" },
+  "objectives": [{ "cell": [4, 1], "id": "objective-a" }],
+  "palette": "palette-minimal.v1",
+  "player": { "id": "player", "spawn": [1, 1], "speed": 4.0 },
+  "scene_id": "smoke-room",
+  "schema_version": "game-ir.v1",
+  "template": "top-down-collect.v1",
+  "walls": [{ "cells": [[3, 1]], "id": "wall-a" }],
+  "world": { "height": 6, "tile_size": 1.0, "width": 8 }
+}

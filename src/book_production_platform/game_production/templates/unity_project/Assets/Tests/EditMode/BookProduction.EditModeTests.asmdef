@@ -1,0 +1,15 @@
+{
+  "name": "BookProduction.EditModeTests",
+  "rootNamespace": "BookProduction.Tests.EditMode",
+  "references": ["BookProduction.Runtime", "BookProduction.Editor"],
+  "includePlatforms": ["Editor"],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "noEngineReferences": false
+}
