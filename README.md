@@ -173,3 +173,79 @@ The HTTP interface is available from
 `book_production_platform.spreadsheet_production.main:app` for local use. It
 does not call an LLM; future semantic column mapping or anomaly explanations
 remain optional adapters and cannot replace formula evaluation.
+
+## Game Scene Prototype Builder V1A
+
+Game V1A converts a validated `game-ir.v1` into a native, editable Unity 2D
+project. The current collection template creates a player, walls, collectibles,
+an exit, and a deterministic gameplay trace. Python checks the IR and grid
+logic before Unity runs; Unity composes the scene and proves the collection loop
+through EditMode, PlayMode, and a fresh-process reopen check. The standard path
+uses no LLM, image model, remote service, or generated asset and reports
+`model_calls: 0`.
+
+### Runtime and build
+
+- Python 3.12 or newer
+- Unity Editor `6000.6.2f1` with its bundled Test Framework
+- The Unity executable is supplied with `--unity`; other Editor versions are
+  rejected for this pilot
+
+Install the package and test tools in the repository virtual environment:
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e ".[test]"
+```
+
+Build the included room:
+
+```powershell
+book-production game build `
+  --game .\examples\game\collection-room.json `
+  --output-root .\.runtime\game-production `
+  --unity "C:\Program Files\Unity\Hub\Editor\6000.6.2f1\Editor\Unity.exe" `
+  --timeout-s 120
+```
+
+The accepted artifact is published atomically under its content fingerprint:
+
+- `project/` — native Unity project; open it in Unity and edit
+  `Assets/Scenes/collection-room.unity`
+- `gameplay-trace.json` — verified blocked-exit, movement, collection, and win
+  events
+- `qa-manifest.json` — source and template hashes, pinned Unity build, test
+  results, output hashes and sizes, timing, and `model_calls: 0`
+- `.receipt.json` — pins the project, scene, trace, and QA manifest hashes for
+  exact replay
+
+An exact repeat verifies the receipt and returns `replayed` without starting
+Unity. A changed GameIR, Unity executable, or template receives a new
+fingerprint. Existing output is never overwritten. Benchmark the accepted,
+replayed, and rejected fixture set after setup:
+
+```powershell
+book-production game benchmark `
+  --fixtures .\tests\fixtures\game_production `
+  --output .\.runtime\game-production\benchmark.json `
+  --unity "C:\Program Files\Unity\Hub\Editor\6000.6.2f1\Editor\Unity.exe"
+```
+
+### V1A limits and error codes
+
+GameIR input is limited to 256 KiB, worlds to 64 × 64 cells, walls to 192
+cells, and objectives to 32. The Unity job has one 120-second deadline, an
+8 MiB log cap, a 1 GiB staging cap, and a 64 MiB published-project cap. Only
+the registered collection template and palette are accepted. Users cannot
+provide scripts, assemblies, paths, URLs, or Unity component types through the
+IR. This local pilot is not an OS sandbox for opening projects or assets from
+untrusted sources.
+
+Rejections emit one JSON object with a stable code and exit status 2. Codes
+include `invalid_game_ir`, `resource_cap_exceeded`, `unsafe_input_path`,
+`unsafe_output_path`, `invalid_timeout`, `unity_unavailable`,
+`unsupported_unity_version`, `deadline_exceeded`,
+`unity_log_cap_exceeded`, `scene_qa_failed`, `unity_test_failed`,
+`gameplay_qa_failed`, `publication_failed`, `publication_conflict`, and
+`replay_integrity_error`.

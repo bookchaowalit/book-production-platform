@@ -1,0 +1,35 @@
+{
+  "schema_version": "game-ir.v1",
+  "scene_id": "collection-room",
+  "template": "top-down-collect.v1",
+  "palette": "palette-minimal.v1",
+  "world": {
+    "width": 12,
+    "height": 8,
+    "tile_size": 1.0
+  },
+  "player": {
+    "id": "runner",
+    "spawn": [1, 1],
+    "speed": 4.0
+  },
+  "walls": [
+    {
+      "id": "north-pillar",
+      "cells": [
+        [4, 1],
+        [4, 2]
+      ]
+    }
+  ],
+  "objectives": [
+    {
+      "id": "golden-key",
+      "cell": [7, 2]
+    }
+  ],
+  "exit": {
+    "id": "moon-gate",
+    "cell": [10, 5]
+  }
+}

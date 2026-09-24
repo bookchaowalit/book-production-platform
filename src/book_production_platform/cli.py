@@ -9,6 +9,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from book_production_platform.game_production.cli import game_main
 from book_production_platform.graphics_production.cli import main as graphics_main
 from book_production_platform.scene3d.benchmark import run_benchmark
 from book_production_platform.scene3d.errors import SceneInputError
@@ -60,6 +61,8 @@ def _parser() -> argparse.ArgumentParser:
 
     graphics = groups.add_parser("graphics", help="Graphics V1A template batch operations")
     graphics.add_argument("graphics_args", nargs=argparse.REMAINDER)
+    game = groups.add_parser("game", help="Game Scene Builder V1A Unity operations")
+    game.add_argument("game_args", nargs=argparse.REMAINDER)
     spreadsheet = groups.add_parser("spreadsheet", help="Spreadsheet V1A workbook operations")
     spreadsheet.add_argument("spreadsheet_args", nargs=argparse.REMAINDER)
     return parser
@@ -71,6 +74,8 @@ def _emit(value: dict[str, Any]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
+    if args.family == "game":
+        return game_main(args.game_args)
     if args.family == "graphics":
         return graphics_main(args.graphics_args)
     if args.family == "spreadsheet":

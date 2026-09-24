@@ -6,15 +6,19 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 GRAPHICS = ROOT / "src" / "book_production_platform" / "graphics_production"
 GRAPHICS_IR = ROOT / "src" / "book_production_platform" / "graphics_ir"
 GRAPHICS_TESTS = ROOT / "tests" / "graphics"
 SPREADSHEET_IR = ROOT / "src" / "book_production_platform" / "spreadsheet_ir"
 SPREADSHEET = ROOT / "src" / "book_production_platform" / "spreadsheet_production"
+GAME_IR = ROOT / "src" / "book_production_platform" / "game_ir"
+GAME = ROOT / "src" / "book_production_platform" / "game_production"
 SPREADSHEET_IR_TESTS = ROOT / "tests" / "spreadsheet_ir"
 SPREADSHEET_TESTS = ROOT / "tests" / "spreadsheet_production"
+GAME_IR_TESTS = ROOT / "tests" / "game_ir"
+GAME_TESTS = ROOT / "tests" / "game_production"
+PLATFORM_CLI = ROOT / "src" / "book_production_platform" / "cli.py"
 RUFF_TARGETS = (
     GRAPHICS_IR,
     GRAPHICS,
@@ -23,8 +27,13 @@ RUFF_TARGETS = (
     SPREADSHEET,
     SPREADSHEET_IR_TESTS,
     SPREADSHEET_TESTS,
+    GAME_IR_TESTS,
+    GAME_TESTS,
+    PLATFORM_CLI,
+    GAME_IR,
+    GAME,
 )
-MYPY_TARGETS = (GRAPHICS_IR, GRAPHICS, SPREADSHEET_IR, SPREADSHEET)
+MYPY_TARGETS = (GRAPHICS_IR, GRAPHICS, SPREADSHEET_IR, SPREADSHEET, GAME_IR, GAME)
 
 
 def main() -> int:

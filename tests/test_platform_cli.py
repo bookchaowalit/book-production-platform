@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import book_production_platform.cli as platform_cli
 from book_production_platform.cli import main
 
 
@@ -32,3 +33,20 @@ def test_platform_cli_routes_spreadsheet_build(tmp_path: Path, capsys: object) -
     assert result["model_calls"] == 0
     manifest_path = Path(result["manifest_path"])
     assert (manifest_path.parent / "workbook.xlsx").is_file()
+
+
+def test_platform_cli_routes_game_commands(monkeypatch, capsys) -> None:
+    received: list[list[str]] = []
+
+    def fake_game_main(argv: list[str]) -> int:
+        received.append(argv)
+        return 7
+
+    monkeypatch.setattr(platform_cli, "game_main", fake_game_main)
+    args = ["build", "--game", "room.json", "--output-root", "jobs", "--unity", "Unity.exe"]
+
+    exit_code = main(["game", *args])
+
+    assert exit_code == 7
+    assert received == [args]
+    assert capsys.readouterr().out == ""
