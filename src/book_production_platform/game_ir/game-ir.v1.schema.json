@@ -1,0 +1,189 @@
+{
+  "$defs": {
+    "ExitIR": {
+      "additionalProperties": false,
+      "properties": {
+        "cell": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            { "type": "integer" },
+            { "type": "integer" }
+          ],
+          "title": "Cell",
+          "type": "array"
+        },
+        "id": {
+          "maxLength": 64,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Id",
+          "type": "string"
+        }
+      },
+      "required": ["id", "cell"],
+      "title": "ExitIR",
+      "type": "object"
+    },
+    "ObjectiveIR": {
+      "additionalProperties": false,
+      "properties": {
+        "cell": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            { "type": "integer" },
+            { "type": "integer" }
+          ],
+          "title": "Cell",
+          "type": "array"
+        },
+        "id": {
+          "maxLength": 64,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Id",
+          "type": "string"
+        }
+      },
+      "required": ["id", "cell"],
+      "title": "ObjectiveIR",
+      "type": "object"
+    },
+    "PlayerIR": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 64,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "spawn": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            { "type": "integer" },
+            { "type": "integer" }
+          ],
+          "title": "Spawn",
+          "type": "array"
+        },
+        "speed": {
+          "maximum": 12.0,
+          "minimum": 0.5,
+          "title": "Speed",
+          "type": "number"
+        }
+      },
+      "required": ["id", "spawn", "speed"],
+      "title": "PlayerIR",
+      "type": "object"
+    },
+    "WallIR": {
+      "additionalProperties": false,
+      "properties": {
+        "cells": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              { "type": "integer" },
+              { "type": "integer" }
+            ],
+            "type": "array"
+          },
+          "title": "Cells",
+          "type": "array"
+        },
+        "id": {
+          "maxLength": 64,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Id",
+          "type": "string"
+        }
+      },
+      "required": ["id", "cells"],
+      "title": "WallIR",
+      "type": "object"
+    },
+    "WorldIR": {
+      "additionalProperties": false,
+      "properties": {
+        "height": {
+          "maximum": 64,
+          "minimum": 3,
+          "title": "Height",
+          "type": "integer"
+        },
+        "tile_size": {
+          "maximum": 4.0,
+          "minimum": 0.25,
+          "title": "Tile Size",
+          "type": "number"
+        },
+        "width": {
+          "maximum": 64,
+          "minimum": 3,
+          "title": "Width",
+          "type": "integer"
+        }
+      },
+      "required": ["width", "height", "tile_size"],
+      "title": "WorldIR",
+      "type": "object"
+    }
+  },
+  "$id": "https://book-production-platform.local/schemas/game-ir.v1.schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "exit": { "$ref": "#/$defs/ExitIR" },
+    "objectives": {
+      "items": { "$ref": "#/$defs/ObjectiveIR" },
+      "maxItems": 32,
+      "minItems": 1,
+      "title": "Objectives",
+      "type": "array"
+    },
+    "palette": {
+      "const": "palette-minimal.v1",
+      "default": "palette-minimal.v1",
+      "title": "Palette",
+      "type": "string"
+    },
+    "player": { "$ref": "#/$defs/PlayerIR" },
+    "scene_id": {
+      "maxLength": 64,
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Scene Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "game-ir.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "template": {
+      "const": "top-down-collect.v1",
+      "title": "Template",
+      "type": "string"
+    },
+    "walls": {
+      "items": { "$ref": "#/$defs/WallIR" },
+      "title": "Walls",
+      "type": "array"
+    },
+    "world": { "$ref": "#/$defs/WorldIR" }
+  },
+  "required": [
+    "schema_version",
+    "scene_id",
+    "template",
+    "world",
+    "player",
+    "walls",
+    "objectives",
+    "exit"
+  ],
+  "title": "GameIR",
+  "type": "object",
+  "x-maxBytes": 262144
+}
