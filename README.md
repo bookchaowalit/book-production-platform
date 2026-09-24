@@ -174,6 +174,61 @@ The HTTP interface is available from
 does not call an LLM; future semantic column mapping or anomaly explanations
 remain optional adapters and cannot replace formula evaluation.
 
+## Data SQL/Pipeline Builder V1A
+
+Data Pipeline Builder converts a typed `pipeline-request.v1` operation graph
+into parameterized SQL and a lineage/query-plan report. It validates schema,
+graph structure, operation types, and deterministic ordering before publishing
+content-addressed local artifacts: `pipeline.sql`, `parameters.json`,
+`report.json`, and `qa-manifest.json`, with a separate integrity receipt.
+`parameters.json` contains filter values, so keep the output root in a
+user-private local location and do not share it. CLI/API responses contain job
+metadata only; benchmark summaries contain aggregate counts only. The normal
+path reports `model_calls: 0`.
+
+This V1A compiles and validates a plan; it does not connect to or read from a
+source database and does not execute the generated `SELECT`. Query-plan
+verification uses an in-memory SQLite schema stub and `EXPLAIN QUERY PLAN`.
+The source reference and typed schema describe the future source contract, not
+an active data connection.
+
+Build from one standalone request JSON:
+
+```powershell
+book-production data pipeline build `
+  --input .\pipeline-request.json `
+  --output-root .\.runtime\data-pipeline
+```
+
+The optional FastAPI endpoint is
+`book_production_platform.data_pipeline.main:app`. The project does not add an
+ASGI server dependency; when using a locally installed ASGI server such as
+Uvicorn, keep it bound to loopback:
+
+```powershell
+$env:DATA_PIPELINE_OUTPUT_ROOT = ".\.runtime\data-pipeline\api"
+uvicorn book_production_platform.data_pipeline.main:app --host 127.0.0.1 --port 8765
+```
+
+Do not bind this local pilot to a LAN or public interface. The endpoint is
+`POST /v1/data/pipelines` and stores artifacts under
+`DATA_PIPELINE_OUTPUT_ROOT` (default `.runtime/data-pipeline`).
+
+Run the synthetic acceptance benchmark into a new, empty output directory:
+
+```powershell
+python -m book_production_platform.data_pipeline.scripts.pipeline_benchmark `
+  --fixtures .\tests\data_pipeline\fixtures\pipelines_20.json `
+  --output-root .\.runtime\data-pipeline\benchmark-new-run
+```
+
+Measured locally on 2026-09-25: 20 cases, 12 accepted, 8 expected rejections,
+0 unexpected outcomes, 0 query-plan failures, 0 lineage failures, 12 exact
+replay hits, 0 model calls, and 32,566 artifact bytes written. This is a
+synthetic plan-only gate, not a measurement of execution against a real source
+database. Monetary compute cost remains `unknown` without an approved rate
+card; there is no deployment target.
+
 ## Audio Master V1A
 
 Audio Master converts one local PCM WAV and a versioned `audio-ir.v1` request

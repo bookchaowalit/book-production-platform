@@ -16,12 +16,16 @@ GAME_IR = ROOT / "src" / "book_production_platform" / "game_ir"
 GAME = ROOT / "src" / "book_production_platform" / "game_production"
 AUDIO_IR = ROOT / "src" / "book_production_platform" / "audio_ir"
 AUDIO = ROOT / "src" / "book_production_platform" / "audio_production"
+DATA_PIPELINE_IR = ROOT / "src" / "book_production_platform" / "data_pipeline_ir"
+DATA_PIPELINE = ROOT / "src" / "book_production_platform" / "data_pipeline"
 SPREADSHEET_IR_TESTS = ROOT / "tests" / "spreadsheet_ir"
 SPREADSHEET_TESTS = ROOT / "tests" / "spreadsheet_production"
 GAME_IR_TESTS = ROOT / "tests" / "game_ir"
 GAME_TESTS = ROOT / "tests" / "game_production"
 AUDIO_IR_TESTS = ROOT / "tests" / "audio_ir"
 AUDIO_TESTS = ROOT / "tests" / "audio_production"
+DATA_PIPELINE_IR_TESTS = ROOT / "tests" / "data_pipeline_ir"
+DATA_PIPELINE_TESTS = ROOT / "tests" / "data_pipeline"
 PLATFORM_CLI = ROOT / "src" / "book_production_platform" / "cli.py"
 RUFF_TARGETS = (
     GRAPHICS_IR,
@@ -37,11 +41,26 @@ RUFF_TARGETS = (
     AUDIO_TESTS,
     AUDIO_IR,
     AUDIO,
+    DATA_PIPELINE_IR_TESTS,
+    DATA_PIPELINE_TESTS,
+    DATA_PIPELINE_IR,
+    DATA_PIPELINE,
     PLATFORM_CLI,
     GAME_IR,
     GAME,
 )
-MYPY_TARGETS = (GRAPHICS_IR, GRAPHICS, SPREADSHEET_IR, SPREADSHEET, GAME_IR, GAME, AUDIO_IR, AUDIO)
+MYPY_TARGETS = (
+    GRAPHICS_IR,
+    GRAPHICS,
+    SPREADSHEET_IR,
+    SPREADSHEET,
+    GAME_IR,
+    GAME,
+    AUDIO_IR,
+    AUDIO,
+    DATA_PIPELINE_IR,
+    DATA_PIPELINE,
+)
 
 
 def main() -> int:
