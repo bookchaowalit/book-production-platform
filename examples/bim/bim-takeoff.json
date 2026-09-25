@@ -1,0 +1,9 @@
+{
+  "schema_version": "bim-takeoff.v1",
+  "takeoff_id": "walls-demo",
+  "element_classes": [
+    "IfcWall",
+    "IfcSlab"
+  ],
+  "output_units": "SI"
+}
