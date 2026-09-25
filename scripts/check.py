@@ -30,6 +30,8 @@ CAD_IR = ROOT / "src" / "book_production_platform" / "cad_ir"
 CAD_PRODUCTION = ROOT / "src" / "book_production_platform" / "cad_production"
 CAD_IR_TESTS = ROOT / "tests" / "cad_ir"
 CAD_PRODUCTION_TESTS = ROOT / "tests" / "cad_production"
+BIM_PRODUCTION = ROOT / "src" / "book_production_platform" / "bim_production"
+BIM_PRODUCTION_TESTS = ROOT / "tests" / "bim_production"
 PLATFORM_CLI = ROOT / "src" / "book_production_platform" / "cli.py"
 RUFF_TARGETS = (
     GRAPHICS_IR,
@@ -53,6 +55,8 @@ RUFF_TARGETS = (
     CAD_PRODUCTION,
     CAD_IR_TESTS,
     CAD_PRODUCTION_TESTS,
+    BIM_PRODUCTION,
+    BIM_PRODUCTION_TESTS,
     PLATFORM_CLI,
     GAME_IR,
     GAME,
@@ -70,6 +74,7 @@ MYPY_TARGETS = (
     DATA_PIPELINE,
     CAD_IR,
     CAD_PRODUCTION,
+    BIM_PRODUCTION,
 )
 
 

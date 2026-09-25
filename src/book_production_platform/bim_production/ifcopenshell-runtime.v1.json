@@ -1,0 +1,12 @@
+{
+  "schema_version": "bim.ifcopenshell-runtime.v1",
+  "freecad_version": "FreeCAD 1.1.3",
+  "freecad_build": "Revision: 20260725 (Git shallow)",
+  "freecad_platform": "windows-x86_64",
+  "freecadcmd_sha256": "8feb06052673cdcd56df60d856cc5e6fbf8cf862d56f1419e80a558f505a7b23",
+  "python_version": "3.11",
+  "ifcopenshell_version": "0.8.4",
+  "wrapper_relative_path": "ifcopenshell/_ifcopenshell_wrapper.cp311-win_amd64.pyd",
+  "wrapper_sha256": "c505947c7d8c1342195498a0e48f38a5da35581104df8b5556f930fbcf297b78",
+  "worker_protocol": "bim-worker.v1"
+}

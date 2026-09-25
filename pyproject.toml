@@ -25,6 +25,8 @@ book_production_platform = [
     "cad_ir/*.json",
     "cad_production/*.json",
     "cad_production/*.FCMacro",
+    "bim_production/*.json",
+    "bim_production/*.FCMacro",
     "game_production/templates/unity_project/.gitattributes",
     "game_production/templates/unity_project/.book-production/worker-input.json",
     "game_production/templates/unity_project/**/*",
