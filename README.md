@@ -300,12 +300,17 @@ python -m pip install -e ".[test]"
 Build the included room:
 
 ```powershell
+$gameOutput = Join-Path $env:LOCALAPPDATA 'BookProduction\Game'
 book-production game build `
   --game .\examples\game\collection-room.json `
-  --output-root .\.runtime\game-production `
+  --output-root $gameOutput `
   --unity "C:\Program Files\Unity\Hub\Editor\6000.6.2f1\Editor\Unity.exe" `
   --timeout-s 120
 ```
+
+On Windows, keep the output root short because Unity creates its `Library`
+database below the fingerprinted project path. A deeply nested repository
+output root can exceed the host path limit when opening the project in Unity.
 
 The accepted artifact is published atomically under its content fingerprint:
 
@@ -338,12 +343,16 @@ the executable SHA-256 was
 build latency was 39.7–56.4 s (median 50.6 s, p95 56.4 s); exact replay was
 155–364 ms (median 252 ms, p95 364 ms). Published Unity projects were 1.12–1.20 MB.
 `model_calls: 0`; monetary cost is unknown. The report is saved locally at
-`.runtime/game-production/benchmark-final.json`. Automated acceptance passed, while
-`manual_scene_review` remains `pending`, so the pilot is not marked fully
-reviewed yet. To finish the visual check, take `artifact_root` and an accepted
-fingerprint from that report, open
-`.runtime/game-production/<artifact_root>/<fingerprint>/project` in Unity, then
-inspect the Player/Walls/Objectives/Exit hierarchy and play one collection loop.
+`.runtime/game-production/benchmark-final.json`. On 2026-09-25, an agent visual
+review passed for the accepted `larger-valid-room` fixture: the Unity Editor
+camera render shows the player, 14 walls, four objectives, and exit inside the
+frame. The fixture's verified PlayMode trace records movement, all four
+collections, and victory. Review files are
+`.runtime/game-production/manual-scene-review-20260925.png` and
+`.runtime/game-production/manual-scene-review-20260925.json`; the benchmark
+report now records `manual_scene_review.status=passed`. This visual review uses
+an Editor camera capture; gameplay is verified by the automated PlayMode trace,
+not manual keyboard input.
 
 ### V1A limits and error codes
 
