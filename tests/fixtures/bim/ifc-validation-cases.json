@@ -1,0 +1,344 @@
+{
+  "protocol": "bim-fixture-registry.v1",
+  "cases": [
+    {
+      "protocol": "bim-fixture.v1",
+      "case_id": "ifc4-walls-valid",
+      "schema": "IFC4",
+      "project_units": [
+        {
+          "unit_type": "LENGTHUNIT",
+          "name": "METRE",
+          "prefix": null
+        },
+        {
+          "unit_type": "AREAUNIT",
+          "name": "SQUARE_METRE",
+          "prefix": null
+        },
+        {
+          "unit_type": "VOLUMEUNIT",
+          "name": "CUBIC_METRE",
+          "prefix": null
+        }
+      ],
+      "elements": [
+        {
+          "class": "IfcWall",
+          "name": "W1",
+          "global_id_seed": 10,
+          "qto": {
+            "name": "Qto_WallBaseQuantities",
+            "method": "calculated",
+            "quantities": [
+              {
+                "name": "Length",
+                "kind": "IfcQuantityLength",
+                "value": 5.0,
+                "unit": null
+              },
+              {
+                "name": "NetArea",
+                "kind": "IfcQuantityArea",
+                "value": 12.5,
+                "unit": null
+              },
+              {
+                "name": "NetVolume",
+                "kind": "IfcQuantityVolume",
+                "value": 3.125,
+                "unit": null
+              },
+              {
+                "name": "NumberOfElements",
+                "kind": "IfcQuantityCount",
+                "value": 2,
+                "unit": null
+              }
+            ]
+          }
+        },
+        {
+          "class": "IfcWall",
+          "name": "W2",
+          "global_id_seed": 11,
+          "qto": {
+            "name": "Qto_WallBaseQuantities",
+            "method": "calculated",
+            "quantities": [
+              {
+                "name": "Length",
+                "kind": "IfcQuantityLength",
+                "value": 2500.0,
+                "unit": null
+              },
+              {
+                "name": "NetArea",
+                "kind": "IfcQuantityArea",
+                "value": 6.25,
+                "unit": null
+              }
+            ]
+          }
+        }
+      ],
+      "type_quantities": [],
+      "variant": null,
+      "malformed_spf": false,
+      "output_name": "ifc4-walls-valid.ifc"
+    },
+    {
+      "protocol": "bim-fixture.v1",
+      "case_id": "ifc2x3-walls-valid",
+      "schema": "IFC2X3",
+      "project_units": [
+        {
+          "unit_type": "LENGTHUNIT",
+          "name": "METRE",
+          "prefix": null
+        },
+        {
+          "unit_type": "AREAUNIT",
+          "name": "SQUARE_METRE",
+          "prefix": null
+        },
+        {
+          "unit_type": "VOLUMEUNIT",
+          "name": "CUBIC_METRE",
+          "prefix": null
+        }
+      ],
+      "elements": [
+        {
+          "class": "IfcWall",
+          "name": "W1",
+          "global_id_seed": 10,
+          "qto": {
+            "name": "Qto_WallBaseQuantities",
+            "method": "calculated",
+            "quantities": [
+              {
+                "name": "Length",
+                "kind": "IfcQuantityLength",
+                "value": 5000.0,
+                "unit": null
+              },
+              {
+                "name": "NumberOfElements",
+                "kind": "IfcQuantityCount",
+                "value": 1,
+                "unit": null
+              }
+            ]
+          }
+        }
+      ],
+      "type_quantities": [],
+      "variant": null,
+      "malformed_spf": false,
+      "output_name": "ifc2x3-walls-valid.ifc"
+    },
+    {
+      "protocol": "bim-fixture.v1",
+      "case_id": "ifc4-malformed-spf",
+      "schema": "IFC4",
+      "project_units": [],
+      "elements": [
+        {
+          "class": "IfcWall",
+          "name": "W1",
+          "global_id_seed": 10,
+          "qto": null
+        }
+      ],
+      "type_quantities": [],
+      "variant": null,
+      "malformed_spf": true,
+      "output_name": "ifc4-malformed-spf.ifc"
+    },
+    {
+      "protocol": "bim-fixture.v1",
+      "case_id": "ifc4x3-unsupported",
+      "schema": "IFC4X3",
+      "project_units": [
+        {
+          "unit_type": "LENGTHUNIT",
+          "name": "METRE",
+          "prefix": null
+        }
+      ],
+      "elements": [
+        {
+          "class": "IfcWall",
+          "name": "W1",
+          "global_id_seed": 10,
+          "qto": null
+        }
+      ],
+      "type_quantities": [],
+      "variant": null,
+      "malformed_spf": false,
+      "output_name": "ifc4x3-unsupported.ifc"
+    },
+    {
+      "protocol": "bim-fixture.v1",
+      "case_id": "ifc4-duplicate-globalid",
+      "schema": "IFC4",
+      "project_units": [
+        {
+          "unit_type": "LENGTHUNIT",
+          "name": "METRE",
+          "prefix": null
+        }
+      ],
+      "elements": [
+        {
+          "class": "IfcWall",
+          "name": "W1",
+          "global_id_seed": 10,
+          "qto": null
+        },
+        {
+          "class": "IfcWall",
+          "name": "W2",
+          "global_id_seed": 11,
+          "qto": null
+        }
+      ],
+      "type_quantities": [],
+      "variant": "duplicate_globalid",
+      "malformed_spf": false,
+      "output_name": "ifc4-duplicate-globalid.ifc"
+    },
+    {
+      "protocol": "bim-fixture.v1",
+      "case_id": "ifc4-short-globalid",
+      "schema": "IFC4",
+      "project_units": [
+        {
+          "unit_type": "LENGTHUNIT",
+          "name": "METRE",
+          "prefix": null
+        }
+      ],
+      "elements": [
+        {
+          "class": "IfcWall",
+          "name": "W1",
+          "global_id_seed": 10,
+          "qto": null
+        }
+      ],
+      "type_quantities": [],
+      "variant": "short_globalid",
+      "malformed_spf": false,
+      "output_name": "ifc4-short-globalid.ifc"
+    },
+    {
+      "protocol": "bim-fixture.v1",
+      "case_id": "ifc4-malformed-unit",
+      "schema": "IFC4",
+      "project_units": [
+        {
+          "unit_type": "LENGTHUNIT",
+          "name": "METRE",
+          "prefix": null
+        }
+      ],
+      "elements": [
+        {
+          "class": "IfcWall",
+          "name": "W1",
+          "global_id_seed": 10,
+          "qto": null
+        }
+      ],
+      "type_quantities": [],
+      "variant": "malformed_unit",
+      "malformed_spf": false,
+      "output_name": "ifc4-malformed-unit.ifc"
+    },
+    {
+      "protocol": "bim-fixture.v1",
+      "case_id": "ifc4-no-units",
+      "schema": "IFC4",
+      "project_units": [
+        {
+          "unit_type": "LENGTHUNIT",
+          "name": "METRE",
+          "prefix": null
+        }
+      ],
+      "elements": [
+        {
+          "class": "IfcWall",
+          "name": "W1",
+          "global_id_seed": 10,
+          "qto": {
+            "name": "Qto_WallBaseQuantities",
+            "method": null,
+            "quantities": [
+              {
+                "name": "Length",
+                "kind": "IfcQuantityLength",
+                "value": 3.0,
+                "unit": null
+              },
+              {
+                "name": "NetArea",
+                "kind": "IfcQuantityArea",
+                "value": 6.0,
+                "unit": null
+              }
+            ]
+          }
+        }
+      ],
+      "type_quantities": [],
+      "variant": null,
+      "malformed_spf": false,
+      "output_name": "ifc4-no-units.ifc"
+    },
+    {
+      "protocol": "bim-fixture.v1",
+      "case_id": "ifc4-type-only-qto",
+      "schema": "IFC4",
+      "project_units": [
+        {
+          "unit_type": "LENGTHUNIT",
+          "name": "METRE",
+          "prefix": null
+        }
+      ],
+      "elements": [
+        {
+          "class": "IfcWall",
+          "name": "W1",
+          "global_id_seed": 10,
+          "qto": null
+        }
+      ],
+      "type_quantities": [
+        {
+          "class": "IfcWall",
+          "name": "WT",
+          "qto": {
+            "name": "Qto_WallTypeQuantities",
+            "method": "type-level",
+            "quantities": [
+              {
+                "name": "Length",
+                "kind": "IfcQuantityLength",
+                "value": 999.0,
+                "unit": null
+              }
+            ]
+          }
+        }
+      ],
+      "variant": null,
+      "malformed_spf": false,
+      "output_name": "ifc4-type-only-qto.ifc"
+    }
+  ]
+}

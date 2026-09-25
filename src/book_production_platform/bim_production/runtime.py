@@ -23,9 +23,11 @@ from book_production_platform.bim_production.errors import BimProductionError
 MAX_WORKER_TIMEOUT_SECONDS = 120
 MAX_DIAGNOSTIC_BYTES = 64 * 1024
 MAX_WORKER_RESULT_BYTES = 16 * 1024
+MAX_IFC_INPUT_BYTES = 64 * 1024 * 1024
 WORKER_PROTOCOL = "bim-worker.v1"
 WORKER_MODES = frozenset({"preflight", "takeoff", "fixture"})
 WORKER_PATH = Path(__file__).with_name("freecad_worker.FCMacro")
+STAGED_IFC_NAME = "source.ifc"
 WRAPPER_RELATIVE_PATH = Path(
     "ifcopenshell/_ifcopenshell_wrapper.cp311-win_amd64.pyd"
 )
@@ -33,32 +35,20 @@ _VERSION_PATTERN = re.compile(
     r"(?m)^FreeCAD (?P<version>[0-9]+\.[0-9]+\.[0-9]+) Revision: (?P<build>[^\r\n]+)$"
 )
 _SAFE_ENVIRONMENT_KEYS = ("SYSTEMROOT", "WINDIR")
-_WORKER_RESULT_KEYS = {
-    "protocol",
-    "mode",
-    "status",
-    "error_code",
-    "failure_stage",
-    "gui_loaded",
-    "freecad_version",
-    "freecad_build",
-    "python_version",
-    "ifcopenshell_version",
-    "wrapper_sha256",
-    "schemas",
-    "open_callable",
-    "validation_api",
-    "unit_api",
-    "qto_api",
-    "malformed_spf_rejected",
-    "valid_ifc4_validation_findings",
-}
 _SAFE_WORKER_ERRORS = {
     "bim_runtime_path_unsupported",
     "unsupported_freecad_build",
     "unsupported_ifcopenshell_runtime",
-        "unsafe_output_path",
-        "worker_failed",
+    "unsafe_output_path",
+    "worker_failed",
+    "invalid_bim_request",
+    "ifc_path_invalid",
+    "ifc_input_too_large",
+    "ifc_parse_invalid",
+    "ifc_schema_invalid",
+    "ifc_identity_invalid",
+    "unsupported_ifc_schema",
+    "invalid_fixture_case",
 }
 _WORKER_FAILURE_STAGES = {
     "startup",
@@ -75,12 +65,45 @@ _WORKER_FAILURE_STAGES = {
     "ifcopenshell-api",
     "ifcopenshell-version",
     "schema-factories",
+    "request-invalid",
+    "ifc-parse",
+    "schema-gate",
+    "instance-bound",
+    "identity",
     "ifc-validation",
+    "unit-assignment",
     "malformed-spf",
     "malformed-spf-accepted",
     "valid-ifc-validation-findings",
+    "fixture-request",
+    "fixture-write",
     "gui-check",
     "complete",
+}
+_WORKER_RESULT_KEYS = {
+    "protocol",
+    "mode",
+    "status",
+    "error_code",
+    "failure_stage",
+    "gui_loaded",
+    "validation",
+    "generated",
+    "malformed",
+    "schema",
+    "instances",
+    "freecad_version",
+    "freecad_build",
+    "python_version",
+    "ifcopenshell_version",
+    "wrapper_sha256",
+    "schemas",
+    "open_callable",
+    "validation_api",
+    "unit_api",
+    "qto_api",
+    "malformed_spf_rejected",
+    "valid_ifc4_validation_findings",
 }
 
 
@@ -454,6 +477,57 @@ def _preflight_failure(
     return None
 
 
+def validate_ifc_source(source: Path) -> str:
+    """Check the local IFC input and return its SHA-256 without reading it twice."""
+
+    if not isinstance(source, Path) or _is_link(source):
+        raise BimProductionError("ifc_path_invalid")
+    try:
+        if not source.is_file() or source.suffix.casefold() != ".ifc":
+            raise BimProductionError("ifc_path_invalid")
+        size = source.stat().st_size
+    except OSError:
+        raise BimProductionError("ifc_path_invalid") from None
+    if size > MAX_IFC_INPUT_BYTES:
+        raise BimProductionError("ifc_input_too_large")
+    try:
+        return _sha256_file(source)
+    except OSError:
+        raise BimProductionError("ifc_path_invalid") from None
+
+
+def stage_ifc_input(source: Path, staging_root: Path) -> tuple[Path, str]:
+    """Copy the bounded IFC input byte-for-byte into private staging."""
+
+    source_hash = validate_ifc_source(source)
+    if not isinstance(staging_root, Path) or _is_link(staging_root):
+        raise BimProductionError("unsafe_output_path")
+    try:
+        staging_root.mkdir(parents=True, exist_ok=True)
+        staged = staging_root / STAGED_IFC_NAME
+        if _is_link(staged) or staged.exists():
+            raise BimProductionError("publication_failed")
+        with source.open("rb") as reader, staged.open("xb") as writer:
+            copied = 0
+            while True:
+                block = reader.read(1024 * 1024)
+                if not block:
+                    break
+                copied += len(block)
+                if copied > MAX_IFC_INPUT_BYTES:
+                    raise BimProductionError("ifc_input_too_large")
+                writer.write(block)
+            writer.flush()
+            os.fsync(writer.fileno())
+        if _sha256_file(staged) != source_hash:
+            raise BimProductionError("takeoff_integrity_error")
+    except BimProductionError:
+        raise
+    except OSError:
+        raise BimProductionError("unsafe_output_path") from None
+    return staged, source_hash
+
+
 def run_bim_worker(
     freecadcmd: Path,
     ifc_site_packages: Path,
@@ -461,6 +535,7 @@ def run_bim_worker(
     request_path: Path,
     work_root: Path,
     timeout_s: int,
+    worker_path: Path | None = None,
 ) -> BimWorkerResult:
     """Run one fixed BIM worker mode with bounded output and a strict deadline."""
 
@@ -490,7 +565,8 @@ def run_bim_worker(
         raise
     except (OSError, RuntimeError):
         raise BimProductionError("unsafe_output_path") from None
-    if not WORKER_PATH.is_file() or _is_link(WORKER_PATH):
+    macro_path = WORKER_PATH if worker_path is None else worker_path
+    if not isinstance(macro_path, Path) or not macro_path.is_file() or _is_link(macro_path):
         raise BimProductionError("freecad_unavailable")
     try:
         result_path = root / f"worker-result-{mode}.json"
@@ -508,7 +584,7 @@ def run_bim_worker(
         command = [
             str(freecadcmd.resolve(strict=True)),
             "--console",
-            str(WORKER_PATH.resolve(strict=True)),
+            str(macro_path.resolve(strict=True)),
             "--",
             mode,
             "--site-packages",

@@ -7,18 +7,51 @@ import ctypes
 import hashlib
 import importlib
 import json
+import math
 import os
+import re
 import sys
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 from book_production_platform.bim_production.errors import BimProductionError
 
 PROTOCOL = "bim-worker.v1"
 MAX_RESULT_BYTES = 16 * 1024
+MAX_REQUEST_BYTES = 64 * 1024
+MAX_IFC_INSTANCES = 250_000
 WRAPPER_RELATIVE_PATH = Path(
     "ifcopenshell/_ifcopenshell_wrapper.cp311-win_amd64.pyd"
 )
+SUPPORTED_SCHEMAS = frozenset({"IFC2X3", "IFC4"})
+SUPPORTED_ELEMENT_CLASSES = (
+    "IfcWall",
+    "IfcSlab",
+    "IfcColumn",
+    "IfcBeam",
+    "IfcDoor",
+    "IfcWindow",
+)
+GLOBAL_ID_PATTERN = re.compile(r"[0-9A-Za-z_$]{22}")
+TAKEOFF_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
+_QUANTITY_KINDS = frozenset(
+    {
+        "IfcQuantityLength",
+        "IfcQuantityArea",
+        "IfcQuantityVolume",
+        "IfcQuantityCount",
+    }
+)
+_TAKEOFF_REQUEST_KEYS = {
+    "protocol",
+    "mode",
+    "takeoff_id",
+    "ifc_path",
+    "element_classes",
+    "expected_schemas",
+    "max_instances",
+}
 _FAILURE_CODE = "worker_failed"
 _FAILURE_STAGE = "startup"
 _WORKER_FAILURE_STAGES = {
@@ -27,6 +60,8 @@ _WORKER_FAILURE_STAGES = {
     "short-path",
     "wrapper-hash",
     "dll-directory",
+    "dll-directory-missing",
+    "dll-directory-registration",
     "freecad-import",
     "freecad-version",
     "python-version",
@@ -34,7 +69,13 @@ _WORKER_FAILURE_STAGES = {
     "ifcopenshell-api",
     "ifcopenshell-version",
     "schema-factories",
+    "request-invalid",
+    "ifc-parse",
+    "schema-gate",
+    "instance-bound",
+    "identity",
     "ifc-validation",
+    "unit-assignment",
     "malformed-spf",
     "gui-check",
     "complete",
@@ -114,7 +155,9 @@ def _atomic_json(path: Path, value: dict[str, object]) -> None:
     os.replace(temporary, path)
 
 
-def _preflight(site_packages: Path, work_root: Path) -> dict[str, object]:
+def _bootstrap(site_packages: Path, load_schema_factories: bool) -> dict[str, Any]:
+    """Verify the pinned runtime through the short path and import its fixed APIs."""
+
     global _FAILURE_CODE, _FAILURE_STAGE
     _FAILURE_CODE = "bim_runtime_path_unsupported"
     _FAILURE_STAGE = "runtime-lock"
@@ -168,59 +211,265 @@ def _preflight(site_packages: Path, work_root: Path) -> dict[str, object]:
         if getattr(ifcopenshell, "__version__", None) != lock["ifcopenshell_version"]:
             _FAILURE_STAGE = "ifcopenshell-version"
             raise BimProductionError("unsupported_ifcopenshell_runtime")
-        _FAILURE_STAGE = "schema-factories"
-        # Opening both empty schemas loads the native schema factories in this process.
-        ifc2x3 = ifcopenshell.file(schema="IFC2X3")
-        ifc4 = ifcopenshell.file(schema="IFC4")
-        valid_path = work_root / "preflight-valid-ifc4.ifc"
-        malformed_path = work_root / "preflight-malformed.ifc"
-        for path in (valid_path, malformed_path):
-            if _is_link(path) or path.exists():
-                raise BimProductionError("unsafe_output_path")
-        ifc4.write(str(valid_path))
-        reopened = ifcopenshell.open(str(valid_path))
-        logger = validate_api.json_logger()
-        _FAILURE_STAGE = "ifc-validation"
-        validate_api.validate(reopened, logger, express_rules=False)
-        malformed_path.write_text("This is not an IFC-SPF file;\n", encoding="utf-8")
-        _FAILURE_STAGE = "malformed-spf"
-        try:
-            ifcopenshell.open(str(malformed_path))
-        # IfcOpenShell raises a native parser exception for invalid SPF text.
-        except Exception:  # noqa: BLE001
-            malformed_rejected = True
-        else:
-            malformed_rejected = False
-        finally:
-            valid_path.unlink(missing_ok=True)
-            malformed_path.unlink(missing_ok=True)
-        if not malformed_rejected:
-            _FAILURE_STAGE = "malformed-spf-accepted"
-            raise BimProductionError("unsupported_ifcopenshell_runtime")
-        if logger.statements:
-            _FAILURE_STAGE = "valid-ifc-validation-findings"
-            raise BimProductionError("unsupported_ifcopenshell_runtime")
-        _FAILURE_STAGE = "gui-check"
-        if "FreeCADGui" in sys.modules:
-            raise BimProductionError("unsupported_ifcopenshell_runtime")
-        _FAILURE_CODE = "worker_failed"
-        _FAILURE_STAGE = "complete"
+        factories: dict[str, Any] = {}
+        if load_schema_factories:
+            _FAILURE_STAGE = "schema-factories"
+            # Opening both empty schemas loads the native schema factories in this process.
+            factories = {
+                "IFC2X3": ifcopenshell.file(schema="IFC2X3"),
+                "IFC4": ifcopenshell.file(schema="IFC4"),
+            }
         return {
             "freecad_version": actual_freecad_version,
-            "freecad_build": str(lock["freecad_build"]),
-            "python_version": f"{sys.version_info.major}.{sys.version_info.minor}",
-            "ifcopenshell_version": str(ifcopenshell.__version__),
-            "wrapper_sha256": wrapper_hash,
-            "schemas": [ifc2x3.schema, ifc4.schema],
-            "open_callable": callable(getattr(ifcopenshell, "open", None)),
-            "validation_api": callable(getattr(validate_api, "validate", None)),
-            "unit_api": callable(getattr(unit_api, "get_project_unit", None)),
-            "qto_api": callable(getattr(element_api, "get_psets", None)),
-            "malformed_spf_rejected": malformed_rejected,
-            "valid_ifc4_validation_findings": len(logger.statements),
+            "ifcopenshell": ifcopenshell,
+            "validate": validate_api,
+            "unit": unit_api,
+            "element": element_api,
+            "wrapper_hash": wrapper_hash,
+            "factories": factories,
         }
     finally:
         dll_cookie.close()
+
+
+def _reject_duplicate_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    value: dict[str, object] = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError("duplicate key")
+        value[key] = item
+    return value
+
+
+def _reject_non_finite(value: str) -> NoReturn:
+    raise ValueError(f"non-finite JSON constant: {value}")
+
+
+def _read_bounded_json(path: Path) -> dict[str, object]:
+    payload = path.read_bytes()
+    if len(payload) > MAX_REQUEST_BYTES:
+        raise ValueError("request exceeds its bound")
+    value = json.loads(
+        payload.decode("utf-8"),
+        object_pairs_hook=_reject_duplicate_pairs,
+        parse_constant=_reject_non_finite,
+    )
+    if not isinstance(value, dict):
+        raise TypeError("request is not an object")
+    return value
+
+
+@dataclass(frozen=True, slots=True)
+class _TakeoffRequest:
+    takeoff_id: str
+    ifc_path: str
+    element_classes: tuple[str, ...]
+    expected_schemas: frozenset[str]
+    max_instances: int
+
+
+def _load_takeoff_request(path: Path) -> _TakeoffRequest:
+    global _FAILURE_STAGE
+    _FAILURE_STAGE = "request-invalid"
+    try:
+        request = _read_bounded_json(path)
+    except (OSError, UnicodeDecodeError, ValueError, TypeError, RecursionError):
+        raise BimProductionError("invalid_bim_request") from None
+    if set(request) != _TAKEOFF_REQUEST_KEYS or request.get("protocol") != PROTOCOL:
+        raise BimProductionError("invalid_bim_request")
+    takeoff_id = request.get("takeoff_id")
+    if not isinstance(takeoff_id, str) or not TAKEOFF_ID_PATTERN.fullmatch(takeoff_id):
+        raise BimProductionError("invalid_bim_request")
+    classes = request.get("element_classes")
+    schemas = request.get("expected_schemas")
+    if not isinstance(classes, list) or not classes:
+        raise BimProductionError("invalid_bim_request")
+    if not all(isinstance(item, str) for item in classes):
+        raise BimProductionError("invalid_bim_request")
+    if len(set(classes)) != len(classes) or not set(classes) <= set(SUPPORTED_ELEMENT_CLASSES):
+        raise BimProductionError("invalid_bim_request")
+    if not isinstance(schemas, list) or not schemas:
+        raise BimProductionError("invalid_bim_request")
+    if not all(isinstance(item, str) for item in schemas):
+        raise BimProductionError("invalid_bim_request")
+    if not set(schemas) <= SUPPORTED_SCHEMAS:
+        raise BimProductionError("invalid_bim_request")
+    limit = request.get("max_instances")
+    if (
+        isinstance(limit, bool)
+        or not isinstance(limit, int)
+        or not 1 <= limit <= MAX_IFC_INSTANCES
+    ):
+        raise BimProductionError("invalid_bim_request")
+    if request.get("mode") != "takeoff" or not isinstance(request.get("ifc_path"), str):
+        raise BimProductionError("invalid_bim_request")
+    _FAILURE_STAGE = "ifc-parse"
+    return _TakeoffRequest(
+        takeoff_id=takeoff_id,
+        ifc_path=str(request["ifc_path"]),
+        element_classes=tuple(str(item) for item in classes),
+        expected_schemas=frozenset(str(item) for item in schemas),
+        max_instances=limit,
+    )
+
+
+def _validate_unit_assignments(model: Any) -> None:
+    """Reject malformed project unit assignments that would corrupt conversion."""
+
+    global _FAILURE_STAGE
+    _FAILURE_STAGE = "unit-assignment"
+    for project in model.by_type("IfcProject"):
+        assignment = getattr(project, "UnitsInContext", None)
+        if assignment is None:
+            continue
+        for unit in getattr(assignment, "Units", None) or []:
+            if unit.is_a("IfcSIUnit"):
+                continue
+            if not unit.is_a("IfcConversionBasedUnit"):
+                raise BimProductionError("ifc_schema_invalid")
+            current = unit
+            while current.is_a("IfcConversionBasedUnit"):
+                factor = getattr(current, "ConversionFactor", None)
+                value = getattr(factor, "ValueComponent", None)
+                raw = getattr(value, "wrappedValue", value)
+                if (
+                    isinstance(raw, bool)
+                    or not isinstance(raw, (int, float))
+                    or not math.isfinite(raw)
+                    or raw <= 0
+                ):
+                    raise BimProductionError("ifc_schema_invalid")
+                current = getattr(factor, "UnitComponent", None)
+                if current is None:
+                    raise BimProductionError("ifc_schema_invalid")
+            if not current.is_a("IfcSIUnit"):
+                raise BimProductionError("ifc_schema_invalid")
+
+
+def _takeoff(site_packages: Path, request_path: Path, work_root: Path) -> dict[str, object]:
+    """Validate IFC syntax, schema, identity, and units for one staged request."""
+
+    global _FAILURE_STAGE
+    request = _load_takeoff_request(request_path)
+    runtime = _bootstrap(site_packages, load_schema_factories=False)
+    ifcopenshell = runtime["ifcopenshell"]
+    validate_api = runtime["validate"]
+    ifc_path = Path(request.ifc_path)
+    if _is_link(ifc_path) or ifc_path.parent != work_root or ifc_path.name != "source.ifc":
+        raise BimProductionError("ifc_path_invalid")
+    try:
+        model = ifcopenshell.open(str(ifc_path))
+    except BimProductionError:
+        raise
+    # IfcOpenShell raises a native parser exception for invalid SPF input.
+    except Exception:  # noqa: BLE001
+        raise BimProductionError("ifc_parse_invalid") from None
+    _FAILURE_STAGE = "schema-gate"
+    schema = str(model.schema)
+    if schema not in request.expected_schemas:
+        raise BimProductionError("unsupported_ifc_schema")
+    _FAILURE_STAGE = "instance-bound"
+    total_instances = sum(1 for _ in iter(model))
+    if not isinstance(total_instances, int) or total_instances > request.max_instances:
+        raise BimProductionError("ifc_input_too_large")
+    _FAILURE_STAGE = "identity"
+    selected_elements = 0
+    seen_global_ids: set[str] = set()
+    for class_name in request.element_classes:
+        for element in model.by_type(str(class_name)):
+            global_id = getattr(element, "GlobalId", None)
+            if not isinstance(global_id, str) or not GLOBAL_ID_PATTERN.fullmatch(global_id):
+                raise BimProductionError("ifc_identity_invalid")
+            if global_id in seen_global_ids:
+                raise BimProductionError("ifc_identity_invalid")
+            seen_global_ids.add(global_id)
+            selected_elements += 1
+    _FAILURE_STAGE = "ifc-validation"
+    logger = validate_api.json_logger()
+    validate_api.validate(model, logger, express_rules=False)
+    if logger.statements:
+        raise BimProductionError("ifc_schema_invalid")
+    _validate_unit_assignments(model)
+    projects = model.by_type("IfcProject")
+    project_identity_hash = ""
+    if projects:
+        project = projects[0]
+        project_identity_hash = hashlib.sha256(
+            f"{getattr(project, 'GlobalId', '')}|{getattr(project, 'Name', '')}".encode()
+        ).hexdigest()
+    _FAILURE_STAGE = "gui-check"
+    if "FreeCADGui" in sys.modules:
+        raise BimProductionError("unsupported_ifcopenshell_runtime")
+    _FAILURE_STAGE = "complete"
+    return {
+        "validation": {
+            "schema": str(schema),
+            "project_identity_hash": project_identity_hash,
+            "total_instances": total_instances,
+            "selected_elements": selected_elements,
+            "validation_findings": len(logger.statements),
+        }
+    }
+
+
+def _preflight(site_packages: Path, work_root: Path) -> dict[str, object]:
+    global _FAILURE_CODE, _FAILURE_STAGE
+    _FAILURE_CODE = "unsupported_ifcopenshell_runtime"
+    runtime = _bootstrap(site_packages, load_schema_factories=True)
+    ifcopenshell = runtime["ifcopenshell"]
+    validate_api = runtime["validate"]
+    unit_api = runtime["unit"]
+    element_api = runtime["element"]
+    wrapper_hash = str(runtime["wrapper_hash"])
+    ifc2x3 = runtime["factories"]["IFC2X3"]
+    ifc4 = runtime["factories"]["IFC4"]
+    valid_path = work_root / "preflight-valid-ifc4.ifc"
+    malformed_path = work_root / "preflight-malformed.ifc"
+    for path in (valid_path, malformed_path):
+        if _is_link(path) or path.exists():
+            raise BimProductionError("unsafe_output_path")
+    ifc4.write(str(valid_path))
+    reopened = ifcopenshell.open(str(valid_path))
+    logger = validate_api.json_logger()
+    _FAILURE_STAGE = "ifc-validation"
+    validate_api.validate(reopened, logger, express_rules=False)
+    malformed_path.write_text("This is not an IFC-SPF file;\n", encoding="utf-8")
+    _FAILURE_STAGE = "malformed-spf"
+    try:
+        ifcopenshell.open(str(malformed_path))
+    # IfcOpenShell raises a native parser exception for invalid SPF text.
+    except Exception:  # noqa: BLE001
+        malformed_rejected = True
+    else:
+        malformed_rejected = False
+    finally:
+        valid_path.unlink(missing_ok=True)
+        malformed_path.unlink(missing_ok=True)
+    if not malformed_rejected:
+        _FAILURE_STAGE = "malformed-spf-accepted"
+        raise BimProductionError("unsupported_ifcopenshell_runtime")
+    if logger.statements:
+        _FAILURE_STAGE = "valid-ifc-validation-findings"
+        raise BimProductionError("unsupported_ifcopenshell_runtime")
+    _FAILURE_STAGE = "gui-check"
+    if "FreeCADGui" in sys.modules:
+        raise BimProductionError("unsupported_ifcopenshell_runtime")
+    _FAILURE_CODE = "worker_failed"
+    _FAILURE_STAGE = "complete"
+    return {
+        "freecad_version": str(runtime["freecad_version"]),
+        "freecad_build": str(_load_lock()["freecad_build"]),
+        "python_version": f"{sys.version_info.major}.{sys.version_info.minor}",
+        "ifcopenshell_version": str(ifcopenshell.__version__),
+        "wrapper_sha256": wrapper_hash,
+        "schemas": [ifc2x3.schema, ifc4.schema],
+        "open_callable": callable(getattr(ifcopenshell, "open", None)),
+        "validation_api": callable(getattr(validate_api, "validate", None)),
+        "unit_api": callable(getattr(unit_api, "get_project_unit", None)),
+        "qto_api": callable(getattr(element_api, "get_psets", None)),
+        "malformed_spf_rejected": malformed_rejected,
+        "valid_ifc4_validation_findings": len(logger.statements),
+    }
 
 
 def _arguments(argv: list[str]) -> argparse.Namespace:
@@ -248,10 +497,17 @@ def main(argv: list[str]) -> None:
         result_path = work_root / f"worker-result-{mode}.json"
         if _is_link(work_root) or not work_root.is_dir() or _is_link(result_path) or result_path.exists():
             raise BimProductionError("unsafe_output_path")
-        if mode != "preflight":
-            # These fixed modes are implemented by subsequent bounded plan tasks.
+        if mode == "preflight":
+            values = _preflight(Path(args.site_packages), work_root)
+        elif mode == "takeoff":
+            if not args.request:
+                raise BimProductionError("invalid_bim_request")
+            values = _takeoff(
+                Path(args.site_packages), Path(args.request), work_root
+            )
+        else:
+            # The fixture mode is implemented only by the test fixture macro.
             raise BimProductionError("worker_failed")
-        values = _preflight(Path(args.site_packages), work_root)
         response: dict[str, object] = {
             "protocol": PROTOCOL,
             "mode": mode,
@@ -292,3 +548,15 @@ def main(argv: list[str]) -> None:
                 )
         except (OSError, TypeError, ValueError):
             return
+
+
+def bootstrap_bim_runtime(site_packages: Path) -> dict[str, Any]:
+    """Verify the pinned runtime and expose its fixed APIs for test tooling only."""
+
+    return _bootstrap(site_packages, load_schema_factories=False)
+
+
+def write_worker_result(path: Path, value: dict[str, object]) -> None:
+    """Write one bounded worker result atomically for the fixed protocol."""
+
+    _atomic_json(path, value)

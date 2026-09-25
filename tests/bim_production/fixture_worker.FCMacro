@@ -1,0 +1,496 @@
+"""Test-only declarative IFC fixture generator for the pinned FreeCAD runtime.
+
+This macro is executed by ``tests/bim_production/fixtures.py`` through
+``run_bim_worker(..., mode="fixture", worker_path=...)``. It accepts only
+``bim-fixture.v1`` descriptor objects, never scripts or expressions, and
+writes generated IFC files only beneath its work root.
+"""
+
+import argparse
+import json
+import math
+import os
+import re
+import sys
+import uuid
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+
+from book_production_platform.bim_production import worker as bim_worker  # noqa: E402
+from book_production_platform.bim_production.errors import BimProductionError  # noqa: E402
+
+PROTOCOL = "bim-fixture.v1"
+SUPPORTED_SCHEMAS = ("IFC2X3", "IFC4", "IFC4X3")
+SUPPORTED_CLASSES = frozenset(bim_worker.SUPPORTED_ELEMENT_CLASSES)
+QUANTITY_KINDS = {
+    "IfcQuantityLength": 4,
+    "IfcQuantityArea": 3,
+    "IfcQuantityVolume": 2,
+    "IfcQuantityCount": 0,
+}
+UNIT_TYPES = frozenset({"LENGTHUNIT", "AREAUNIT", "VOLUMEUNIT"})
+UNIT_NAMES = frozenset({"METRE", "SQUARE_METRE", "CUBIC_METRE"})
+UNIT_PREFIXES = frozenset({None, "MILLI", "CENTI"})
+VARIANTS = frozenset({None, "duplicate_globalid", "short_globalid", "malformed_unit"})
+CASE_ID_PATTERN = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
+OUTPUT_PATTERN = re.compile(r"[a-z0-9][a-z0-9-]{0,63}\.ifc")
+MAX_UNITS = 8
+MAX_ELEMENTS = 24
+MAX_QUANTITIES = 24
+MAX_TYPE_QUANTITIES = 4
+
+_FAILURE_STAGE = "fixture-request"
+
+
+def _guid(seed: int):
+    return sys.modules["ifcopenshell"].guid.compress(str(uuid.UUID(int=seed)))
+
+
+def _is_link(path: Path) -> bool:
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return True
+    junction = bool(getattr(metadata, "st_file_attributes", 0) & 0x400)
+    return path.is_symlink() or junction
+
+
+def _reject_duplicate_pairs(pairs):
+    value = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError("duplicate key")
+        value[key] = item
+    return value
+
+
+def _finite_number(value) -> bool:
+    return (
+        not isinstance(value, bool)
+        and isinstance(value, (int, float))
+        and math.isfinite(value)
+    )
+
+
+def _validate_unit(unit) -> None:
+    global _FAILURE_STAGE
+    _FAILURE_STAGE = "fixture-request"
+    if not isinstance(unit, dict) or set(unit) != {"unit_type", "name", "prefix"}:
+        raise BimProductionError("invalid_fixture_case")
+    if unit["unit_type"] not in UNIT_TYPES or unit["name"] not in UNIT_NAMES:
+        raise BimProductionError("invalid_fixture_case")
+    if unit["prefix"] not in UNIT_PREFIXES:
+        raise BimProductionError("invalid_fixture_case")
+
+
+def _validate_quantity(quantity) -> None:
+    global _FAILURE_STAGE
+    _FAILURE_STAGE = "fixture-request"
+    if not isinstance(quantity, dict) or set(quantity) != {
+        "name",
+        "kind",
+        "value",
+        "unit",
+    }:
+        raise BimProductionError("invalid_fixture_case")
+    name = quantity["name"]
+    kind = quantity["kind"]
+    if not isinstance(name, str) or not 1 <= len(name) <= 64:
+        raise BimProductionError("invalid_fixture_case")
+    if kind not in QUANTITY_KINDS:
+        raise BimProductionError("invalid_fixture_case")
+    if not _finite_number(quantity["value"]):
+        raise BimProductionError("invalid_fixture_case")
+    if quantity["unit"] is not None:
+        _validate_unit(quantity["unit"])
+
+
+def _validate_descriptor(descriptor) -> dict:
+    global _FAILURE_STAGE
+    _FAILURE_STAGE = "fixture-request"
+    allowed = {
+        "protocol",
+        "case_id",
+        "schema",
+        "project_units",
+        "elements",
+        "type_quantities",
+        "variant",
+        "malformed_spf",
+        "output_name",
+    }
+    if not isinstance(descriptor, dict) or set(descriptor) != allowed:
+        raise BimProductionError("invalid_fixture_case")
+    if descriptor["protocol"] != PROTOCOL:
+        raise BimProductionError("invalid_fixture_case")
+    if not isinstance(descriptor["case_id"], str) or not CASE_ID_PATTERN.fullmatch(
+        descriptor["case_id"]
+    ):
+        raise BimProductionError("invalid_fixture_case")
+    if descriptor["schema"] not in SUPPORTED_SCHEMAS:
+        raise BimProductionError("invalid_fixture_case")
+    if not isinstance(descriptor["output_name"], str) or not OUTPUT_PATTERN.fullmatch(
+        descriptor["output_name"]
+    ):
+        raise BimProductionError("invalid_fixture_case")
+    if descriptor["variant"] not in VARIANTS:
+        raise BimProductionError("invalid_fixture_case")
+    if not isinstance(descriptor["malformed_spf"], bool):
+        raise BimProductionError("invalid_fixture_case")
+    units = descriptor["project_units"]
+    if not isinstance(units, list) or len(units) > MAX_UNITS:
+        raise BimProductionError("invalid_fixture_case")
+    for unit in units:
+        _validate_unit(unit)
+    elements = descriptor["elements"]
+    if not isinstance(elements, list) or not elements or len(elements) > MAX_ELEMENTS:
+        raise BimProductionError("invalid_fixture_case")
+    for element in elements:
+        if not isinstance(element, dict) or set(element) != {
+            "class",
+            "name",
+            "global_id_seed",
+            "qto",
+        }:
+            raise BimProductionError("invalid_fixture_case")
+        if element["class"] not in SUPPORTED_CLASSES:
+            raise BimProductionError("invalid_fixture_case")
+        if not isinstance(element["name"], str) or not 1 <= len(element["name"]) <= 64:
+            raise BimProductionError("invalid_fixture_case")
+        if (
+            isinstance(element["global_id_seed"], bool)
+            or not isinstance(element["global_id_seed"], int)
+            or not 0 <= element["global_id_seed"] <= 2**63 - 1
+        ):
+            raise BimProductionError("invalid_fixture_case")
+        qto = element["qto"]
+        if qto is None:
+            continue
+        if not isinstance(qto, dict) or set(qto) != {
+            "name",
+            "method",
+            "quantities",
+        }:
+            raise BimProductionError("invalid_fixture_case")
+        if not isinstance(qto["name"], str) or not 1 <= len(qto["name"]) <= 64:
+            raise BimProductionError("invalid_fixture_case")
+        if qto["method"] is not None and (
+            not isinstance(qto["method"], str) or len(qto["method"]) > 64
+        ):
+            raise BimProductionError("invalid_fixture_case")
+        quantities = qto["quantities"]
+        if not isinstance(quantities, list) or len(quantities) > MAX_QUANTITIES:
+            raise BimProductionError("invalid_fixture_case")
+        for quantity in quantities:
+            _validate_quantity(quantity)
+    type_quantities = descriptor["type_quantities"]
+    if not isinstance(type_quantities, list) or len(type_quantities) > MAX_TYPE_QUANTITIES:
+        raise BimProductionError("invalid_fixture_case")
+    for entry in type_quantities:
+        if not isinstance(entry, dict) or set(entry) != {
+            "class",
+            "name",
+            "qto",
+        }:
+            raise BimProductionError("invalid_fixture_case")
+        if entry["class"] not in SUPPORTED_CLASSES:
+            raise BimProductionError("invalid_fixture_case")
+        if not isinstance(entry["name"], str) or not 1 <= len(entry["name"]) <= 64:
+            raise BimProductionError("invalid_fixture_case")
+        qto = entry["qto"]
+        if not isinstance(qto, dict) or set(qto) != {"name", "method", "quantities"}:
+            raise BimProductionError("invalid_fixture_case")
+        if not isinstance(qto["quantities"], list) or not qto["quantities"]:
+            raise BimProductionError("invalid_fixture_case")
+        for quantity in qto["quantities"]:
+            _validate_quantity(quantity)
+    return descriptor
+
+
+def _build_units(ifc, unit_specs):
+    units = []
+    for spec in unit_specs:
+        units.append(
+            ifc.createIfcSIUnit(None, spec["unit_type"], spec["prefix"], spec["name"])
+        )
+    return units
+
+
+def _build_quantities(ifc, qto_spec):
+    entities = []
+    for quantity in qto_spec["quantities"]:
+        unit = quantity["unit"]
+        unit_entity = None
+        if unit is not None:
+            unit_entity = ifc.createIfcSIUnit(None, unit["unit_type"], unit["prefix"], unit["name"])
+        kind = quantity["kind"]
+        name = quantity["name"]
+        value = float(quantity["value"])
+        if kind == "IfcQuantityLength":
+            entities.append(ifc.createIfcQuantityLength(name, None, unit_entity, value))
+        elif kind == "IfcQuantityArea":
+            entities.append(ifc.createIfcQuantityArea(name, None, unit_entity, value))
+        elif kind == "IfcQuantityVolume":
+            entities.append(ifc.createIfcQuantityVolume(name, None, unit_entity, value))
+        else:
+            entities.append(ifc.createIfcQuantityCount(name, None, unit_entity, value))
+    return entities
+
+
+def _build_model(ifc, descriptor):
+    person = ifc.createIfcPerson(None, "Fixture", "User", None, None, None, None, None)
+    org = ifc.createIfcOrganization(None, "FixtureOrg", None, None, None)
+    pando = ifc.createIfcPersonAndOrganization(person, org, None)
+    app = ifc.createIfcApplication(org, "1.0", "FixtureApp", "FIXT")
+    hist = ifc.createIfcOwnerHistory(
+        OwningUser=pando,
+        OwningApplication=app,
+        ChangeAction="NOCHANGE",
+        CreationDate=0,
+    )
+    units = _build_units(ifc, descriptor["project_units"])
+    assignment = ifc.createIfcUnitAssignment()
+    assignment.Units = units
+    origin = ifc.createIfcAxis2Placement3D(
+        ifc.createIfcCartesianPoint((0.0, 0.0, 0.0)), None, None
+    )
+    context = ifc.createIfcGeometricRepresentationContext(
+        None, "Model", 3, 1.0e-05, origin, None
+    )
+    project = ifc.createIfcProject(
+        _guid(1), hist, "FixtureProject", None, None, None, None, [context], assignment
+    )
+    site = ifc.createIfcSite(
+        GlobalId=_guid(2), OwnerHistory=hist, Name="FixtureSite", CompositionType="ELEMENT"
+    )
+    building = ifc.createIfcBuilding(
+        GlobalId=_guid(3), OwnerHistory=hist, Name="FixtureBuilding", CompositionType="ELEMENT"
+    )
+    storey = ifc.createIfcBuildingStorey(
+        GlobalId=_guid(4), OwnerHistory=hist, Name="FixtureStorey", CompositionType="ELEMENT"
+    )
+    ifc.createIfcRelAggregates(_guid(20), hist, None, None, project, [site])
+    ifc.createIfcRelAggregates(_guid(21), hist, None, None, site, [building])
+    ifc.createIfcRelAggregates(_guid(22), hist, None, None, building, [storey])
+
+    built = []
+    element_constructors = {
+        "IfcWall": ifc.createIfcWall,
+        "IfcSlab": ifc.createIfcSlab,
+        "IfcColumn": ifc.createIfcColumn,
+        "IfcBeam": ifc.createIfcBeam,
+        "IfcDoor": ifc.createIfcDoor,
+        "IfcWindow": ifc.createIfcWindow,
+    }
+    type_constructors = {
+        "IfcWall": ifc.createIfcWallType,
+        "IfcSlab": ifc.createIfcSlabType,
+        "IfcColumn": ifc.createIfcColumnType,
+        "IfcBeam": ifc.createIfcBeamType,
+    }
+    for index, element in enumerate(descriptor["elements"]):
+        create = element_constructors[element["class"]]
+        entity = create(_guid(100 + index), hist, element["name"], None, None, None, None, None)
+        built.append(entity)
+        if element["qto"] is not None:
+            quantities = _build_quantities(ifc, element["qto"])
+            qto = ifc.createIfcElementQuantity(
+                _guid(2000 + index),
+                hist,
+                element["qto"]["name"],
+                element["qto"]["method"],
+                None,
+                quantities,
+            )
+            ifc.createIfcRelDefinesByProperties(
+                _guid(3000 + index), hist, None, None, [entity], qto
+            )
+        ifc.createIfcRelContainedInSpatialStructure(
+            _guid(4000 + index), hist, None, None, [entity], storey
+        )
+
+    for index, entry in enumerate(descriptor["type_quantities"]):
+        create = type_constructors.get(entry["class"])
+        if create is None:
+            raise BimProductionError("invalid_fixture_case")
+        type_entity = create(GlobalId=_guid(5000 + index), OwnerHistory=hist, Name=entry["name"])
+        quantities = _build_quantities(ifc, entry["qto"])
+        qto = ifc.createIfcElementQuantity(
+            _guid(7000 + index),
+            hist,
+            entry["qto"]["name"],
+            entry["qto"]["method"],
+            None,
+            quantities,
+        )
+        type_entity.HasPropertySets = [qto]
+        related = [entity for entity in built if entity.is_a(entry["class"])]
+        if not related:
+            raise BimProductionError("invalid_fixture_case")
+        ifc.createIfcRelDefinesByType(
+            _guid(8000 + index), hist, None, None, related, type_entity
+        )
+
+    if descriptor["variant"] == "duplicate_globalid":
+        first = built[0]
+        second = built[1]
+        second.GlobalId = first.GlobalId
+    elif descriptor["variant"] == "short_globalid":
+        built[0].GlobalId = "SHORT"
+    elif descriptor["variant"] == "malformed_unit":
+        factor = ifc.createIfcMeasureWithUnit(
+            ifc.createIfcLengthMeasure(0.0),
+            ifc.createIfcSIUnit(None, "LENGTHUNIT", None, "METRE"),
+        )
+        exponents = ifc.createIfcDimensionalExponents(1, 0, 0, 0, 0, 0, 0)
+        broken = ifc.createIfcConversionBasedUnit(
+            exponents, "LENGTHUNIT", "BROKENUNIT", factor
+        )
+        assignment.Units = [broken]
+    return built
+
+
+def _normalize_header_timestamp(output: Path) -> None:
+    """Replace the wall-clock FILE_NAME stamp with a fixed deterministic value."""
+
+    text = output.read_text(encoding="utf-8")
+    normalized = re.sub(
+        r"(FILE_NAME\('[^']*',')[^']*(')",
+        r"\g<1>1970-01-01T00:00:00\g<2>",
+        text,
+        count=1,
+    )
+    if normalized != text:
+        output.write_text(normalized, encoding="utf-8")
+
+
+def _fixture(site_packages: Path, request_path: Path, work_root: Path) -> dict:
+    global _FAILURE_STAGE
+    runtime = bim_worker.bootstrap_bim_runtime(site_packages)
+    ifcopenshell = runtime["ifcopenshell"]
+    _FAILURE_STAGE = "fixture-request"
+    try:
+        with request_path.open("rb") as stream:
+            payload = stream.read(64 * 1024 + 1)
+        if len(payload) > 64 * 1024:
+            raise ValueError("fixture request exceeds its bound")
+        request = json.loads(payload.decode("utf-8"), object_pairs_hook=_reject_duplicate_pairs)
+    except (OSError, UnicodeDecodeError, ValueError, TypeError) as error:
+        raise BimProductionError("invalid_fixture_case") from error
+    if not isinstance(request, dict) or set(request) != {"protocol", "case"}:
+        raise BimProductionError("invalid_fixture_case")
+    if request["protocol"] != PROTOCOL:
+        raise BimProductionError("invalid_fixture_case")
+    descriptor = _validate_descriptor(request["case"])
+
+    _FAILURE_STAGE = "fixture-write"
+    if descriptor["malformed_spf"]:
+        output = work_root / descriptor["output_name"]
+        if _is_link(output) or output.exists():
+            raise BimProductionError("unsafe_output_path")
+        output.write_text("This is not an IFC-SPF file;\n", encoding="utf-8")
+        return {"generated": descriptor["output_name"], "malformed": True}
+
+    factory_schema = descriptor["schema"]
+    model = ifcopenshell.file(schema=factory_schema)
+    _build_model(model, descriptor)
+    output = work_root / descriptor["output_name"]
+    if _is_link(output) or output.exists():
+        raise BimProductionError("unsafe_output_path")
+    model.write(str(output))
+    _normalize_header_timestamp(output)
+    return {
+        "generated": descriptor["output_name"],
+        "malformed": False,
+        "schema": model.schema,
+        "instances": sum(1 for _ in iter(model)),
+    }
+
+
+def _arguments(argv):
+    try:
+        marker = argv.index("--")
+    except ValueError as error:
+        raise BimProductionError("worker_failed") from error
+    parser = argparse.ArgumentParser(prog="bim-fixture-worker", add_help=False)
+    parser.add_argument("mode", choices=("fixture",))
+    parser.add_argument("--site-packages", required=True)
+    parser.add_argument("--work-root", required=True)
+    parser.add_argument("--request", required=True)
+    return parser.parse_args(argv[marker + 1 :])
+
+
+def main(argv) -> None:
+    mode = "fixture"
+    work_root = Path.cwd()
+    result_path = work_root / "worker-result-fixture.json"
+    try:
+        args = _arguments(argv)
+        mode = args.mode
+        work_root = Path(args.work_root).resolve(strict=True)
+        result_path = work_root / f"worker-result-{mode}.json"
+        if (
+            _is_link(work_root)
+            or not work_root.is_dir()
+            or _is_link(result_path)
+            or result_path.exists()
+        ):
+            raise BimProductionError("unsafe_output_path")
+        values = _fixture(Path(args.site_packages), Path(args.request), work_root)
+        bim_worker.write_worker_result(
+            result_path,
+            {
+                "protocol": bim_worker.PROTOCOL,
+                "mode": mode,
+                "status": "ok",
+                "gui_loaded": "FreeCADGui" in sys.modules,
+                **values,
+            },
+        )
+    except BimProductionError as error:
+        try:
+            if (
+                not _is_link(work_root)
+                and work_root.is_dir()
+                and not result_path.exists()
+            ):
+                bim_worker.write_worker_result(
+                    result_path,
+                    {
+                        "protocol": bim_worker.PROTOCOL,
+                        "mode": mode,
+                        "status": "error",
+                        "error_code": error.code,
+                        "failure_stage": _FAILURE_STAGE,
+                    },
+                )
+        except (OSError, TypeError, ValueError):
+            return
+    except Exception:  # noqa: BLE001
+        try:
+            if (
+                not _is_link(work_root)
+                and work_root.is_dir()
+                and not result_path.exists()
+            ):
+                bim_worker.write_worker_result(
+                    result_path,
+                    {
+                        "protocol": bim_worker.PROTOCOL,
+                        "mode": mode,
+                        "status": "error",
+                        "error_code": "invalid_fixture_case",
+                        "failure_stage": _FAILURE_STAGE,
+                    },
+                )
+        except (OSError, TypeError, ValueError):
+            return
+
+
+# FreeCAD executes macros without a __main__ module name, so the entry
+# point is invoked at import time exactly like the product worker macro.
+main(sys.argv)
