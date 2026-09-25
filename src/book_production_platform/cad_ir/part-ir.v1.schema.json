@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "part-ir.v1.schema.json",
+  "title": "PartIR v1",
+  "description": "Strict mounting-plate request. Decimal ranges and web constraints are enforced by the deterministic validator.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "part_id",
+    "template",
+    "units",
+    "parameters",
+    "hole_pattern"
+  ],
+  "properties": {
+    "schema_version": {"const": "part-ir.v1"},
+    "part_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+    },
+    "template": {"const": "mounting-plate.v1"},
+    "units": {"const": "mm"},
+    "parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "width_mm",
+        "height_mm",
+        "thickness_mm",
+        "hole_diameter_mm",
+        "hole_offset_x_mm",
+        "hole_offset_y_mm"
+      ],
+      "properties": {
+        "width_mm": {"type": "string", "pattern": "^(0|[1-9][0-9]{0,2})(\\.[0-9]{1,3})?$"},
+        "height_mm": {"type": "string", "pattern": "^(0|[1-9][0-9]{0,2})(\\.[0-9]{1,3})?$"},
+        "thickness_mm": {"type": "string", "pattern": "^(0|[1-9][0-9]{0,2})(\\.[0-9]{1,3})?$"},
+        "hole_diameter_mm": {"type": "string", "pattern": "^(0|[1-9][0-9]{0,2})(\\.[0-9]{1,3})?$"},
+        "hole_offset_x_mm": {"type": "string", "pattern": "^(0|[1-9][0-9]{0,2})(\\.[0-9]{1,3})?$"},
+        "hole_offset_y_mm": {"type": "string", "pattern": "^(0|[1-9][0-9]{0,2})(\\.[0-9]{1,3})?$"}
+      }
+    },
+    "hole_pattern": {"const": "four-corner.v1"}
+  }
+}

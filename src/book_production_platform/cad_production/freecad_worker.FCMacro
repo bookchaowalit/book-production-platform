@@ -1,0 +1,492 @@
+"""Fixed, data-only FreeCAD worker for one bounded PartIR mounting plate."""
+
+import argparse
+import json
+import math
+import os
+import re
+import sys
+from decimal import Decimal
+
+import FreeCAD as App
+import Mesh
+import Part
+import Sketcher
+
+
+PROTOCOL = "freecad-worker.v1"
+PART_IR_VERSION = "part-ir.v1"
+TEMPLATE = "mounting-plate.v1"
+HOLE_PATTERN = "four-corner.v1"
+MAX_REQUEST_BYTES = 64 * 1024
+MAX_TESSELLATION_ITEMS = 100_000
+DECIMAL_PATTERN = re.compile(r"^(0|[1-9][0-9]{0,2})(\.[0-9]{1,3})?$")
+PART_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
+PARAMETER_NAMES = {
+    "width_mm",
+    "height_mm",
+    "thickness_mm",
+    "hole_diameter_mm",
+    "hole_offset_x_mm",
+    "hole_offset_y_mm",
+}
+_FAILURE_STAGE = "startup"
+
+
+def _reject_duplicate_pairs(pairs):
+    value = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError("duplicate key")
+        value[key] = item
+    return value
+
+
+def _reject_non_finite(value):
+    raise ValueError("non-finite JSON value")
+
+
+def _is_junction(path):
+    if os.name != "nt":
+        return False
+    try:
+        metadata = os.lstat(path)
+    except OSError:
+        return False
+    return bool(getattr(metadata, "st_file_attributes", 0) & 0x400) and not os.path.islink(path)
+
+
+def _require_regular_file(path):
+    if os.path.islink(path) or _is_junction(path) or not os.path.isfile(path):
+        raise ValueError("required file is unavailable")
+
+
+def _atomic_json(path, value):
+    temporary = path + ".tmp"
+    with open(temporary, "w", encoding="utf-8", newline="\n") as stream:
+        json.dump(value, stream, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+        stream.write("\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(temporary, path)
+
+
+def _read_part_ir(request_path, output_root):
+    if os.path.islink(output_root) or _is_junction(output_root) or not os.path.isdir(output_root):
+        raise ValueError("output root is unavailable")
+    root = os.path.realpath(output_root)
+    _require_regular_file(request_path)
+    request = os.path.realpath(request_path)
+    if os.path.dirname(request) != root:
+        raise ValueError("request is outside the job directory")
+    with open(request, "rb") as stream:
+        payload = stream.read(MAX_REQUEST_BYTES + 1)
+    if len(payload) > MAX_REQUEST_BYTES:
+        raise ValueError("request exceeds its size limit")
+    value = json.loads(
+        payload.decode("utf-8"),
+        object_pairs_hook=_reject_duplicate_pairs,
+        parse_constant=_reject_non_finite,
+    )
+    if not isinstance(value, dict) or set(value) != {
+        "schema_version",
+        "part_id",
+        "template",
+        "units",
+        "parameters",
+        "hole_pattern",
+    }:
+        raise ValueError("invalid request structure")
+    if (
+        value["schema_version"] != PART_IR_VERSION
+        or value["template"] != TEMPLATE
+        or value["units"] != "mm"
+        or value["hole_pattern"] != HOLE_PATTERN
+        or not isinstance(value["part_id"], str)
+        or PART_ID_PATTERN.fullmatch(value["part_id"]) is None
+        or not isinstance(value["parameters"], dict)
+        or set(value["parameters"]) != PARAMETER_NAMES
+    ):
+        raise ValueError("unsupported request")
+    parameters = {}
+    ranges = {
+        "width_mm": (Decimal(20), Decimal(500)),
+        "height_mm": (Decimal(20), Decimal(500)),
+        "thickness_mm": (Decimal(1), Decimal(50)),
+        "hole_diameter_mm": (Decimal(2), Decimal(25)),
+        "hole_offset_x_mm": (Decimal(5), Decimal(200)),
+        "hole_offset_y_mm": (Decimal(5), Decimal(200)),
+    }
+    for name, (minimum, maximum) in ranges.items():
+        raw = value["parameters"][name]
+        if not isinstance(raw, str) or DECIMAL_PATTERN.fullmatch(raw) is None:
+            raise ValueError("invalid dimension")
+        number = Decimal(raw)
+        if not minimum <= number <= maximum:
+            raise ValueError("dimension outside range")
+        parameters[name] = number
+    diameter = parameters["hole_diameter_mm"]
+    if (
+        parameters["hole_offset_x_mm"] - diameter / 2 < 2
+        or parameters["hole_offset_y_mm"] - diameter / 2 < 2
+        or parameters["width_mm"] - 2 * parameters["hole_offset_x_mm"] - diameter < 2
+        or parameters["height_mm"] - 2 * parameters["hole_offset_y_mm"] - diameter < 2
+    ):
+        raise ValueError("minimum web constraint failed")
+    return value["part_id"], parameters
+
+
+def _matches_bounds(shape, parameters):
+    bounds = shape.BoundBox
+    expected = (
+        (bounds.XMin, 0.0),
+        (bounds.YMin, 0.0),
+        (bounds.ZMin, 0.0),
+        (bounds.XMax, float(parameters["width_mm"])),
+        (bounds.YMax, float(parameters["height_mm"])),
+        (bounds.ZMax, float(parameters["thickness_mm"])),
+    )
+    return all(abs(actual - target) <= 0.01 for actual, target in expected)
+
+
+def _bounds(shape):
+    bounds = shape.BoundBox
+    return [
+        float(bounds.XMin),
+        float(bounds.XMax),
+        float(bounds.YMin),
+        float(bounds.YMax),
+        float(bounds.ZMin),
+        float(bounds.ZMax),
+    ]
+
+
+def _cylindrical_bores(shape, thickness):
+    measured = []
+    for face in shape.Faces:
+        surface = face.Surface
+        if not isinstance(surface, Part.Cylinder):
+            continue
+        axis = surface.Axis
+        face_bounds = face.BoundBox
+        if (
+            abs(axis.x) > 1e-6
+            or abs(axis.y) > 1e-6
+            or abs(abs(axis.z) - 1.0) > 1e-6
+            or face_bounds.ZMin > 0.01
+            or face_bounds.ZMax < thickness - 0.01
+        ):
+            continue
+        center = surface.Center
+        measured.append(
+            {
+                "center_x_mm": float(center.x),
+                "center_y_mm": float(center.y),
+                "radius_mm": float(surface.Radius),
+                "through": True,
+            }
+        )
+    measured.sort(key=lambda item: (item["center_x_mm"], item["center_y_mm"]))
+    if len(measured) != 4:
+        raise ValueError("native cylindrical bore count invalid")
+    return measured
+
+
+def _require_valid_solid(shape):
+    if shape.isNull() or not shape.isValid() or len(shape.Solids) != 1 or shape.Volume <= 0:
+        raise ValueError("solid geometry failed validation")
+
+
+def _plate_sketch(doc, body, width, height):
+    sketch = doc.addObject("Sketcher::SketchObject", "PlateSketch")
+    body.addObject(sketch)
+    points = [(0.0, 0.0), (width, 0.0), (width, height), (0.0, height)]
+    for index in range(4):
+        start = points[index]
+        end = points[(index + 1) % 4]
+        sketch.addGeometry(
+            Part.LineSegment(
+                App.Vector(start[0], start[1], 0),
+                App.Vector(end[0], end[1], 0),
+            ),
+            False,
+        )
+    sketch.addConstraint(
+        [
+            Sketcher.Constraint("Coincident", 0, 2, 1, 1),
+            Sketcher.Constraint("Coincident", 1, 2, 2, 1),
+            Sketcher.Constraint("Coincident", 2, 2, 3, 1),
+            Sketcher.Constraint("Coincident", 3, 2, 0, 1),
+            Sketcher.Constraint("Horizontal", 0),
+            Sketcher.Constraint("Vertical", 1),
+            Sketcher.Constraint("Horizontal", 2),
+            Sketcher.Constraint("Vertical", 3),
+            Sketcher.Constraint("DistanceX", 0, 1, 0.0),
+            Sketcher.Constraint("DistanceY", 0, 1, 0.0),
+            Sketcher.Constraint("Distance", 0, width),
+            Sketcher.Constraint("Distance", 1, height),
+        ]
+    )
+    return sketch
+
+
+def _hole_sketch(doc, body, width, height, thickness, diameter, offset_x, offset_y):
+    sketch = doc.addObject("Sketcher::SketchObject", "HoleSketch")
+    body.addObject(sketch)
+    sketch.Placement = App.Placement(App.Vector(0, 0, thickness), App.Rotation())
+    centers = (
+        (offset_x, offset_y),
+        (width - offset_x, offset_y),
+        (width - offset_x, height - offset_y),
+        (offset_x, height - offset_y),
+    )
+    for index, (x, y) in enumerate(centers):
+        sketch.addGeometry(
+            Part.Circle(App.Vector(x, y, 0), App.Vector(0, 0, 1), diameter / 2),
+            False,
+        )
+        sketch.addConstraint(
+            [
+                Sketcher.Constraint("DistanceX", index, 3, x),
+                Sketcher.Constraint("DistanceY", index, 3, y),
+                Sketcher.Constraint("Diameter", index, diameter),
+            ]
+        )
+    return sketch
+
+
+def _tessellate(shape, output_root):
+    vertices, triangles = shape.tessellate(0.25)
+    if not 1 <= len(vertices) <= MAX_TESSELLATION_ITEMS:
+        raise ValueError("tessellation vertex cap exceeded")
+    if not 1 <= len(triangles) <= MAX_TESSELLATION_ITEMS:
+        raise ValueError("tessellation face cap exceeded")
+    packed_vertices = []
+    for vertex in vertices:
+        values = [round(float(vertex.x), 6), round(float(vertex.y), 6), round(float(vertex.z), 6)]
+        if not all(math.isfinite(value) for value in values):
+            raise ValueError("tessellation contains non-finite values")
+        packed_vertices.append([0.0 if value == 0 else value for value in values])
+    packed_triangles = [list(map(int, triangle)) for triangle in triangles]
+    for triangle in packed_triangles:
+        if len(triangle) != 3 or any(index < 0 or index >= len(packed_vertices) for index in triangle):
+            raise ValueError("tessellation index invalid")
+    path = os.path.join(output_root, "tessellation.json")
+    _atomic_json(
+        path,
+        {
+            "schema_version": "cad-tessellation.v1",
+            "units": "mm",
+            "vertices": packed_vertices,
+            "triangles": packed_triangles,
+        },
+    )
+    return len(packed_vertices), len(packed_triangles)
+
+
+def _build(part_id, parameters, output_root):
+    global _FAILURE_STAGE
+    width = float(parameters["width_mm"])
+    height = float(parameters["height_mm"])
+    thickness = float(parameters["thickness_mm"])
+    diameter = float(parameters["hole_diameter_mm"])
+    offset_x = float(parameters["hole_offset_x_mm"])
+    offset_y = float(parameters["hole_offset_y_mm"])
+    doc = App.newDocument("CADPart")
+    try:
+        _FAILURE_STAGE = "rectangle-sketch"
+        doc.Label = "Mounting Plate " + part_id
+        body = doc.addObject("PartDesign::Body", "Body")
+        plate = _plate_sketch(doc, body, width, height)
+        doc.recompute()
+        _FAILURE_STAGE = "pad"
+        pad = body.newObject("PartDesign::Pad", "Pad")
+        pad.Profile = plate
+        pad.Length = thickness
+        doc.recompute()
+        _FAILURE_STAGE = "hole-sketch"
+        holes = _hole_sketch(
+            doc,
+            body,
+            width,
+            height,
+            thickness,
+            diameter,
+            offset_x,
+            offset_y,
+        )
+        doc.recompute()
+        _FAILURE_STAGE = "pocket"
+        pocket = body.newObject("PartDesign::Pocket", "Pocket")
+        pocket.Profile = holes
+        pocket.Type = 1
+        body.Tip = pocket
+        doc.recompute()
+        _FAILURE_STAGE = "geometry-check"
+        shape = pocket.Shape
+        _require_valid_solid(shape)
+        if not _matches_bounds(shape, parameters):
+            raise ValueError("native bounds differ from request")
+        if len(plate.Constraints) != 12 or len(holes.Constraints) != 12:
+            raise ValueError("sketch constraints are incomplete")
+        native_path = os.path.join(output_root, "part.FCStd")
+        step_path = os.path.join(output_root, "part.step")
+        stl_path = os.path.join(output_root, "part.stl")
+        _FAILURE_STAGE = "native-and-exchange-export"
+        doc.saveAs(native_path)
+        Part.export([pocket], step_path)
+        Mesh.export([pocket], stl_path)
+        for path in (native_path, step_path, stl_path):
+            _require_regular_file(path)
+            if os.path.getsize(path) == 0:
+                raise ValueError("native export is empty")
+        _FAILURE_STAGE = "tessellation"
+        vertex_count, face_count = _tessellate(shape, output_root)
+        return {
+            "shape_valid": True,
+            "solid_count": 1,
+            "volume_positive": True,
+            "bounds_match": True,
+            "feature_names": ["Body", "PlateSketch", "Pad", "HoleSketch", "Pocket"],
+            "tessellation_vertices": vertex_count,
+            "tessellation_faces": face_count,
+        }
+    finally:
+        App.closeDocument(doc.Name)
+
+
+def _verify_native(parameters, output_root):
+    native_path = os.path.join(output_root, "part.FCStd")
+    _require_regular_file(native_path)
+    doc = App.openDocument(native_path)
+    try:
+        names = {item.Name for item in doc.Objects}
+        expected_names = {"Body", "PlateSketch", "Pad", "HoleSketch", "Pocket"}
+        if not expected_names.issubset(names):
+            raise ValueError("native feature tree is incomplete")
+        bodies = [item for item in doc.Objects if item.TypeId == "PartDesign::Body"]
+        if len(bodies) != 1:
+            raise ValueError("native body count invalid")
+        body = doc.getObject("Body")
+        plate = doc.getObject("PlateSketch")
+        pad = doc.getObject("Pad")
+        holes = doc.getObject("HoleSketch")
+        pocket = doc.getObject("Pocket")
+        shape = pocket.Shape
+        _require_valid_solid(shape)
+        if body.Tip != pocket or plate.GeometryCount != 4 or holes.GeometryCount != 4:
+            raise ValueError("native feature history invalid")
+        if len(plate.Constraints) != 12 or len(holes.Constraints) != 12:
+            raise ValueError("native dimensions are not constrained")
+        if abs(float(pad.Length.Value) - float(parameters["thickness_mm"])) > 0.001:
+            raise ValueError("native pad thickness mismatch")
+        if not _matches_bounds(shape, parameters):
+            raise ValueError("native bounds differ from request")
+        return {
+            "shape_valid": True,
+            "solid_count": 1,
+            "volume_positive": True,
+            "bounds_match": True,
+            "feature_names": ["Body", "PlateSketch", "Pad", "HoleSketch", "Pocket"],
+            "volume_mm3": float(shape.Volume),
+            "bounds_mm": _bounds(shape),
+            "cylindrical_bores": _cylindrical_bores(shape, float(parameters["thickness_mm"])),
+        }
+    finally:
+        App.closeDocument(doc.Name)
+
+
+def _verify_step(parameters, output_root):
+    step_path = os.path.join(output_root, "part.step")
+    _require_regular_file(step_path)
+    shape = Part.Shape()
+    shape.read(step_path)
+    _require_valid_solid(shape)
+    if not _matches_bounds(shape, parameters):
+        raise ValueError("STEP bounds differ from request")
+    with open(step_path, "rb") as stream:
+        payload = stream.read(16 * 1024 * 1024 + 1)
+    if len(payload) > 16 * 1024 * 1024:
+        raise ValueError("STEP export exceeds size limit")
+    if re.search(rb"SI_UNIT\s*\(\s*\.MILLI\.\s*,\s*\.METRE\.\s*\)", payload) is None:
+        raise ValueError("STEP units are not millimeters")
+    width = float(parameters["width_mm"])
+    height = float(parameters["height_mm"])
+    thickness = float(parameters["thickness_mm"])
+    radius = float(parameters["hole_diameter_mm"]) / 2
+    expected_volume = (width * height - 4 * math.pi * radius * radius) * thickness
+    relative_error = abs(float(shape.Volume) - expected_volume) / expected_volume
+    if relative_error > 0.001:
+        raise ValueError("STEP volume differs from request")
+    return {
+        "shape_valid": True,
+        "solid_count": 1,
+        "volume_positive": True,
+        "bounds_match": True,
+        "step_valid": True,
+        "relative_volume_error": relative_error,
+        "volume_mm3": float(shape.Volume),
+        "bounds_mm": _bounds(shape),
+        "units": "mm",
+    }
+
+
+def _worker_args():
+    try:
+        marker = sys.argv.index("--")
+    except ValueError:
+        raise ValueError("worker arguments are missing")
+    parser = argparse.ArgumentParser(prog="freecad-worker", add_help=False)
+    parser.add_argument("mode", choices=("build", "verify-native", "verify-step"))
+    parser.add_argument("--request", required=True)
+    parser.add_argument("--output-root", required=True)
+    return parser.parse_args(sys.argv[marker + 1 :])
+
+
+def _main():
+    global _FAILURE_STAGE
+    _FAILURE_STAGE = "arguments"
+    args = _worker_args()
+    mode = args.mode
+    result_path = os.path.join(args.output_root, "worker-result-" + mode + ".json")
+    try:
+        _FAILURE_STAGE = "request-validation"
+        if os.path.islink(result_path) or _is_junction(result_path) or os.path.exists(result_path):
+            raise ValueError("worker result path is unavailable")
+        part_id, parameters = _read_part_ir(args.request, args.output_root)
+        if "FreeCADGui" in sys.modules:
+            raise ValueError("GUI module loaded")
+        if mode == "build":
+            _FAILURE_STAGE = "build"
+            values = _build(part_id, parameters, args.output_root)
+        elif mode == "verify-native":
+            _FAILURE_STAGE = "verify-native"
+            values = _verify_native(parameters, args.output_root)
+        else:
+            _FAILURE_STAGE = "verify-step"
+            values = _verify_step(parameters, args.output_root)
+        response = {
+            "protocol": PROTOCOL,
+            "mode": mode,
+            "status": "ok",
+            "gui_loaded": False,
+            **values,
+        }
+        _atomic_json(result_path, response)
+    except Exception:
+        try:
+            _atomic_json(
+                result_path,
+                {
+                    "protocol": PROTOCOL,
+                    "mode": mode,
+                    "status": "error",
+                    "error_code": "worker_failed",
+                    "failure_stage": _FAILURE_STAGE,
+                },
+            )
+        except Exception:
+            return
+
+
+_main()

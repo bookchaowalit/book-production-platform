@@ -1,0 +1,1 @@
+{"schema_version":"part-ir.v1","part_id":"bad-web","template":"mounting-plate.v1","units":"mm","parameters":{"width_mm":"137","height_mm":"83","thickness_mm":"7.5","hole_diameter_mm":"8","hole_offset_x_mm":"5","hole_offset_y_mm":"17"},"hole_pattern":"four-corner.v1"}

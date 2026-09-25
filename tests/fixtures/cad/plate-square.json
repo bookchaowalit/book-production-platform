@@ -1,0 +1,1 @@
+{"schema_version":"part-ir.v1","part_id":"plate-square","template":"mounting-plate.v1","units":"mm","parameters":{"width_mm":"100","height_mm":"100","thickness_mm":"5","hole_diameter_mm":"6","hole_offset_x_mm":"10","hole_offset_y_mm":"10"},"hole_pattern":"four-corner.v1"}

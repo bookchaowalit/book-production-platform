@@ -1,0 +1,1 @@
+{"schema_version":"part-ir.v1","part_id":"plate-wide","template":"mounting-plate.v1","units":"mm","parameters":{"width_mm":"220","height_mm":"95","thickness_mm":"12","hole_diameter_mm":"10","hole_offset_x_mm":"20","hole_offset_y_mm":"16"},"hole_pattern":"four-corner.v1"}

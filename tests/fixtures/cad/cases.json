@@ -1,0 +1,25 @@
+{
+  "schema_version": "cad.acceptance-cases.v1",
+  "cases": [
+    {"id": "plate-asymmetric", "kind": "accept", "input": "plate-asymmetric.json"},
+    {"id": "plate-wide", "kind": "accept", "input": "plate-wide.json"},
+    {"id": "plate-square", "kind": "accept", "input": "plate-square.json"},
+    {"id": "plate-long-thin", "kind": "accept", "input": "plate-long-thin.json"},
+    {"id": "plate-compact-thick", "kind": "accept", "input": "plate-compact-thick.json"},
+    {"id": "replay-asymmetric", "kind": "replay", "reference": "plate-asymmetric"},
+    {"id": "replay-wide", "kind": "replay", "reference": "plate-wide"},
+    {"id": "replay-square", "kind": "replay", "reference": "plate-square"},
+    {"id": "replay-long-thin", "kind": "replay", "reference": "plate-long-thin"},
+    {"id": "replay-compact-thick", "kind": "replay", "reference": "plate-compact-thick"},
+    {"id": "malformed-json", "kind": "reject", "input": "malformed-json.json", "expected_error": "invalid_part_ir"},
+    {"id": "unknown-field", "kind": "reject", "input": "unknown-field.json", "expected_error": "invalid_part_ir"},
+    {"id": "unsupported-template", "kind": "reject", "input": "unsupported-template.json", "expected_error": "unsupported_template"},
+    {"id": "unsupported-units", "kind": "reject", "input": "unsupported-units.json", "expected_error": "unsupported_units"},
+    {"id": "dimension-out-of-range", "kind": "reject", "input": "dimension-out-of-range.json", "expected_error": "dimension_out_of_range"},
+    {"id": "web-constraint", "kind": "reject", "input": "web-constraint.json", "expected_error": "feature_constraint_violation"},
+    {"id": "duplicate-key", "kind": "reject", "input": "duplicate-key.json", "expected_error": "invalid_part_ir"},
+    {"id": "oversized-input", "kind": "reject", "input": "oversized-input.json", "expected_error": "invalid_part_ir"},
+    {"id": "tamper-preview", "kind": "tamper_replay", "reference": "plate-asymmetric", "tamper_file": "preview.png", "expected_error": "replay_integrity_error"},
+    {"id": "tamper-step", "kind": "tamper_replay", "reference": "plate-square", "tamper_file": "part.step", "expected_error": "replay_integrity_error"}
+  ]
+}

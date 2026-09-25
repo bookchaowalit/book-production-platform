@@ -1,0 +1,1 @@
+{"schema_version":"part-ir.v1","part_id":"plate-long-thin","template":"mounting-plate.v1","units":"mm","parameters":{"width_mm":"280","height_mm":"60","thickness_mm":"4","hole_diameter_mm":"4","hole_offset_x_mm":"12","hole_offset_y_mm":"8"},"hole_pattern":"four-corner.v1"}

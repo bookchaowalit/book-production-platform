@@ -229,6 +229,85 @@ synthetic plan-only gate, not a measurement of execution against a real source
 database. Monetary compute cost remains `unknown` without an approved rate
 card; there is no deployment target.
 
+## CAD Parametric Part Generator V1A
+
+CAD V1A turns one bounded `part-ir.v1` JSON request into an editable native
+FreeCAD mounting plate and neutral STEP/STL exports. The first template is
+intentionally narrow: one rectangular plate with four through-bores. The
+adapter builds a fixed FreeCAD feature tree, checks the reopened native model,
+STEP units and volume, STL geometry, bore locations, and a deterministic PNG
+preview before publishing. The production path is local and deterministic;
+it uses no LLM, image model, or remote service and reports `model_calls: 0`.
+
+### Runtime and build
+
+- Python 3.12 or newer
+- Windows x86-64 and the pinned portable FreeCADCmd `1.1.3`
+- Runtime archive SHA-256:
+  `9c6959dc9c4dba64dd818a62447e3dfedb4221d776fb044b239d462f150bcec4`
+- FreeCADCmd executable SHA-256:
+  `8feb06052673cdcd56df60d856cc5e6fbf8cf862d56f1419e80a558f505a7b23`
+
+The package checks the executable version, build, platform, and hash against
+`cad_production/freecad-runtime.v1.json` before a job. Runtime files belong in
+the ignored `.runtime/cad/` directory; the portable runtime is not installed
+system-wide or committed. Use the included request at
+`examples/cad/part-ir.json`:
+
+```powershell
+$freecadcmd = ".\.runtime\cad\freecad-1.1.3\extracted\FreeCAD_1.1.3-Windows-x86_64-py311\FreeCADCmd.exe"
+book-production cad build `
+  --input .\examples\cad\part-ir.json `
+  --output-root .\.runtime\cad\jobs `
+  --freecadcmd $freecadcmd `
+  --timeout-s 120
+```
+
+An accepted fingerprint directory contains exactly `part.FCStd`, `part.step`,
+`part.stl`, `preview.png`, and `qa-manifest.json`. The `.FCStd` file keeps the
+editable Body, sketch, pad, hole sketch, and pocket feature history. Replay
+receipts are stored separately under `.receipts/`; an exact replay validates
+all five artifacts and skips the FreeCAD build. Existing artifacts are never
+overwritten.
+
+Run the synthetic acceptance suite once into a new report location:
+
+```powershell
+book-production cad benchmark `
+  --fixtures .\tests\fixtures\cad `
+  --output .\.runtime\cad\pilot\benchmark-cad-v1a.json `
+  --freecadcmd $freecadcmd
+```
+
+The benchmark creates `benchmark-cad-v1a.jobs` beside the report and retains its
+five accepted native projects and previews for local review. It checks five
+fresh builds, five exact replays, eight malformed/boundary requests, and two
+tampered-artifact replays. The JSON report includes case IDs, counts, timings,
+runtime identity, and byte totals; it contains neither PartIR values nor local
+paths. Output and job locations must be new and are not overwritten.
+
+### V1A boundaries and errors
+
+PartIR is limited to 64 KiB, decimal strings with at most three fractional
+digits, and millimeter units. Width and height range from 20–500 mm, thickness
+from 1–50 mm, bore diameter from 2–25 mm, and offsets from 5–200 mm. Each bore
+must leave at least a 2 mm edge or inter-bore web. Only `mounting-plate.v1` and
+`four-corner.v1` are accepted. Requests cannot supply scripts, expressions,
+macros, paths, URLs, arbitrary feature types, or source CAD files.
+
+Rejected CLI requests print one stable JSON object and exit with status 2;
+benchmark outcome mismatches produce a failed report and exit with status 3.
+Stable codes include `invalid_part_ir`, `unsupported_template`,
+`unsupported_units`, `dimension_out_of_range`,
+`feature_constraint_violation`, `freecad_unavailable`,
+`unsupported_freecad_build`, `worker_deadline_exceeded`,
+`native_document_invalid`, `step_export_invalid`, `stl_export_invalid`,
+`preview_invalid`, `replay_integrity_error`, and `publication_failed`.
+Input and generated artifacts stay on the local machine. This pilot is not an
+OS sandbox for untrusted files and its geometric checks are not engineering,
+structural, safety, manufacturing, or regulatory certification. Monetary cost
+is `unknown`; the standard build path makes zero model calls.
+
 ## Audio Master V1A
 
 Audio Master converts one local PCM WAV and a versioned `audio-ir.v1` request

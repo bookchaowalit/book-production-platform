@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from book_production_platform.audio_production.cli import main as audio_main
+from book_production_platform.cad_production.cli import main as cad_main
 from book_production_platform.data_pipeline.cli import main as data_main
 from book_production_platform.game_production.cli import game_main
 from book_production_platform.graphics_production.cli import main as graphics_main
@@ -69,6 +70,8 @@ def _parser() -> argparse.ArgumentParser:
     spreadsheet.add_argument("spreadsheet_args", nargs=argparse.REMAINDER)
     audio = groups.add_parser("audio", help="Audio Master V1A WAV operations")
     audio.add_argument("audio_args", nargs=argparse.REMAINDER)
+    cad = groups.add_parser("cad", help="Parametric CAD V1A operations")
+    cad.add_argument("cad_args", nargs=argparse.REMAINDER)
     data = groups.add_parser("data", help="Data SQL/Pipeline Builder V1A operations")
     data.add_argument("data_args", nargs=argparse.REMAINDER)
     return parser
@@ -90,6 +93,8 @@ def main(argv: list[str] | None = None) -> int:
         return spreadsheet_main(args.spreadsheet_args)
     if args.family == "audio":
         return audio_main(args.audio_args)
+    if args.family == "cad":
+        return cad_main(args.cad_args)
     try:
         if args.family == "scene" and args.command == "compose":
             result = compose_scene(
