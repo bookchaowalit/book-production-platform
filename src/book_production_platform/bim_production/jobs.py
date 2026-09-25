@@ -57,7 +57,7 @@ LOCK_TIMEOUT_SECONDS = 15
 MAX_RECEIPT_BYTES = 64 * 1024
 IFC_HEADER_SCAN_BYTES = 64 * 1024
 _HEADER_SCHEMA_PATTERN = re.compile(
-    r"FILE_SCHEMA\s*\(\s*\(\s*'(IFC[0-9A-Za-z]+)'\s*\)\s*\)"
+    r"FILE_SCHEMA\s*\(\s*\(\s*'(IFC[0-9A-Za-z_]+)'\s*\)\s*\)"
 )
 
 
@@ -295,6 +295,20 @@ def shutil_rmtree(directory: Path) -> None:
     shutil.rmtree(directory, ignore_errors=True)
 
 
+def _rename_directory(source: Path, target: Path) -> None:
+    """Atomically publish a directory, tolerating brief Windows share locks."""
+
+    deadline = time.monotonic() + 5
+    while True:
+        try:
+            os.replace(source, target)
+            return
+        except PermissionError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.1)
+
+
 def build_bim_takeoff_job(
     ir_path: Path,
     ifc_path: Path,
@@ -434,7 +448,7 @@ def build_bim_takeoff_job(
                     for name in JOB_ARTIFACTS
                 },
             }
-            os.replace(build_dir, job_dir)
+            _rename_directory(build_dir, job_dir)
             _write_receipt(receipt_path, receipt)
             return BimJobResult(
                 status=qa.status,
