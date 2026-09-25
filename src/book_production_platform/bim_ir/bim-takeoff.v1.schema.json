@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "bim-takeoff.v1.schema.json",
+  "title": "BimTakeoffIR v1",
+  "description": "Strict, declarative quantity-takeoff request. Quantity values never appear here; they are read only from the IFC model.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "takeoff_id",
+    "element_classes",
+    "output_units"
+  ],
+  "properties": {
+    "schema_version": {"const": "bim-takeoff.v1"},
+    "takeoff_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+    },
+    "element_classes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 6,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "IfcWall",
+          "IfcSlab",
+          "IfcColumn",
+          "IfcBeam",
+          "IfcDoor",
+          "IfcWindow"
+        ]
+      }
+    },
+    "output_units": {"const": "SI"}
+  }
+}
