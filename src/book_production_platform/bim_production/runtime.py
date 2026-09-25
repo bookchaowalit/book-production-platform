@@ -23,6 +23,7 @@ from book_production_platform.bim_production.errors import BimProductionError
 MAX_WORKER_TIMEOUT_SECONDS = 120
 MAX_DIAGNOSTIC_BYTES = 64 * 1024
 MAX_WORKER_RESULT_BYTES = 16 * 1024
+MAX_TAKEOFF_RESULT_BYTES = 1024 * 1024
 MAX_IFC_INPUT_BYTES = 64 * 1024 * 1024
 WORKER_PROTOCOL = "bim-worker.v1"
 WORKER_MODES = frozenset({"preflight", "takeoff", "fixture"})
@@ -88,6 +89,7 @@ _WORKER_RESULT_KEYS = {
     "failure_stage",
     "gui_loaded",
     "validation",
+    "extraction",
     "generated",
     "malformed",
     "schema",
@@ -331,12 +333,13 @@ def _reject_duplicate_pairs(pairs: list[tuple[str, object]]) -> dict[str, object
 
 
 def _read_worker_result(path: Path, mode: str) -> dict[str, object] | None:
+    bound = MAX_TAKEOFF_RESULT_BYTES if mode == "takeoff" else MAX_WORKER_RESULT_BYTES
     try:
         if _is_link(path) or not path.is_file():
             return None
         with path.open("rb") as stream:
-            payload = stream.read(MAX_WORKER_RESULT_BYTES + 1)
-        if len(payload) > MAX_WORKER_RESULT_BYTES:
+            payload = stream.read(bound + 1)
+        if len(payload) > bound:
             return None
         value = json.loads(
             payload.decode("utf-8"), object_pairs_hook=_reject_duplicate_pairs

@@ -19,8 +19,10 @@ from book_production_platform.bim_production.errors import BimProductionError
 
 PROTOCOL = "bim-worker.v1"
 MAX_RESULT_BYTES = 16 * 1024
+MAX_TAKEOFF_RESULT_BYTES = 1024 * 1024
 MAX_REQUEST_BYTES = 64 * 1024
 MAX_IFC_INSTANCES = 250_000
+MAX_QUANTITY_RECORDS = 4000
 WRAPPER_RELATIVE_PATH = Path(
     "ifcopenshell/_ifcopenshell_wrapper.cp311-win_amd64.pyd"
 )
@@ -141,11 +143,13 @@ def _short_path(path: Path) -> Path:
         raise BimProductionError("bim_runtime_path_unsupported") from None
 
 
-def _atomic_json(path: Path, value: dict[str, object]) -> None:
+def _atomic_json(
+    path: Path, value: dict[str, object], max_bytes: int = MAX_RESULT_BYTES
+) -> None:
     payload = json.dumps(
         value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False
     ).encode("utf-8") + b"\n"
-    if len(payload) > MAX_RESULT_BYTES:
+    if len(payload) > max_bytes:
         raise ValueError("worker result exceeds its bound")
     temporary = path.with_name(path.name + ".tmp")
     with temporary.open("xb") as stream:
@@ -355,10 +359,20 @@ def _takeoff(site_packages: Path, request_path: Path, work_root: Path) -> dict[s
     ifcopenshell = runtime["ifcopenshell"]
     validate_api = runtime["validate"]
     ifc_path = Path(request.ifc_path)
-    if _is_link(ifc_path) or ifc_path.parent != work_root or ifc_path.name != "source.ifc":
+    if (
+        _is_link(ifc_path)
+        or not ifc_path.is_absolute()
+        or ifc_path.name != "source.ifc"
+    ):
         raise BimProductionError("ifc_path_invalid")
     try:
-        model = ifcopenshell.open(str(ifc_path))
+        resolved_ifc = ifc_path.resolve(strict=True)
+    except (OSError, RuntimeError):
+        raise BimProductionError("ifc_path_invalid") from None
+    if resolved_ifc.parent != work_root or resolved_ifc.name != "source.ifc":
+        raise BimProductionError("ifc_path_invalid")
+    try:
+        model = ifcopenshell.open(str(resolved_ifc))
     except BimProductionError:
         raise
     # IfcOpenShell raises a native parser exception for invalid SPF input.
@@ -397,19 +411,169 @@ def _takeoff(site_packages: Path, request_path: Path, work_root: Path) -> dict[s
         project_identity_hash = hashlib.sha256(
             f"{getattr(project, 'GlobalId', '')}|{getattr(project, 'Name', '')}".encode()
         ).hexdigest()
+    _FAILURE_STAGE = "extraction"
+    extraction = _extract_occurrence_quantities(model, request.element_classes)
     _FAILURE_STAGE = "gui-check"
     if "FreeCADGui" in sys.modules:
         raise BimProductionError("unsupported_ifcopenshell_runtime")
     _FAILURE_STAGE = "complete"
     return {
         "validation": {
-            "schema": str(schema),
+            "schema": schema,
             "project_identity_hash": project_identity_hash,
             "total_instances": total_instances,
             "selected_elements": selected_elements,
             "validation_findings": len(logger.statements),
-        }
+        },
+        "extraction": {"records": extraction},
     }
+
+
+_EXTRACTION_RECORD_KEYS = {
+    "global_id",
+    "ifc_class",
+    "qto_name",
+    "quantity_name",
+    "measure_kind",
+    "method",
+    "raw_value",
+    "unit",
+    "gap",
+}
+
+
+def _extraction_record(
+    global_id: str | None,
+    ifc_class: str | None,
+    qto_name: str | None,
+    quantity_name: str | None,
+    measure_kind: str | None,
+    method: str | None,
+    raw_value: str | None,
+    unit: dict[str, object] | None,
+    gap: str | None,
+) -> dict[str, object]:
+    return {
+        "global_id": global_id,
+        "ifc_class": ifc_class,
+        "qto_name": qto_name,
+        "quantity_name": quantity_name,
+        "measure_kind": measure_kind,
+        "method": method,
+        "raw_value": raw_value,
+        "unit": unit,
+        "gap": gap,
+    }
+
+
+def _unit_payload(metadata: Any) -> dict[str, object] | None:
+    if metadata is None:
+        return None
+    return {
+        "kind": metadata.kind,
+        "name": metadata.name,
+        "prefix": metadata.prefix,
+        "scale": metadata.scale,
+        "dimension": metadata.dimension,
+    }
+
+
+def _extract_occurrence_quantities(
+    model: Any, element_classes: tuple[str, ...]
+) -> list[dict[str, object]]:
+    """Read only direct occurrence-level IfcElementQuantity values."""
+
+    global _FAILURE_STAGE
+    _FAILURE_STAGE = "extraction"
+    from book_production_platform.bim_production.units import (
+        VALUE_ATTRIBUTE,
+        CoverageGap,
+        quantity_raw_value,
+        resolve_source_unit,
+    )
+
+    records: list[dict[str, object]] = []
+    for class_name in element_classes:
+        for element in model.by_type(str(class_name)):
+            global_id = str(element.GlobalId)
+            ifc_class = str(element.is_a())
+            qto_entities = []
+            for rel in getattr(element, "IsDefinedBy", None) or []:
+                if not rel.is_a("IfcRelDefinesByProperties"):
+                    continue
+                definition = getattr(rel, "RelatingPropertyDefinition", None)
+                if definition is not None and definition.is_a("IfcElementQuantity"):
+                    qto_entities.append(definition)
+            if not qto_entities:
+                records.append(
+                    _extraction_record(
+                        global_id, ifc_class, None, None, None, None, None, None,
+                        "quantity_missing",
+                    )
+                )
+                continue
+            for qto in qto_entities:
+                qto_name = str(qto.Name)
+                method_value = getattr(qto, "MethodOfMeasurement", None)
+                method = str(method_value) if method_value else None
+                quantities = list(getattr(qto, "Quantities", None) or [])
+                name_counts: dict[tuple[str, str], int] = {}
+                for quantity in quantities:
+                    key = (qto_name, str(getattr(quantity, "Name", "")))
+                    name_counts[key] = name_counts.get(key, 0) + 1
+                ambiguous_reported: set[tuple[str, str]] = set()
+                for quantity in quantities:
+                    measure_kind = str(quantity.is_a())
+                    quantity_name = str(getattr(quantity, "Name", ""))
+                    if name_counts[(qto_name, quantity_name)] > 1:
+                        if (qto_name, quantity_name) not in ambiguous_reported:
+                            ambiguous_reported.add((qto_name, quantity_name))
+                            records.append(
+                                _extraction_record(
+                                    global_id, ifc_class, qto_name, quantity_name,
+                                    measure_kind, method, None, None,
+                                    "quantity_ambiguous",
+                                )
+                            )
+                        continue
+                    if len(records) >= MAX_QUANTITY_RECORDS:
+                        _FAILURE_STAGE = "result-bound"
+                        raise BimProductionError("ifc_input_too_large")
+                    if measure_kind not in VALUE_ATTRIBUTE:
+                        records.append(
+                            _extraction_record(
+                                global_id, ifc_class, qto_name, quantity_name,
+                                measure_kind, method, None, None,
+                                "quantity_type_unsupported",
+                            )
+                        )
+                        continue
+                    resolved = resolve_source_unit(model, quantity)
+                    if isinstance(resolved, CoverageGap):
+                        records.append(
+                            _extraction_record(
+                                global_id, ifc_class, qto_name, quantity_name,
+                                measure_kind, method, None, None,
+                                str(resolved.reason),
+                            )
+                        )
+                        continue
+                    try:
+                        raw = quantity_raw_value(quantity, measure_kind)
+                    except ValueError:
+                        raise BimProductionError("ifc_schema_invalid") from None
+                    unit_payload = (
+                        None
+                        if measure_kind == "IfcQuantityCount"
+                        else _unit_payload(resolved)
+                    )
+                    records.append(
+                        _extraction_record(
+                            global_id, ifc_class, qto_name, quantity_name,
+                            measure_kind, method, repr(raw), unit_payload, None,
+                        )
+                    )
+    return records
 
 
 def _preflight(site_packages: Path, work_root: Path) -> dict[str, object]:
@@ -515,7 +679,11 @@ def main(argv: list[str]) -> None:
             "gui_loaded": "FreeCADGui" in sys.modules,
             **values,
         }
-        _atomic_json(result_path, response)
+        _atomic_json(
+            result_path,
+            response,
+            max_bytes=MAX_TAKEOFF_RESULT_BYTES if mode == "takeoff" else MAX_RESULT_BYTES,
+        )
     except BimProductionError as error:
         _FAILURE_CODE = error.code
         try:

@@ -109,6 +109,26 @@ def _validate_quantity(quantity) -> None:
         _validate_unit(quantity["unit"])
 
 
+def _validate_qto(qto) -> None:
+    if not isinstance(qto, dict) or set(qto) != {
+        "name",
+        "method",
+        "quantities",
+    }:
+        raise BimProductionError("invalid_fixture_case")
+    if not isinstance(qto["name"], str) or not 1 <= len(qto["name"]) <= 64:
+        raise BimProductionError("invalid_fixture_case")
+    if qto["method"] is not None and (
+        not isinstance(qto["method"], str) or len(qto["method"]) > 64
+    ):
+        raise BimProductionError("invalid_fixture_case")
+    quantities = qto["quantities"]
+    if not isinstance(quantities, list) or len(quantities) > MAX_QUANTITIES:
+        raise BimProductionError("invalid_fixture_case")
+    for quantity in quantities:
+        _validate_quantity(quantity)
+
+
 def _validate_descriptor(descriptor) -> dict:
     global _FAILURE_STAGE
     _FAILURE_STAGE = "fixture-request"
@@ -170,23 +190,16 @@ def _validate_descriptor(descriptor) -> dict:
         qto = element["qto"]
         if qto is None:
             continue
-        if not isinstance(qto, dict) or set(qto) != {
-            "name",
-            "method",
-            "quantities",
-        }:
+        if isinstance(qto, dict):
+            qto_list = [qto]
+        elif isinstance(qto, list):
+            qto_list = qto
+        else:
             raise BimProductionError("invalid_fixture_case")
-        if not isinstance(qto["name"], str) or not 1 <= len(qto["name"]) <= 64:
+        if not qto_list or len(qto_list) > MAX_QUANTITIES:
             raise BimProductionError("invalid_fixture_case")
-        if qto["method"] is not None and (
-            not isinstance(qto["method"], str) or len(qto["method"]) > 64
-        ):
-            raise BimProductionError("invalid_fixture_case")
-        quantities = qto["quantities"]
-        if not isinstance(quantities, list) or len(quantities) > MAX_QUANTITIES:
-            raise BimProductionError("invalid_fixture_case")
-        for quantity in quantities:
-            _validate_quantity(quantity)
+        for single in qto_list:
+            _validate_qto(single)
     type_quantities = descriptor["type_quantities"]
     if not isinstance(type_quantities, list) or len(type_quantities) > MAX_TYPE_QUANTITIES:
         raise BimProductionError("invalid_fixture_case")
@@ -202,12 +215,16 @@ def _validate_descriptor(descriptor) -> dict:
         if not isinstance(entry["name"], str) or not 1 <= len(entry["name"]) <= 64:
             raise BimProductionError("invalid_fixture_case")
         qto = entry["qto"]
-        if not isinstance(qto, dict) or set(qto) != {"name", "method", "quantities"}:
+        if isinstance(qto, dict):
+            qto_list = [qto]
+        elif isinstance(qto, list):
+            qto_list = qto
+        else:
             raise BimProductionError("invalid_fixture_case")
-        if not isinstance(qto["quantities"], list) or not qto["quantities"]:
+        if not qto_list:
             raise BimProductionError("invalid_fixture_case")
-        for quantity in qto["quantities"]:
-            _validate_quantity(quantity)
+        for single in qto_list:
+            _validate_qto(single)
     return descriptor
 
 
@@ -296,18 +313,20 @@ def _build_model(ifc, descriptor):
         create = element_constructors[element["class"]]
         entity = create(_guid(100 + index), hist, element["name"], None, None, None, None, None)
         built.append(entity)
-        if element["qto"] is not None:
-            quantities = _build_quantities(ifc, element["qto"])
+        qto_spec = element["qto"]
+        qto_list = [] if qto_spec is None else (qto_spec if isinstance(qto_spec, list) else [qto_spec])
+        for qto_index, single in enumerate(qto_list):
+            quantities = _build_quantities(ifc, single)
             qto = ifc.createIfcElementQuantity(
-                _guid(2000 + index),
+                _guid(2000 + index * 8 + qto_index),
                 hist,
-                element["qto"]["name"],
-                element["qto"]["method"],
+                single["name"],
                 None,
+                single["method"],
                 quantities,
             )
             ifc.createIfcRelDefinesByProperties(
-                _guid(3000 + index), hist, None, None, [entity], qto
+                _guid(3000 + index * 8 + qto_index), hist, None, None, [entity], qto
             )
         ifc.createIfcRelContainedInSpatialStructure(
             _guid(4000 + index), hist, None, None, [entity], storey
@@ -318,22 +337,18 @@ def _build_model(ifc, descriptor):
         if create is None:
             raise BimProductionError("invalid_fixture_case")
         type_entity = create(GlobalId=_guid(5000 + index), OwnerHistory=hist, Name=entry["name"])
-        quantities = _build_quantities(ifc, entry["qto"])
+        qto_spec = entry["qto"]
+        single = qto_spec[0] if isinstance(qto_spec, list) else qto_spec
+        quantities = _build_quantities(ifc, single)
         qto = ifc.createIfcElementQuantity(
             _guid(7000 + index),
             hist,
-            entry["qto"]["name"],
-            entry["qto"]["method"],
+            single["name"],
             None,
+            single["method"],
             quantities,
         )
         type_entity.HasPropertySets = [qto]
-        related = [entity for entity in built if entity.is_a(entry["class"])]
-        if not related:
-            raise BimProductionError("invalid_fixture_case")
-        ifc.createIfcRelDefinesByType(
-            _guid(8000 + index), hist, None, None, related, type_entity
-        )
 
     if descriptor["variant"] == "duplicate_globalid":
         first = built[0]
