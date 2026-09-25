@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import io
+import json
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -123,8 +124,38 @@ def _prepare_worker_runner(
     work_root.mkdir()
     worker_path.write_text("# fixed test worker\n", encoding="utf-8")
     monkeypatch.setattr(runtime, "WORKER_PATH", worker_path)
-    monkeypatch.setattr(runtime, "inspect_bim_runtime", lambda *args: None)
+    identity = runtime.BimRuntimeIdentity(
+        freecad_version="FreeCAD 1.1.3",
+        freecad_build="Revision: 20260725 (Git shallow)",
+        ifcopenshell_version="0.8.4",
+        python_version="3.11",
+        platform="windows-x86_64",
+        freecadcmd_sha256="a" * 64,
+        wrapper_sha256="b" * 64,
+    )
+    monkeypatch.setattr(runtime, "inspect_bim_runtime", lambda *args: identity)
     return runtime, freecadcmd, site_packages, work_root
+
+
+def _preflight_result() -> dict[str, object]:
+    return {
+        "protocol": "bim-worker.v1",
+        "mode": "preflight",
+        "status": "ok",
+        "gui_loaded": False,
+        "freecad_version": "FreeCAD 1.1.3",
+        "freecad_build": "Revision: 20260725 (Git shallow)",
+        "python_version": "3.11",
+        "ifcopenshell_version": "0.8.4",
+        "wrapper_sha256": "b" * 64,
+        "schemas": ["IFC2X3", "IFC4"],
+        "open_callable": True,
+        "validation_api": True,
+        "unit_api": True,
+        "qto_api": True,
+        "malformed_spf_rejected": True,
+        "valid_ifc4_validation_findings": 0,
+    }
 
 
 def test_worker_runner_uses_closed_stdin_and_shell_false(
@@ -138,11 +169,7 @@ def test_worker_runner_uses_closed_stdin_and_shell_false(
     def fake_popen(command: list[str], **kwargs: object) -> FakeProcess:
         calls.append(kwargs)
         result_path = work_root / "worker-result-preflight.json"
-        result_path.write_text(
-            '{"protocol":"bim-worker.v1","mode":"preflight","status":"ok",'
-            '"gui_loaded":false}',
-            encoding="utf-8",
-        )
+        result_path.write_text(json.dumps(_preflight_result()), encoding="utf-8")
         return FakeProcess(b"diagnostic output")
 
     monkeypatch.setattr(runtime.subprocess, "Popen", fake_popen)
@@ -158,6 +185,34 @@ def test_worker_runner_uses_closed_stdin_and_shell_false(
     assert result.error_code is None
     assert calls[0]["stdin"] is subprocess.DEVNULL
     assert calls[0]["shell"] is False
+
+
+def test_worker_runner_rejects_a_result_with_the_wrong_ifcopenshell_version(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    runtime, freecadcmd, site_packages, work_root = _prepare_worker_runner(
+        monkeypatch, tmp_path, tmp_path / "worker.FCMacro"
+    )
+
+    def fake_popen(command: list[str], **kwargs: object) -> FakeProcess:
+        result = _preflight_result()
+        result["ifcopenshell_version"] = "0.8.5"
+        (work_root / "worker-result-preflight.json").write_text(
+            json.dumps(result), encoding="utf-8"
+        )
+        return FakeProcess(b"")
+
+    monkeypatch.setattr(runtime.subprocess, "Popen", fake_popen)
+    result = runtime.run_bim_worker(
+        freecadcmd,
+        site_packages,
+        "preflight",
+        tmp_path / "unused.json",
+        work_root,
+        timeout_s=10,
+    )
+
+    assert result.error_code == "unsupported_ifcopenshell_runtime"
 
 
 def test_worker_runner_reports_a_deadline_and_kills_the_process(

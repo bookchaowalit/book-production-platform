@@ -85,6 +85,20 @@ def test_windows_short_path_rejects_a_missing_site_packages_directory(
     assert error.value.code == "bim_runtime_path_unsupported"
 
 
+def test_windows_short_path_fails_closed_for_a_linked_site_packages_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    runtime = _runtime_module()
+    site_packages = tmp_path / "site-packages"
+    site_packages.mkdir()
+    monkeypatch.setattr(runtime, "_is_link", lambda path: path == site_packages)
+
+    with pytest.raises(runtime.BimProductionError) as error:
+        runtime.windows_short_path(site_packages)
+
+    assert error.value.code == "bim_runtime_path_unsupported"
+
+
 def test_runtime_identity_accepts_the_existing_pinned_freecad_and_wrapper(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -172,8 +186,15 @@ def test_runtime_identity_rejects_wrapper_hash_mismatch(
     assert error.value.code == "unsupported_ifcopenshell_runtime"
 
 
-def test_runtime_identity_rejects_a_freecad_version_mismatch(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+@pytest.mark.parametrize(
+    "reported_version",
+    [
+        "FreeCAD 1.1.2 Revision: 20260725 (Git shallow)\n",
+        "FreeCAD 1.1.3 Revision: unexpected build\n",
+    ],
+)
+def test_runtime_identity_rejects_a_freecad_version_or_build_mismatch(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, reported_version: str
 ) -> None:
     runtime = _runtime_module()
     freecadcmd = tmp_path / "FreeCADCmd.exe"
@@ -204,12 +225,34 @@ def test_runtime_identity_rejects_a_freecad_version_mismatch(
         runtime.subprocess,
         "run",
         lambda argv, **kwargs: subprocess.CompletedProcess(
-            argv, 0, stdout="FreeCAD 1.1.2 Revision: 20260725 (Git shallow)\n", stderr=""
+            argv, 0, stdout=reported_version, stderr=""
         ),
     )
 
     with pytest.raises(runtime.BimProductionError) as error:
         runtime.inspect_bim_runtime(freecadcmd, site_packages)
+
+    assert error.value.code == "unsupported_freecad_build"
+
+
+def test_runtime_identity_rejects_a_freecad_hash_mismatch(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    runtime = _runtime_module()
+    freecadcmd = tmp_path / "FreeCADCmd.exe"
+    freecadcmd.write_bytes(b"test executable")
+    monkeypatch.setattr(runtime, "_host_platform", lambda: "windows-x86_64")
+    monkeypatch.setattr(
+        runtime,
+        "_load_runtime_lock",
+        lambda: {
+            "freecad_platform": "windows-x86_64",
+            "freecadcmd_sha256": "0" * 64,
+        },
+    )
+
+    with pytest.raises(runtime.BimProductionError) as error:
+        runtime.inspect_bim_runtime(freecadcmd, tmp_path / "unused-site-packages")
 
     assert error.value.code == "unsupported_freecad_build"
 

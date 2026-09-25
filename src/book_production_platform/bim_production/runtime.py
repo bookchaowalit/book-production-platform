@@ -406,6 +406,54 @@ def _terminate_worker(process: subprocess.Popen[bytes]) -> int | None:
             return None
 
 
+def _preflight_failure(
+    result: dict[str, object], identity: BimRuntimeIdentity
+) -> str | None:
+    required = {
+        "protocol",
+        "mode",
+        "status",
+        "gui_loaded",
+        "freecad_version",
+        "freecad_build",
+        "python_version",
+        "ifcopenshell_version",
+        "wrapper_sha256",
+        "schemas",
+        "open_callable",
+        "validation_api",
+        "unit_api",
+        "qto_api",
+        "malformed_spf_rejected",
+        "valid_ifc4_validation_findings",
+    }
+    if set(result) != required:
+        return "unsupported_ifcopenshell_runtime"
+    if (
+        result.get("freecad_version") != identity.freecad_version
+        or result.get("freecad_build") != identity.freecad_build
+    ):
+        return "unsupported_freecad_build"
+    if (
+        result.get("python_version") != identity.python_version
+        or result.get("ifcopenshell_version") != identity.ifcopenshell_version
+        or result.get("wrapper_sha256") != identity.wrapper_sha256
+    ):
+        return "unsupported_ifcopenshell_runtime"
+    if (
+        result.get("schemas") != ["IFC2X3", "IFC4"]
+        or result.get("open_callable") is not True
+        or result.get("validation_api") is not True
+        or result.get("unit_api") is not True
+        or result.get("qto_api") is not True
+        or result.get("malformed_spf_rejected") is not True
+        or type(result.get("valid_ifc4_validation_findings")) is not int
+        or result.get("valid_ifc4_validation_findings") != 0
+    ):
+        return "unsupported_ifcopenshell_runtime"
+    return None
+
+
 def run_bim_worker(
     freecadcmd: Path,
     ifc_site_packages: Path,
@@ -451,7 +499,7 @@ def run_bim_worker(
     except OSError:
         raise BimProductionError("unsafe_output_path") from None
 
-    inspect_bim_runtime(freecadcmd, ifc_site_packages)
+    identity = inspect_bim_runtime(freecadcmd, ifc_site_packages)
     started = time.perf_counter()
     diagnostics_total = 0
     exit_code: int | None = None
@@ -519,6 +567,16 @@ def run_bim_worker(
                     "worker_failed",
                     None,
                 )
+            if mode == "preflight" and result.get("status") == "ok":
+                preflight_error = _preflight_failure(result, identity)
+                if preflight_error is not None:
+                    return BimWorkerResult(
+                        exit_code,
+                        time.perf_counter() - started,
+                        diagnostics_total,
+                        preflight_error,
+                        None,
+                    )
             error_code = result.get("error_code") if result.get("status") == "error" else None
             if error_code is not None and not isinstance(error_code, str):
                 error_code = "worker_failed"
