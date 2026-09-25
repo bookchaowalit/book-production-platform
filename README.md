@@ -450,3 +450,51 @@ include `invalid_game_ir`, `resource_cap_exceeded`, `unsafe_input_path`,
 `unity_log_cap_exceeded`, `scene_qa_failed`, `unity_test_failed`,
 `gameplay_qa_failed`, `publication_failed`, `publication_conflict`, and
 `replay_integrity_error`.
+
+## BIM Quantity Takeoff V1A
+
+รุ่นทดลองนี้อ่านโมเดล IFC2X3/IFC4 ไฟล์เดียวในเครื่อง (สูงสุด 64 MiB และไม่เกิน
+250,000 IFC instances) พร้อม `BimTakeoffIR` แบบ strict แล้วดึงเฉพาะ
+occurrence-level `IfcElementQuantity` (Length/Area/Volume/Count) แปลงหน่วยเป็น
+SI และเผยแพร่ `takeoff.json`, `takeoff.csv`, `qa-manifest.json`
+อย่าง content-addressed พร้อม replay ที่ตรวจ hash ทุกไบต์
+
+### ข้อจำกัดที่สำคัญ
+
+- รองรับเฉพาะ Windows x86-64 กับ runtime เดิมที่ pin ไว้ (FreeCAD 1.1.3 /
+  Python 3.11 / IfcOpenShell 0.8.4) ผ่าน Windows short path เท่านั้น
+  ไม่มีการติดตั้งหรือคัดลอก runtime เพิ่ม
+- ไม่รองรับ IFCZIP, IFCXML, IFC4X3, geometry-derived quantity, type-level
+  quantity, pricing หรือ code compliance
+- ปริมาณที่ขาด คลุมเครือ หรือแปลงหน่วยไม่ได้ จะถูกรายงานเป็น coverage gap
+  ไม่เติมค่าศูนย์หรือค่าประมาณ
+
+### การใช้งาน
+
+```bash
+book-production bim takeoff   --ir examples/bim/bim-takeoff.json   --ifc path/to/model.ifc   --output-root .runtime/bim/jobs   --freecadcmd path/to/FreeCADCmd.exe   --ifc-site-packages path/to/site-packages   --timeout-s 120
+```
+
+สถานะและ exit code: `complete`/`replayed` → 0, `partial` → 3,
+`needs_input` → 4, กรณีอื่น (rejected) → 2 พร้อม JSON error code ที่นิ่ง
+
+### Benchmark 20 กรณี
+
+```bash
+book-production bim benchmark   --fixtures tests/fixtures/bim/cases.json   --output .runtime/bim/benchmarks/latest.json   --freecadcmd path/to/FreeCADCmd.exe   --ifc-site-packages path/to/site-packages   --fixture-macro tests/bim_production/fixture_worker.FCMacro   --timeout-s 120
+```
+
+### ความเป็นส่วนตัว
+
+ทุกอย่างทำงานในเครื่อง ไม่มีการอัปโหลดโมเดลหรือเรียก parser ภายนอก
+เส้นทางปกติ `model_calls: 0` และ `monetary_cost: "unknown"`
+source IFC path จะไม่ปรากฏใน report, manifest, benchmark summary หรือ logs
+
+### การตรวจสอบแบบ offline
+
+```bash
+py -3.12 -m pytest -q tests/bim_ir tests/bim_production
+py -3.12 -m ruff check src/book_production_platform/bim_ir src/book_production_platform/bim_production tests/bim_ir tests/bim_production
+py -3.12 -m mypy --strict src/book_production_platform/bim_ir src/book_production_platform/bim_production
+py -3.12 scripts/check.py
+```

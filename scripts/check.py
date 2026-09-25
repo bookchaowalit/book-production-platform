@@ -27,6 +27,8 @@ AUDIO_TESTS = ROOT / "tests" / "audio_production"
 DATA_PIPELINE_IR_TESTS = ROOT / "tests" / "data_pipeline_ir"
 DATA_PIPELINE_TESTS = ROOT / "tests" / "data_pipeline"
 CAD_IR = ROOT / "src" / "book_production_platform" / "cad_ir"
+BIM_IR = ROOT / "src" / "book_production_platform" / "bim_ir"
+BIM_TESTS = ROOT / "tests" / "bim_ir"
 CAD_PRODUCTION = ROOT / "src" / "book_production_platform" / "cad_production"
 CAD_IR_TESTS = ROOT / "tests" / "cad_ir"
 CAD_PRODUCTION_TESTS = ROOT / "tests" / "cad_production"
@@ -57,6 +59,8 @@ RUFF_TARGETS = (
     CAD_PRODUCTION_TESTS,
     BIM_PRODUCTION,
     BIM_PRODUCTION_TESTS,
+    BIM_IR,
+    BIM_TESTS,
     PLATFORM_CLI,
     GAME_IR,
     GAME,
@@ -74,6 +78,7 @@ MYPY_TARGETS = (
     DATA_PIPELINE,
     CAD_IR,
     CAD_PRODUCTION,
+    BIM_IR,
     BIM_PRODUCTION,
 )
 

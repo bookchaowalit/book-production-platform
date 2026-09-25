@@ -1,0 +1,544 @@
+{
+  "protocol": "bim-benchmark-cases.v1",
+  "fixture_protocol": "bim-fixture.v1",
+  "fresh": [
+    {
+      "id": "fresh-walls-ifc4",
+      "element_classes": [
+        "IfcWall"
+      ],
+      "expected": "complete",
+      "fixture": {
+        "protocol": "bim-fixture.v1",
+        "case_id": "bench-walls-ifc4",
+        "schema": "IFC4",
+        "project_units": [
+          {
+            "unit_type": "LENGTHUNIT",
+            "name": "METRE",
+            "prefix": "MILLI"
+          },
+          {
+            "unit_type": "AREAUNIT",
+            "name": "SQUARE_METRE",
+            "prefix": null
+          },
+          {
+            "unit_type": "VOLUMEUNIT",
+            "name": "CUBIC_METRE",
+            "prefix": null
+          }
+        ],
+        "elements": [
+          {
+            "class": "IfcWall",
+            "name": "W1",
+            "global_id_seed": 10,
+            "qto": [
+              {
+                "name": "Qto_WallBaseQuantities",
+                "method": "gross",
+                "quantities": [
+                  {
+                    "name": "Length",
+                    "kind": "IfcQuantityLength",
+                    "value": 2500.0,
+                    "unit": null
+                  },
+                  {
+                    "name": "NetArea",
+                    "kind": "IfcQuantityArea",
+                    "value": 12.5,
+                    "unit": null
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "class": "IfcWall",
+            "name": "W2",
+            "global_id_seed": 11,
+            "qto": [
+              {
+                "name": "Qto_WallBaseQuantities",
+                "method": "gross",
+                "quantities": [
+                  {
+                    "name": "Length",
+                    "kind": "IfcQuantityLength",
+                    "value": 1000.0,
+                    "unit": {
+                      "unit_type": "LENGTHUNIT",
+                      "name": "METRE",
+                      "prefix": "MILLI"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "type_quantities": [],
+        "variant": null,
+        "malformed_spf": false,
+        "output_name": "bench-walls-ifc4.ifc"
+      }
+    },
+    {
+      "id": "fresh-walls-ifc2x3",
+      "element_classes": [
+        "IfcWall"
+      ],
+      "expected": "complete",
+      "fixture": {
+        "protocol": "bim-fixture.v1",
+        "case_id": "bench-walls-ifc2x3",
+        "schema": "IFC2X3",
+        "project_units": [
+          {
+            "unit_type": "LENGTHUNIT",
+            "name": "METRE",
+            "prefix": null
+          }
+        ],
+        "elements": [
+          {
+            "class": "IfcWall",
+            "name": "W1",
+            "global_id_seed": 10,
+            "qto": [
+              {
+                "name": "Qto_WallBaseQuantities",
+                "method": null,
+                "quantities": [
+                  {
+                    "name": "Length",
+                    "kind": "IfcQuantityLength",
+                    "value": 5.0,
+                    "unit": null
+                  },
+                  {
+                    "name": "NumberOfElements",
+                    "kind": "IfcQuantityCount",
+                    "value": 1,
+                    "unit": null
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "type_quantities": [],
+        "variant": null,
+        "malformed_spf": false,
+        "output_name": "bench-walls-ifc2x3.ifc"
+      }
+    },
+    {
+      "id": "fresh-rich-ifc4",
+      "element_classes": [
+        "IfcWall"
+      ],
+      "expected": "complete",
+      "fixture": {
+        "protocol": "bim-fixture.v1",
+        "case_id": "bench-rich-ifc4",
+        "schema": "IFC4",
+        "project_units": [
+          {
+            "unit_type": "LENGTHUNIT",
+            "name": "METRE",
+            "prefix": "MILLI"
+          },
+          {
+            "unit_type": "AREAUNIT",
+            "name": "SQUARE_METRE",
+            "prefix": null
+          },
+          {
+            "unit_type": "VOLUMEUNIT",
+            "name": "CUBIC_METRE",
+            "prefix": null
+          }
+        ],
+        "elements": [
+          {
+            "class": "IfcWall",
+            "name": "W1",
+            "global_id_seed": 10,
+            "qto": [
+              {
+                "name": "Qto_WallBaseQuantities",
+                "method": "gross",
+                "quantities": [
+                  {
+                    "name": "Length",
+                    "kind": "IfcQuantityLength",
+                    "value": 2500.0,
+                    "unit": null
+                  },
+                  {
+                    "name": "NetArea",
+                    "kind": "IfcQuantityArea",
+                    "value": 12.5,
+                    "unit": null
+                  },
+                  {
+                    "name": "NetVolume",
+                    "kind": "IfcQuantityVolume",
+                    "value": 3.125,
+                    "unit": null
+                  },
+                  {
+                    "name": "NumberOfElements",
+                    "kind": "IfcQuantityCount",
+                    "value": 4,
+                    "unit": null
+                  }
+                ]
+              },
+              {
+                "name": "Qto_NetQuantities",
+                "method": "net",
+                "quantities": [
+                  {
+                    "name": "Length",
+                    "kind": "IfcQuantityLength",
+                    "value": 2400.0,
+                    "unit": null
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "class": "IfcWall",
+            "name": "W2",
+            "global_id_seed": 11,
+            "qto": [
+              {
+                "name": "Qto_WallBaseQuantities",
+                "method": "gross",
+                "quantities": [
+                  {
+                    "name": "Length",
+                    "kind": "IfcQuantityLength",
+                    "value": 2.0,
+                    "unit": {
+                      "unit_type": "LENGTHUNIT",
+                      "name": "METRE",
+                      "prefix": null
+                    }
+                  },
+                  {
+                    "name": "NetArea",
+                    "kind": "IfcQuantityArea",
+                    "value": 5.0,
+                    "unit": null
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "type_quantities": [],
+        "variant": null,
+        "malformed_spf": false,
+        "output_name": "bench-rich-ifc4.ifc"
+      }
+    },
+    {
+      "id": "fresh-slab-beam-ifc4",
+      "element_classes": [
+        "IfcSlab",
+        "IfcBeam"
+      ],
+      "expected": "complete",
+      "fixture": {
+        "protocol": "bim-fixture.v1",
+        "case_id": "bench-slab-beam",
+        "schema": "IFC4",
+        "project_units": [
+          {
+            "unit_type": "LENGTHUNIT",
+            "name": "METRE",
+            "prefix": "MILLI"
+          },
+          {
+            "unit_type": "AREAUNIT",
+            "name": "SQUARE_METRE",
+            "prefix": null
+          },
+          {
+            "unit_type": "VOLUMEUNIT",
+            "name": "CUBIC_METRE",
+            "prefix": null
+          }
+        ],
+        "elements": [
+          {
+            "class": "IfcSlab",
+            "name": "S1",
+            "global_id_seed": 10,
+            "qto": [
+              {
+                "name": "Qto_SlabBaseQuantities",
+                "method": "gross",
+                "quantities": [
+                  {
+                    "name": "NetArea",
+                    "kind": "IfcQuantityArea",
+                    "value": 24.0,
+                    "unit": null
+                  },
+                  {
+                    "name": "NetVolume",
+                    "kind": "IfcQuantityVolume",
+                    "value": 6.0,
+                    "unit": null
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "class": "IfcBeam",
+            "name": "B1",
+            "global_id_seed": 11,
+            "qto": [
+              {
+                "name": "Qto_BeamBaseQuantities",
+                "method": "gross",
+                "quantities": [
+                  {
+                    "name": "Length",
+                    "kind": "IfcQuantityLength",
+                    "value": 6000.0,
+                    "unit": null
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "type_quantities": [],
+        "variant": null,
+        "malformed_spf": false,
+        "output_name": "bench-slab-beam.ifc"
+      }
+    },
+    {
+      "id": "fresh-partial-ifc4",
+      "element_classes": [
+        "IfcWall"
+      ],
+      "expected": "partial",
+      "fixture": {
+        "protocol": "bim-fixture.v1",
+        "case_id": "bench-partial",
+        "schema": "IFC4",
+        "project_units": [
+          {
+            "unit_type": "LENGTHUNIT",
+            "name": "METRE",
+            "prefix": "MILLI"
+          }
+        ],
+        "elements": [
+          {
+            "class": "IfcWall",
+            "name": "W1",
+            "global_id_seed": 10,
+            "qto": [
+              {
+                "name": "Qto_WallBaseQuantities",
+                "method": "gross",
+                "quantities": [
+                  {
+                    "name": "Length",
+                    "kind": "IfcQuantityLength",
+                    "value": 3000.0,
+                    "unit": null
+                  },
+                  {
+                    "name": "NetArea",
+                    "kind": "IfcQuantityArea",
+                    "value": 6.0,
+                    "unit": null
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "type_quantities": [],
+        "variant": null,
+        "malformed_spf": false,
+        "output_name": "bench-partial.ifc"
+      }
+    }
+  ],
+  "rejects": [
+    {
+      "id": "invalid-ir",
+      "ifc_kind": "invalid-ir",
+      "expected_code": "invalid_bim_takeoff_ir"
+    },
+    {
+      "id": "missing-ifc",
+      "ifc_kind": "missing-ifc",
+      "expected_code": "ifc_path_invalid"
+    },
+    {
+      "id": "wrong-extension",
+      "ifc_kind": "wrong-extension",
+      "expected_code": "ifc_path_invalid"
+    },
+    {
+      "id": "malformed-spf",
+      "ifc_kind": "fixture",
+      "expected_code": "ifc_parse_invalid",
+      "fixture": {
+        "protocol": "bim-fixture.v1",
+        "case_id": "bench-malformed",
+        "schema": "IFC4",
+        "project_units": [],
+        "elements": [
+          {
+            "class": "IfcWall",
+            "name": "W1",
+            "global_id_seed": 10,
+            "qto": null
+          }
+        ],
+        "type_quantities": [],
+        "variant": null,
+        "malformed_spf": true,
+        "output_name": "bench-malformed.ifc"
+      }
+    },
+    {
+      "id": "ifc4x3",
+      "ifc_kind": "fixture",
+      "expected_code": "unsupported_ifc_schema",
+      "fixture": {
+        "protocol": "bim-fixture.v1",
+        "case_id": "bench-ifc4x3",
+        "schema": "IFC4X3",
+        "project_units": [
+          {
+            "unit_type": "LENGTHUNIT",
+            "name": "METRE",
+            "prefix": null
+          }
+        ],
+        "elements": [
+          {
+            "class": "IfcWall",
+            "name": "W1",
+            "global_id_seed": 10,
+            "qto": null
+          }
+        ],
+        "type_quantities": [],
+        "variant": null,
+        "malformed_spf": false,
+        "output_name": "bench-ifc4x3.ifc"
+      }
+    },
+    {
+      "id": "duplicate-globalid",
+      "ifc_kind": "fixture",
+      "expected_code": "ifc_identity_invalid",
+      "fixture": {
+        "protocol": "bim-fixture.v1",
+        "case_id": "bench-dup-gid",
+        "schema": "IFC4",
+        "project_units": [
+          {
+            "unit_type": "LENGTHUNIT",
+            "name": "METRE",
+            "prefix": null
+          }
+        ],
+        "elements": [
+          {
+            "class": "IfcWall",
+            "name": "W1",
+            "global_id_seed": 10,
+            "qto": null
+          },
+          {
+            "class": "IfcWall",
+            "name": "W2",
+            "global_id_seed": 11,
+            "qto": null
+          }
+        ],
+        "type_quantities": [],
+        "variant": "duplicate_globalid",
+        "malformed_spf": false,
+        "output_name": "bench-dup-gid.ifc"
+      }
+    },
+    {
+      "id": "short-globalid",
+      "ifc_kind": "fixture",
+      "expected_code": "ifc_identity_invalid",
+      "fixture": {
+        "protocol": "bim-fixture.v1",
+        "case_id": "bench-short-gid",
+        "schema": "IFC4",
+        "project_units": [
+          {
+            "unit_type": "LENGTHUNIT",
+            "name": "METRE",
+            "prefix": null
+          }
+        ],
+        "elements": [
+          {
+            "class": "IfcWall",
+            "name": "W1",
+            "global_id_seed": 10,
+            "qto": null
+          }
+        ],
+        "type_quantities": [],
+        "variant": "short_globalid",
+        "malformed_spf": false,
+        "output_name": "bench-short-gid.ifc"
+      }
+    },
+    {
+      "id": "malformed-unit",
+      "ifc_kind": "fixture",
+      "expected_code": "ifc_schema_invalid",
+      "fixture": {
+        "protocol": "bim-fixture.v1",
+        "case_id": "bench-malformed-unit",
+        "schema": "IFC4",
+        "project_units": [
+          {
+            "unit_type": "LENGTHUNIT",
+            "name": "METRE",
+            "prefix": null
+          }
+        ],
+        "elements": [
+          {
+            "class": "IfcWall",
+            "name": "W1",
+            "global_id_seed": 10,
+            "qto": null
+          }
+        ],
+        "type_quantities": [],
+        "variant": "malformed_unit",
+        "malformed_spf": false,
+        "output_name": "bench-malformed-unit.ifc"
+      }
+    }
+  ]
+}

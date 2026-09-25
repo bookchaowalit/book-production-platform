@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from book_production_platform.audio_production.cli import main as audio_main
+from book_production_platform.bim_production.cli import main as bim_main
 from book_production_platform.cad_production.cli import main as cad_main
 from book_production_platform.data_pipeline.cli import main as data_main
 from book_production_platform.game_production.cli import game_main
@@ -74,6 +75,8 @@ def _parser() -> argparse.ArgumentParser:
     cad.add_argument("cad_args", nargs=argparse.REMAINDER)
     data = groups.add_parser("data", help="Data SQL/Pipeline Builder V1A operations")
     data.add_argument("data_args", nargs=argparse.REMAINDER)
+    bim = groups.add_parser("bim", help="BIM Quantity Takeoff V1A operations")
+    bim.add_argument("bim_args", nargs=argparse.REMAINDER)
     return parser
 
 
@@ -95,6 +98,8 @@ def main(argv: list[str] | None = None) -> int:
         return audio_main(args.audio_args)
     if args.family == "cad":
         return cad_main(args.cad_args)
+    if args.family == "bim":
+        return bim_main(args.bim_args)
     try:
         if args.family == "scene" and args.command == "compose":
             result = compose_scene(
