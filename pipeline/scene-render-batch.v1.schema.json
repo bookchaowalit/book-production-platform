@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "scene-render-batch.v1.schema.json",
+  "title": "Scene Render Batch v1",
+  "description": "Versioned handoff artifact between the 3D scene render product and the graphics template batch product. All path values are relative POSIX paths without traversal: scene.artifact_dir is relative to the pipeline output root, and the paths inside scene.render_png, scene.scene_blend, and scene.qa_manifest are relative to scene.artifact_dir. Absolute paths, backslashes, drive letters, URLs, and empty or traversal segments are forbidden.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "scene",
+    "graphics"
+  ],
+  "properties": {
+    "schema_version": { "const": "scene-render-batch.v1" },
+    "scene": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fingerprint",
+        "render_profile",
+        "artifact_dir",
+        "render_png",
+        "scene_blend",
+        "qa_manifest"
+      ],
+      "properties": {
+        "fingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "render_profile": { "enum": ["square-1024.v1", "landscape-1920x1080.v1"] },
+        "artifact_dir": { "$ref": "#/$defs/relativePath" },
+        "render_png": { "$ref": "#/$defs/renderOutput" },
+        "scene_blend": { "$ref": "#/$defs/artifactRef" },
+        "qa_manifest": { "$ref": "#/$defs/artifactRef" }
+      }
+    },
+    "graphics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "template_id",
+        "variants",
+        "brand"
+      ],
+      "properties": {
+        "template_id": { "enum": ["quote_card", "product_card", "announcement"] },
+        "variants": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": { "enum": ["square", "portrait", "story"] }
+        },
+        "brand": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["primary", "accent"],
+          "properties": {
+            "primary": { "$ref": "#/$defs/hexColor" },
+            "accent": { "$ref": "#/$defs/hexColor" },
+            "foreground": { "$ref": "#/$defs/hexColor" },
+            "background": { "$ref": "#/$defs/hexColor" }
+          }
+        },
+        "content": {
+          "type": "object",
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)[^\\\\]+$"
+    },
+    "artifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "$ref": "#/$defs/relativePath" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "renderOutput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "width", "height"],
+      "properties": {
+        "path": { "$ref": "#/$defs/relativePath" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "width": { "type": "integer", "minimum": 1, "maximum": 8192 },
+        "height": { "type": "integer", "minimum": 1, "maximum": 8192 }
+      }
+    },
+    "hexColor": { "type": "string", "pattern": "^#[0-9A-F]{6}$" }
+  }
+}

@@ -14,6 +14,7 @@ from book_production_platform.data_pipeline.cli import main as data_main
 from book_production_platform.doctor import default_blender, run_doctor
 from book_production_platform.game_production.cli import game_main
 from book_production_platform.graphics_production.cli import main as graphics_main
+from book_production_platform.pipeline.cli import main as pipeline_main
 from book_production_platform.scene3d.benchmark import run_benchmark
 from book_production_platform.scene3d.errors import SceneInputError
 from book_production_platform.scene3d.runtime import MAX_TIMEOUT_SECONDS, compose_scene
@@ -56,6 +57,8 @@ def _parser() -> argparse.ArgumentParser:
     data.add_argument("data_args", nargs=argparse.REMAINDER)
     bim = groups.add_parser("bim", help="BIM Quantity Takeoff V1A operations")
     bim.add_argument("bim_args", nargs=argparse.REMAINDER)
+    pipeline = groups.add_parser("pipeline", help="Cross-product pipeline operations")
+    pipeline.add_argument("pipeline_args", nargs=argparse.REMAINDER)
     doctor = groups.add_parser(
         "doctor", help="report local runtimes and per-product readiness"
     )
@@ -90,6 +93,8 @@ def main(argv: list[str] | None = None) -> int:
         return cad_main(args.cad_args)
     if args.family == "bim":
         return bim_main(args.bim_args)
+    if args.family == "pipeline":
+        return pipeline_main(args.pipeline_args)
     try:
         if args.family == "scene" and args.command == "compose":
             result = compose_scene(

@@ -1,0 +1,7 @@
+{
+  "schema_version": "scene-graphics-spec.v1",
+  "template_id": "product_card",
+  "variants": ["square", "portrait", "story"],
+  "brand": { "primary": "#14213D", "accent": "#FCA311", "foreground": "#111111" },
+  "content": { "title": "แก้วเก็บอุณหภูมิ", "price": "฿390" }
+}

@@ -91,7 +91,7 @@ book-production scene compose `
 
 ระบบเก็บ `output-root/.receipts/<fingerprint>.json` แยกจากโฟลเดอร์ผลลัพธ์
 เพื่อ pin hash ของ artifact ทั้งสาม รวมถึง manifest เอง; replay จะปฏิเสธ
-manifest หรือ artifact ที่ถูกแก้ไข และคืน hash เดิมจาก receipt ที่ตรวจผ่าน
+manifest หรือ artifact ที่ถูกแก้ไข และจะไม่เขียนทับงานเดิม
 
 การเรียกซ้ำด้วย SceneIR, asset และ Blender build เดิมจะตรวจ hash แล้วตอบ
 `replayed` โดยไม่สร้างไฟล์ใหม่ หาก artifact เดิมถูกแก้ไขจะปฏิเสธด้วย
@@ -140,6 +140,71 @@ book-production scene benchmark `
 ```powershell
 py -3 -m pytest -q
 ```
+
+## Pipeline: Scene-to-Graphics (3D Scene → PNG → Graphics Template Batch)
+
+`book-production pipeline scene-to-graphics` เชื่อมสอง product ที่มีอยู่เข้าด้วยกันแบบ
+thin orchestration โดยไม่ย้าย ownership ของ code: stage แรกเรียก scene composer
+เดิม (`compose_scene`) เพื่อ render ฉากสินค้าด้วย Blender จริง แล้ว stage ที่สองเรียก
+graphics batch เดิม (`run_batch`) เพื่อทำภาพ SVG/PNG หลายขนาดโดยใช้ `render.png`
+จากฉากเป็น `product_image` เส้นทางปกติ deterministic, offline และรายงาน
+`model_calls: 0`
+
+การส่งต่อระหว่างสอง stage ผ่าน **versioned artifact contract `scene-render-batch.v1`**
+(schema อยู่ที่ `pipeline/scene-render-batch.v1.schema.json`) ทุก path ใน artifact
+ที่เผยแพร่เป็น relative POSIX path เท่านั้น: `scene.artifact_dir` อ้างจาก pipeline
+output root และ path ภายใน (เช่น `render.png`) อ้างจาก artifact_dir ห้าม absolute
+path, backslash หรือ traversal segment
+
+### การใช้งาน
+
+เตรียม `scene.json` (SceneIR v1) + `.glb` ใน input root และไฟล์ spec
+(`scene-graphics-spec.v1` — ครึ่ง graphics ของ contract: `template_id`,
+`variants` สูงสุด 3 จาก square/portrait/story, `brand`, `content`) ตัวอย่างที่
+`examples/pipeline/scene-graphics-spec.json`:
+
+```powershell
+book-production pipeline scene-to-graphics `
+  --scene .\input\scene.json `
+  --input-root .\input `
+  --spec .\examples\pipeline\scene-graphics-spec.json `
+  --output-root .\.runtime\pipeline `
+  --blender "$env:BLENDER_BIN" `
+  --timeout-s 240
+```
+
+ผลลัพธ์ภายใต้ `<output-root>`:
+
+- `<scene-fingerprint>/` — งาน scene เดิม (`scene.blend`, `render.png`,
+  `qa-manifest.json`) เผยแพร่โดย scene composer เอง พร้อม replay ตามปกติ
+- `.pipeline/<pipeline-id>/scene-render-batch.json` — contract ที่ผ่านการตรวจแล้ว
+  (scene half แปลงจาก QA manifest ของงาน scene, graphics half มาจาก spec)
+- `.pipeline/<pipeline-id>/graphics/` — ผลลัพธ์ graphics batch เดิมต่อหนึ่งขนาด
+  (SVG + PNG) พร้อม manifest ของ graphics เอง
+- `.pipeline/<pipeline-id>/pipeline-manifest.json` — manifest ที่โยง identity ทั้งสอง
+  stage: scene fingerprint, contract hash, graphics `batch_id`, idempotency key,
+  hash และขนาดของทุก artifact โดยไม่มี timing หรือ absolute path
+
+`pipeline_id` คือ SHA-256 ของ contract ทั้งก้อน (recipe + ผล scene + spec) ดังนั้น
+การรันซ้ำด้วย input เดิมได้ผลลัพธ์เดิม: scene stage จะ replay จาก hash, ถ้า
+pipeline manifest มีอยู่แล้วและตรงกันระบบจะตอบ `replayed` โดยไม่รัน graphics ซ้ำ
+และไม่เขียนทับ artifact เดิมเลย ถ้า contract หรือ manifest ที่เผยแพร่ไว้ถูกแก้ไข
+จะปฏิเสธด้วย `pipeline_conflict`
+
+### ขอบเขตและ error
+
+- pipeline ไม่ render เองและไม่คำนวณ layout เอง — ทุกงานผลิตยังอยู่กับ scene3d และ
+  graphics เดิม; contract ผ่าน `parse_scene_render_batch` ตรวจได้ทุกเมื่อ
+- stage ล้มเหลว = pipeline ล้มเหลว: scene error code ของ scene3d ส่งต่อตรง
+  (เช่น `blender_unavailable`, `deadline_exceeded`) ถ้า graphics batch ไม่รับทุกขนาด
+  จะปฏิเสธด้วย `graphics_batch_failed` และไม่มีการเขียน pipeline manifest
+- stable error codes ของ pipeline: `invalid_graphics_spec`, `invalid_timeout`,
+  `contract_validation_failed`, `pipeline_conflict`, `graphics_batch_failed`,
+  `publication_failed`, `unsafe_output_path`, `cli_io_error` (exit code `2`)
+- ขีดจำกัด spec 64 KiB, variants 1–3 แบบไม่ซ้ำ; graphics stage ยังใช้ขอบเขต
+  เดิมของ Graphics V1A รวมถึง browser ในเครื่องสำหรับ rasterize PNG
+- ไม่มีการเรียกโมเดลหรือเครือข่ายในทุก stage; ต้นทุนค่าคอมพิวต์รายงานเป็น
+  `unknown` ตามเดิม
 
 ## Graphics V1A Template Batch
 

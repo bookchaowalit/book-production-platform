@@ -37,3 +37,10 @@ book_production_platform = [
 pythonpath = ["src"]
 testpaths = ["tests"]
 addopts = "-ra"
+
+[[tool.mypy.overrides]]
+# The scene3d internals include Blender-worker modules and are intentionally
+# not part of MYPY_TARGETS; pipeline code imports their public functions, so
+# use their types while keeping the gate free of pre-existing scene3d findings.
+module = "book_production_platform.scene3d.*"
+follow_imports = "silent"
