@@ -35,6 +35,8 @@ CAD_PRODUCTION_TESTS = ROOT / "tests" / "cad_production"
 BIM_PRODUCTION = ROOT / "src" / "book_production_platform" / "bim_production"
 BIM_PRODUCTION_TESTS = ROOT / "tests" / "bim_production"
 PLATFORM_CLI = ROOT / "src" / "book_production_platform" / "cli.py"
+DOCTOR = ROOT / "src" / "book_production_platform" / "doctor.py"
+DOCTOR_TESTS = ROOT / "tests" / "test_doctor.py"
 RUFF_TARGETS = (
     GRAPHICS_IR,
     GRAPHICS,
@@ -62,6 +64,8 @@ RUFF_TARGETS = (
     BIM_IR,
     BIM_TESTS,
     PLATFORM_CLI,
+    DOCTOR,
+    DOCTOR_TESTS,
     GAME_IR,
     GAME,
 )
@@ -80,6 +84,7 @@ MYPY_TARGETS = (
     CAD_PRODUCTION,
     BIM_IR,
     BIM_PRODUCTION,
+    DOCTOR,
 )
 
 

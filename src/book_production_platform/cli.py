@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
-import shutil
 from pathlib import Path
 from typing import Any
 
@@ -13,32 +11,13 @@ from book_production_platform.audio_production.cli import main as audio_main
 from book_production_platform.bim_production.cli import main as bim_main
 from book_production_platform.cad_production.cli import main as cad_main
 from book_production_platform.data_pipeline.cli import main as data_main
+from book_production_platform.doctor import default_blender, run_doctor
 from book_production_platform.game_production.cli import game_main
 from book_production_platform.graphics_production.cli import main as graphics_main
 from book_production_platform.scene3d.benchmark import run_benchmark
 from book_production_platform.scene3d.errors import SceneInputError
 from book_production_platform.scene3d.runtime import MAX_TIMEOUT_SECONDS, compose_scene
 from book_production_platform.spreadsheet_production.cli import main as spreadsheet_main
-
-_LOCAL_BLENDER = (
-    Path.home()
-    / ".codex"
-    / "tools"
-    / "blender-5.2.2"
-    / "portable"
-    / "blender-5.2.2-windows-x64"
-    / "blender.exe"
-)
-
-
-def _default_blender() -> Path:
-    configured = os.environ.get("BLENDER_BIN")
-    if configured:
-        return Path(configured)
-    discovered = shutil.which("blender")
-    if discovered:
-        return Path(discovered)
-    return _LOCAL_BLENDER
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -77,6 +56,15 @@ def _parser() -> argparse.ArgumentParser:
     data.add_argument("data_args", nargs=argparse.REMAINDER)
     bim = groups.add_parser("bim", help="BIM Quantity Takeoff V1A operations")
     bim.add_argument("bim_args", nargs=argparse.REMAINDER)
+    doctor = groups.add_parser(
+        "doctor", help="report local runtimes and per-product readiness"
+    )
+    doctor.add_argument("--format", choices=("json", "text"), default="text")
+    doctor.add_argument(
+        "--probe",
+        action="store_true",
+        help="also probe FreeCADCmd for its real version with a bounded timeout",
+    )
     return parser
 
 
@@ -86,6 +74,8 @@ def _emit(value: dict[str, Any]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
+    if args.family == "doctor":
+        return run_doctor(args.format, probe=args.probe)
     if args.family == "data":
         return data_main(args.data_args)
     if args.family == "game":
@@ -124,7 +114,7 @@ def main(argv: list[str] | None = None) -> int:
             report = run_benchmark(
                 args.fixtures,
                 args.output,
-                args.blender or _default_blender(),
+                args.blender or default_blender(),
                 timeout_s=args.timeout_s,
             )
             _emit(report)

@@ -4,6 +4,33 @@
 adapter และ engine ที่ตรวจสอบซ้ำได้ ใช้กฎ โปรแกรม และ API กับงานที่ทำซ้ำได้
 แล้วเรียกโมเดลเฉพาะขั้นที่ต้องใช้ความสามารถเชิงกำเนิดจริง ๆ
 
+## Doctor — ตรวจ runtime และความพร้อมของแต่ละ product
+
+`book-production doctor` ตรวจ runtime ในเครื่องแบบ offline (python,
+freecadcmd, ffmpeg, blender, unity) แล้วสรุปว่า product บน dispatcher
+(scene, graphics, game, spreadsheet, audio, cad, data, bim) ตัวใดพร้อมรัน
+จาก runtime ที่จำเป็นเท่านั้น ไม่มีการเข้าถึงเครือข่ายและไม่รัน pipeline
+
+```powershell
+book-production doctor                 # ตารางแบบคนอ่าน (ค่าเริ่มต้น)
+book-production doctor --format json   # ผลลัพธ์ JSON นิ่งสำหรับเครื่องอ่าน
+```
+
+- การค้นหา binary: ใช้ `BLENDER_BIN` และ `FFMPEG_BIN` เดิม และรับ
+  `FREECARDCMD_BIN` กับ `UNITY_BIN` เพิ่มสำหรับ doctor แล้วต่อด้วย `PATH`
+  ถ้ายังไม่พบ freecadcmd จะลองตำแหน่ง pinned runtime ตาม lock ที่
+  `.runtime/cad/freecad-<version>/extracted/...` อีกขั้น
+- เวอร์ชัน: freecadcmd อ่านจาก runtime lock (`FreeCAD 1.1.3`) โดยไม่ spawn,
+  ffmpeg และ blender ถูก probe แบบ bounded (timeout 15 วินาที) เสมอ,
+  unity ไม่ถูก spawn เพราะ `-version` ต้องใช้ project; ธง `--probe` จะ spawn
+  `FreeCADCmd --version` เพิ่มและปฏิเสธถ้าเวอร์ชันไม่ตรง lock
+- exit code: `0` เมื่อคำสั่งตรวจสำเร็จแม้ runtime ตัวเลือกบางตัวจะหาย;
+  `2` เมื่อพบตัว freecadcmd แต่ runtime lock ใช้ไม่ได้ (เช่น
+  `unsupported_ifcopenshell_runtime`, `unsupported_freecad_build`) หรือ
+  `cli_io_error` พร้อม JSON error code ที่นิ่ง
+- doctor เป็นรายงานเท่านั้น คำสั่ง production ยังต้องส่ง `--blender`,
+  `--unity` หรือ `--freecadcmd` ของตัวเองต่อตามปกติ
+
 ## 3D Product Scene Composer V1A
 
 รุ่นทดลองนี้รับ `scene-ir.v1` กับไฟล์ `.glb` ในเครื่อง แล้วสร้างฉากสินค้าแบบ
