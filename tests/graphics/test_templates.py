@@ -30,7 +30,7 @@ def test_compile_template_supports_the_three_v1_templates(template_id: str) -> N
 
     ir = compile_template(request)
 
-    assert ir.template_ref == f"{template_id}@1"
+    assert ir.template_ref == f"{template_id}@2"
     assert ir.canvas.width == 1080
     assert len(ir.nodes) >= 3
     assert ir.assumptions["model_calls"] == "0"

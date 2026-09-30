@@ -17,7 +17,7 @@ from book_production_platform.graphics_ir import (
 from .assets import AssetReferenceError, validate_local_reference
 from .layout import LayoutError, fit_text
 
-TEMPLATE_VERSION = "1"
+TEMPLATE_VERSION = "2"
 VARIANT_SIZES: dict[str, tuple[int, int]] = {
     "square": (1080, 1080),
     "portrait": (1080, 1350),
@@ -175,11 +175,16 @@ def compile_template(request: GraphicRequest | dict[str, Any]) -> GraphicIR:
         headline = _required(content, "headline")
         body = _required(content, "body")
         cta = _required(content, "cta")
+        # The call to action sits a fixed margin above the bottom edge of every
+        # variant; the body fills the space between headline and button.
+        cta_y = parsed.canvas.height - 72 - 108
+        headline_height = 260 if parsed.variant == "square" else 300
+        body_y = 110 + headline_height + 40
         nodes.extend([
-            _text("headline", headline, x=72, y=190, width=936, height=300, font_size=80, min_font_size=32, max_lines=8, color=color, font_ref=parsed.font_ref, align="left", overflow_policy="reject"),
-            _text("body", body, x=72, y=540, width=936, height=430, font_size=42, min_font_size=24, max_lines=12, color=color, font_ref=parsed.font_ref, align="left", overflow_policy="reject"),
-            ShapeNode(node_id="cta-bg", x=72, y=1030, width=360, height=108, fill=parsed.brand.primary),
-            _text("cta", cta, x=92, y=1065, width=320, height=64, font_size=32, min_font_size=20, max_lines=2, color=parsed.brand.background, font_ref=parsed.font_ref, align="center"),
+            _text("headline", headline, x=72, y=110, width=936, height=headline_height, font_size=80, min_font_size=32, max_lines=8, color=color, font_ref=parsed.font_ref, align="left", overflow_policy="reject"),
+            _text("body", body, x=72, y=body_y, width=936, height=cta_y - 40 - body_y, font_size=42, min_font_size=24, max_lines=12, color=color, font_ref=parsed.font_ref, align="left", overflow_policy="reject"),
+            ShapeNode(node_id="cta-bg", x=72, y=cta_y, width=360, height=108, fill=parsed.brand.primary),
+            _text("cta", cta, x=92, y=cta_y + 22, width=320, height=64, font_size=32, min_font_size=20, max_lines=2, color=parsed.brand.background, font_ref=parsed.font_ref, align="center"),
         ])
 
     return GraphicIR(

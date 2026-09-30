@@ -22,7 +22,7 @@ from .telemetry import BatchTelemetry
 from .templates import TemplateError, compile_template
 
 CONTRACT_VERSION = "graphics.v1a"
-RECIPE_VERSION = "template-batch-v2"
+RECIPE_VERSION = "template-batch-v3"
 
 
 class IdempotencyConflict(ValueError):

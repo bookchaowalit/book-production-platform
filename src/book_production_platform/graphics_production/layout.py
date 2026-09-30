@@ -15,16 +15,78 @@ class TextLayout:
     font_size: float
 
 
+# Thai above/below vowels and tone marks take no horizontal space and must stay
+# with the consonant before them; leading vowels must stay with the consonant
+# after them.
+_THAI_COMBINING = frozenset(chr(code) for code in (0x0E31, *range(0x0E34, 0x0E3B), *range(0x0E47, 0x0E4F)))
+_THAI_LEADING = frozenset(chr(code) for code in range(0x0E40, 0x0E45))
+
+
+def visible_length(text: str) -> int:
+    """Characters that take horizontal space (Thai combining marks count as zero)."""
+
+    return sum(1 for char in text if char not in _THAI_COMBINING)
+
+
+def _clusters(word: str) -> list[str]:
+    clusters: list[str] = []
+    pending = ""
+    for char in word:
+        if char in _THAI_COMBINING and clusters and not pending:
+            clusters[-1] += char
+        elif char in _THAI_LEADING:
+            pending += char
+        else:
+            clusters.append(pending + char)
+            pending = ""
+    if pending:
+        clusters.append(pending)
+    return clusters
+
+
+def _hard_split(word: str, max_chars: int) -> list[str]:
+    pieces: list[str] = []
+    current = ""
+    for cluster in _clusters(word):
+        if current and visible_length(current + cluster) > max_chars:
+            pieces.append(current)
+            current = ""
+        current += cluster
+    if current:
+        pieces.append(current)
+    return pieces
+
+
 def wrap_text(text: str, width: float, font_size: float) -> tuple[str, ...]:
-    """Wrap by a conservative character-width estimate, including Thai text."""
+    """Wrap by a conservative width estimate, preferring spaces and never splitting a Thai cluster.
+
+    Lines break at whitespace first; a word longer than one line is split between
+    character clusters so a vowel or tone mark never starts a line. Every
+    non-space character of the input is kept in order.
+    """
 
     max_chars = max(1, int(width / max(font_size * 0.55, 1)))
     lines: list[str] = []
     for paragraph in text.splitlines() or [""]:
-        if not paragraph:
+        words = paragraph.split()
+        if not words:
             lines.append("")
             continue
-        lines.extend(paragraph[index : index + max_chars] for index in range(0, len(paragraph), max_chars))
+        current = ""
+        for word in words:
+            candidate = f"{current} {word}" if current else word
+            if visible_length(candidate) <= max_chars:
+                current = candidate
+                continue
+            if current:
+                lines.append(current)
+                current = ""
+            if visible_length(word) <= max_chars:
+                current = word
+            else:
+                *full, current = _hard_split(word, max_chars)
+                lines.extend(full)
+        lines.append(current)
     return tuple(lines)
 
 
