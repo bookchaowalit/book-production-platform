@@ -81,6 +81,9 @@ def _asset_fingerprints(items: list[dict[str, Any]]) -> list[dict[str, str]]:
     fingerprints: list[dict[str, str]] = []
     for item in items:
         item_fingerprints: dict[str, str] = {}
+        if not isinstance(item, dict):
+            fingerprints.append(item_fingerprints)
+            continue
         root = item.get("asset_root")
         references = dict(item.get("assets", {})) if isinstance(item.get("assets"), dict) else {}
         font_ref = item.get("font_ref", "builtin:sans")
@@ -100,7 +103,10 @@ def _asset_fingerprints(items: list[dict[str, Any]]) -> list[dict[str, str]]:
 
 
 def _canonical_hash(items: list[dict[str, Any]]) -> str:
-    canonical_items = [{key: value for key, value in item.items() if key != "asset_root"} for item in items]
+    canonical_items = [
+        {key: value for key, value in item.items() if key != "asset_root"} if isinstance(item, dict) else item
+        for item in items
+    ]
     payload = json.dumps({"recipe": RECIPE_VERSION, "items": canonical_items, "asset_fingerprints": _asset_fingerprints(items)}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
@@ -117,6 +123,27 @@ def _write_atomic(path: Path, data: bytes) -> int:
         temporary = Path(handle.name)
     temporary.replace(path)
     return len(data)
+
+
+def _conflicting_existing_file(path: Path, data: bytes) -> bool:
+    """Return True when ``path`` already holds different bytes (or is not a regular file).
+
+    Artifacts live directly in the shared output directory and manifests refer to
+    them by file name, so a later batch that reuses a ``request_id`` must never
+    replace bytes an earlier manifest still hashes. Identical bytes are fine: the
+    earlier manifest stays valid.
+    """
+
+    if path.is_symlink():
+        return True
+    if not path.exists():
+        return False
+    if not path.is_file():
+        return True
+    try:
+        return path.read_bytes() != data
+    except OSError:
+        return True
 
 
 def _artifact(path: Path, media_type: str, width: int, height: int) -> ArtifactRef:
@@ -174,6 +201,9 @@ def run_batch(items: list[dict[str, Any]], output_dir: str | Path, idempotency_k
     # and macOS file systems treat "Card" and "card" as the same file.
     claimed_names: set[str] = set()
     for index, raw in enumerate(items):
+        if not isinstance(raw, dict):
+            output_items.append(ItemResult(request_id=f"item-{index + 1}", status="rejected", error_code="invalid_request"))
+            continue
         request_id = str(raw.get("request_id", f"item-{index + 1}"))
         prefix = _safe_name(request_id, f"item-{index + 1}")
         if prefix.casefold() in claimed_names:
@@ -191,7 +221,13 @@ def run_batch(items: list[dict[str, Any]], output_dir: str | Path, idempotency_k
                 raise RenderError("qa_failed:" + ",".join(issues))
             svg_path = output_path / f"{prefix}.svg"
             png_path = output_path / f"{prefix}.png"
-            bytes_written += _write_atomic(svg_path, svg.encode("utf-8"))
+            svg_bytes = svg.encode("utf-8")
+            if _conflicting_existing_file(svg_path, svg_bytes) or _conflicting_existing_file(png_path, png):
+                # Another batch in this directory already published different
+                # bytes under this name; overwriting would break its manifest.
+                output_items.append(ItemResult(request_id=request_id, status="rejected", error_code="artifact_exists_with_different_content"))
+                continue
+            bytes_written += _write_atomic(svg_path, svg_bytes)
             bytes_written += _write_atomic(png_path, png)
             output_items.append(ItemResult(request_id=request_id, status="accepted", artifacts=(
                 _artifact(svg_path, "image/svg+xml", ir.canvas.width, ir.canvas.height),

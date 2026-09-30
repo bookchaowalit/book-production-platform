@@ -144,3 +144,44 @@ def test_run_batch_reuses_a_name_whose_first_owner_was_rejected(
 
     assert [entry.status for entry in result.items] == ["rejected", "accepted"]
     assert result.status == "partial"
+
+
+def test_later_batch_cannot_overwrite_files_an_earlier_manifest_hashes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _stub_browser(monkeypatch)
+    first = run_batch([item("quote-001")], tmp_path, "first-batch")
+    changed = {**item("quote-001"), "content": {"quote": "ข้อความใหม่", "author": "คนอื่น"}}
+
+    second = run_batch([changed], tmp_path, "second-batch")
+
+    assert second.status == "rejected"
+    assert second.items[0].error_code == "artifact_exists_with_different_content"
+    # Every file the first manifest records still has the recorded hash.
+    assert first.manifest_path is not None
+    manifest = json.loads(first.manifest_path.read_text(encoding="utf-8"))
+    for artifact in manifest["items"][0]["artifacts"]:
+        data = (tmp_path / artifact["filename"]).read_bytes()
+        assert hashlib.sha256(data).hexdigest() == artifact["content_hash"]
+
+
+def test_later_batch_with_identical_output_reuses_existing_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _stub_browser(monkeypatch)
+    first = run_batch([item("quote-001")], tmp_path, "first-batch")
+
+    second = run_batch([item("quote-001")], tmp_path, "another-key")
+
+    assert second.status == "accepted"
+    assert second.items[0].artifacts == first.items[0].artifacts
+
+
+def test_non_object_items_are_rejected_per_item(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _stub_browser(monkeypatch)
+
+    result = run_batch([item("quote-001"), "not-an-object", 7], tmp_path, "mixed")  # type: ignore[list-item]
+
+    assert [entry.status for entry in result.items] == ["accepted", "rejected", "rejected"]
+    assert [entry.error_code for entry in result.items[1:]] == ["invalid_request", "invalid_request"]
+    assert result.status == "partial"
