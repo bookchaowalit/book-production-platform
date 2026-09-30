@@ -565,6 +565,62 @@ include `invalid_game_ir`, `resource_cap_exceeded`, `unsafe_input_path`,
 `gameplay_qa_failed`, `publication_failed`, `publication_conflict`, and
 `replay_integrity_error`.
 
+### Export playable players (`game export`)
+
+`game export` turns an accepted `game build` artifact into a playable build for
+one target. It first verifies the source artifact's receipt, copies its project
+into staging, adds the packaged `PlayerExporter.cs` editor script to that copy
+only, and runs Unity with `-buildTarget`. The published editable project is
+never modified.
+
+| Target | Unity build target | Output entrypoint | Install needed |
+|---|---|---|---|
+| `web` | WebGL (Gzip with decompression fallback) | `player/index.html` | WebGL Build Support |
+| `windows` | StandaloneWindows64 (Mono) | `player/<scene_id>.exe` | Windows Build Support |
+
+```powershell
+$exportOutput = Join-Path $env:LOCALAPPDATA 'BookProduction\GameExport'
+book-production game export `
+  --artifact <accepted game build artifact dir> `
+  --target web `
+  --output-root $exportOutput `
+  --unity "C:\Program Files\Unity\Hub\Editor\6000.6.2f1\Editor\Unity.exe" `
+  --timeout-s 900
+```
+
+The web build writes `Build/player.{loader.js,data,framework.js,wasm}` (the
+last three as `.unityweb`); Unity names them after the output folder. It loads
+from any static host, including servers that do not send `Content-Encoding`
+headers, because the loader decompresses in JavaScript when needed. Serve the
+`player/` folder over HTTP; opening `index.html` from disk does not work in
+browsers.
+
+Local verification (2026-09-30, `pod-launch-arcade`, Unity `6000.6.2f1`): the
+web export took 120 s and produced a 4.4 MiB player that loaded in Chromium over
+`python -m http.server` with no console errors and moved the player with the
+arrow keys; the Windows export took 37 s, produced a 91 MiB player, and ran for
+8 s on Direct3D 12 with no errors in its log. Repeating both exports returned
+`replayed` without starting Unity. The host CPU was near 90% busy during the
+web run, so treat these timings as upper bounds.
+
+The export is published atomically under a fingerprint of the exporter version,
+source artifact fingerprint and project hash, target, and pinned Unity
+executable. Each export contains:
+
+- `player/` — the playable build; Unity's `*_DoNotShip` folders are removed
+- `export-manifest.json` — source fingerprint, target, Unity build result,
+  every player file with its SHA-256 and size, timing, and `model_calls: 0`
+- `.receipt.json` — pins the player tree and manifest hashes for exact replay
+
+An exact repeat verifies the receipt and returns `replayed` without starting
+Unity. Unity player builds are not byte-reproducible, so replay checks the
+published files instead of rebuilding them. Limits: timeout up to 1800 s
+(default 900 s), 64 MiB log cap, 512 MiB player cap. Export-specific error codes
+are `unsupported_export_target`, `export_target_not_installed`,
+`unity_export_failed`, and `player_incomplete`, in addition to the shared codes
+above. Android and iOS are not supported yet: Android needs the Android Build
+Support module, and iOS needs a macOS host with Xcode.
+
 ## BIM Quantity Takeoff V1A
 
 รุ่นทดลองนี้อ่านโมเดล IFC2X3/IFC4 ไฟล์เดียวในเครื่อง (สูงสุด 64 MiB และไม่เกิน

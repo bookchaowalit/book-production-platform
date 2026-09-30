@@ -31,6 +31,7 @@ book_production_platform = [
     "game_production/templates/unity_project/.gitattributes",
     "game_production/templates/unity_project/.book-production/worker-input.json",
     "game_production/templates/unity_project/**/*",
+    "game_production/exporter/*.cs",
 ]
 
 [tool.pytest.ini_options]

@@ -11,6 +11,11 @@ from typing import Any, NoReturn
 
 from book_production_platform.game_ir import GameInputError
 from book_production_platform.game_production.errors import GameJobError
+from book_production_platform.game_production.export import (
+    DEFAULT_EXPORT_TIMEOUT_SECONDS,
+    EXPORT_TARGETS,
+    export_game_player,
+)
 from book_production_platform.game_production.jobs import compose_game_scene
 
 
@@ -24,7 +29,7 @@ class _JsonArgumentParser(argparse.ArgumentParser):
 def _parser() -> argparse.ArgumentParser:
     parser = _JsonArgumentParser(
         prog="book-production game",
-        description="Build editable Unity scenes from validated GameIR.",
+        description="Build editable Unity scenes from validated GameIR and export playable players.",
     )
     commands = parser.add_subparsers(dest="command", required=True)
     build = commands.add_parser("build", help="build and verify one Unity project")
@@ -33,6 +38,13 @@ def _parser() -> argparse.ArgumentParser:
     build.add_argument("--unity", type=Path, required=True)
     build.add_argument("--timeout-s", type=int, default=120)
     build.add_argument("--asset-root", type=Path, default=None, help="folder holding GameIR v2 audio assets")
+
+    export = commands.add_parser("export", help="build a playable player from an accepted project")
+    export.add_argument("--artifact", type=Path, required=True, help="accepted `game build` artifact directory")
+    export.add_argument("--target", choices=sorted(EXPORT_TARGETS), required=True)
+    export.add_argument("--output-root", type=Path, required=True)
+    export.add_argument("--unity", type=Path, required=True)
+    export.add_argument("--timeout-s", type=int, default=DEFAULT_EXPORT_TIMEOUT_SECONDS)
 
     benchmark = commands.add_parser("benchmark", help="run the 20-case local acceptance suite")
     benchmark.add_argument("--fixtures", type=Path, required=True)
@@ -75,6 +87,36 @@ def game_main(argv: list[str]) -> int:
                 "artifact_hashes": result.artifact_hashes,
                 "replay": result.replay,
                 "model_calls": result.model_calls,
+            }
+        )
+        return 0
+
+    if args.command == "export":
+        try:
+            exported = export_game_player(
+                args.artifact,
+                args.target,
+                args.output_root,
+                args.unity,
+                timeout_s=args.timeout_s,
+            )
+        except (GameInputError, GameJobError) as error:
+            _emit({"status": "rejected", "error": error.code})
+            return 2
+        except OSError:
+            _emit({"status": "rejected", "error": "cli_io_error"})
+            return 2
+        _emit(
+            {
+                "status": exported.status,
+                "fingerprint": exported.fingerprint,
+                "target": exported.target,
+                "artifact_dir": str(exported.artifact_dir),
+                "entrypoint": exported.entrypoint,
+                "source_fingerprint": exported.source_fingerprint,
+                "artifact_hashes": exported.artifact_hashes,
+                "replay": exported.replay,
+                "model_calls": exported.model_calls,
             }
         )
         return 0
