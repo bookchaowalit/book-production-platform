@@ -234,6 +234,20 @@ python -m book_production_platform.graphics_production.scripts.benchmark `
   --output-dir .\.runtime\graphics\benchmark
 ```
 
+Artifacts are named after each item's `request_id` and live directly in the
+output directory next to every batch manifest that hashes them. An item whose
+name collides with another item in the same batch is rejected with
+`artifact_name_collision`; an item that would replace a file another batch
+already wrote with different bytes is rejected with
+`artifact_exists_with_different_content` (identical bytes are reused). Use a
+new output directory or `request_id` for a changed render.
+
+This repository is the owner of graphics production. `book-graphics-production`
+is an older frozen fork kept only until it is archived; safety fixes are
+mirrored there, features are not. `python scripts/graphics_fork_parity.py
+--fork ..\book-graphics-production` reports which modules have drifted and
+fails if the fork has a module this repository lacks.
+
 The root `scripts/check.py` entrypoint runs the full repository test suite,
 Ruff and strict mypy (pinned to the Windows platform in `pyproject.toml`) for
 every product module listed in the script, and GitHub Actions runs the same

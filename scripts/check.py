@@ -39,6 +39,8 @@ PIPELINE_TESTS = ROOT / "tests" / "pipeline"
 PLATFORM_CLI = ROOT / "src" / "book_production_platform" / "cli.py"
 DOCTOR = ROOT / "src" / "book_production_platform" / "doctor.py"
 DOCTOR_TESTS = ROOT / "tests" / "test_doctor.py"
+SCRIPTS = ROOT / "scripts"
+PARITY_TESTS = ROOT / "tests" / "test_graphics_fork_parity.py"
 RUFF_TARGETS = (
     GRAPHICS_IR,
     GRAPHICS,
@@ -72,6 +74,8 @@ RUFF_TARGETS = (
     DOCTOR_TESTS,
     GAME_IR,
     GAME,
+    SCRIPTS,
+    PARITY_TESTS,
 )
 MYPY_TARGETS = (
     GRAPHICS_IR,
@@ -90,6 +94,7 @@ MYPY_TARGETS = (
     BIM_PRODUCTION,
     PIPELINE,
     DOCTOR,
+    SCRIPTS / "graphics_fork_parity.py",
 )
 
 
