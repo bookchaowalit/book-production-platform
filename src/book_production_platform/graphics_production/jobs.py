@@ -170,8 +170,17 @@ def run_batch(items: list[dict[str, Any]], output_dir: str | Path, idempotency_k
     output_items: list[ItemResult] = []
     bytes_written = 0
     accepted = 0
+    # Artifact names already written by this batch, case-folded because Windows
+    # and macOS file systems treat "Card" and "card" as the same file.
+    claimed_names: set[str] = set()
     for index, raw in enumerate(items):
         request_id = str(raw.get("request_id", f"item-{index + 1}"))
+        prefix = _safe_name(request_id, f"item-{index + 1}")
+        if prefix.casefold() in claimed_names:
+            # A duplicate or sanitize-equivalent request_id would overwrite an
+            # accepted item's files and invalidate the hashes in this manifest.
+            output_items.append(ItemResult(request_id=request_id, status="rejected", error_code="artifact_name_collision"))
+            continue
         try:
             ir = compile_template(raw)
             asset_root = raw.get("asset_root")
@@ -180,7 +189,6 @@ def run_batch(items: list[dict[str, Any]], output_dir: str | Path, idempotency_k
             issues = run_graphic_qa(svg, png, ir)
             if issues:
                 raise RenderError("qa_failed:" + ",".join(issues))
-            prefix = _safe_name(request_id, f"item-{index + 1}")
             svg_path = output_path / f"{prefix}.svg"
             png_path = output_path / f"{prefix}.png"
             bytes_written += _write_atomic(svg_path, svg.encode("utf-8"))
@@ -189,6 +197,7 @@ def run_batch(items: list[dict[str, Any]], output_dir: str | Path, idempotency_k
                 _artifact(svg_path, "image/svg+xml", ir.canvas.width, ir.canvas.height),
                 _artifact(png_path, "image/png", ir.canvas.width, ir.canvas.height),
             )))
+            claimed_names.add(prefix.casefold())
             accepted += 1
         except (TemplateError, LayoutError, RenderError, ValidationError, ValueError) as exc:
             code = "invalid_request" if isinstance(exc, ValidationError) else str(exc).split(":", 1)[0] or exc.__class__.__name__

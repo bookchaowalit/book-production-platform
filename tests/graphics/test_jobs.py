@@ -1,3 +1,4 @@
+import hashlib
 import json
 from io import BytesIO
 from pathlib import Path
@@ -10,6 +11,7 @@ from book_production_platform.graphics_production.jobs import (
     IdempotencyConflict,
     run_batch,
 )
+from tests.graphics.browser import requires_browser
 
 
 def item(request_id: str = "quote-001") -> dict[str, object]:
@@ -23,6 +25,7 @@ def item(request_id: str = "quote-001") -> dict[str, object]:
     }
 
 
+@requires_browser
 def test_run_batch_writes_manifest_and_two_artifacts(tmp_path: Path) -> None:
     result = run_batch([item()], tmp_path, "batch-1")
 
@@ -36,6 +39,7 @@ def test_run_batch_writes_manifest_and_two_artifacts(tmp_path: Path) -> None:
     assert json.loads(result.manifest_path.read_text(encoding="utf-8"))["telemetry"]["model_calls"] == 0
 
 
+@requires_browser
 def test_run_batch_replays_without_rewriting_artifacts(tmp_path: Path) -> None:
     first = run_batch([item()], tmp_path, "batch-2")
     assert first.manifest_path is not None
@@ -58,6 +62,7 @@ def test_run_batch_rejects_idempotency_reuse_with_different_input(tmp_path: Path
         run_batch([item("different")], tmp_path, "batch-3")
 
 
+@requires_browser
 def test_run_batch_keeps_malformed_item_as_actionable_rejection(tmp_path: Path) -> None:
     result = run_batch([item(), {"request_id": "bad", "template_id": "quote_card"}], tmp_path, "batch-4")
 
@@ -94,3 +99,48 @@ def test_run_batch_rejects_replay_when_local_asset_bytes_change(tmp_path: Path, 
 
     with pytest.raises(IdempotencyConflict):
         run_batch([item_data], tmp_path / "out", "asset-change")
+
+
+def _stub_browser(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Replace browser rasterization with a canvas-sized PNG so naming logic runs anywhere."""
+
+    def fake_render_png(ir: object, *, asset_root: object = None) -> bytes:
+        canvas = ir.canvas  # type: ignore[attr-defined]
+        buffer = BytesIO()
+        Image.new("RGB", (canvas.width, canvas.height), "white").save(buffer, format="PNG")
+        return buffer.getvalue()
+
+    monkeypatch.setattr(jobs, "render_png", fake_render_png)
+    monkeypatch.setattr(jobs, "run_graphic_qa", lambda svg, png, ir: ())
+
+
+@pytest.mark.parametrize("second_id", ["quote-001", "QUOTE-001", "..quote-001", "quote-001.."])
+def test_run_batch_rejects_items_whose_artifact_names_collide(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, second_id: str
+) -> None:
+    _stub_browser(monkeypatch)
+    first = item("quote-001")
+    second = {**item(second_id), "content": {"quote": "อีกข้อความ", "author": "คนอื่น"}}
+
+    result = run_batch([first, second], tmp_path, f"collision-{second_id}")
+
+    assert result.status == "partial"
+    assert [entry.status for entry in result.items] == ["accepted", "rejected"]
+    assert result.items[1].error_code == "artifact_name_collision"
+    svg_artifact = next(a for a in result.items[0].artifacts if a.media_type == "image/svg+xml")
+    written = (tmp_path / svg_artifact.filename).read_bytes()
+    # The accepted item's file still matches the hash recorded in the manifest.
+    assert hashlib.sha256(written).hexdigest() == svg_artifact.content_hash
+    assert "ทำให้ชัดเจน".encode() in written
+
+
+def test_run_batch_reuses_a_name_whose_first_owner_was_rejected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _stub_browser(monkeypatch)
+    broken = {**item("quote-001"), "template_id": "missing_template"}
+
+    result = run_batch([broken, item("quote-001")], tmp_path, "reuse-after-reject")
+
+    assert [entry.status for entry in result.items] == ["rejected", "accepted"]
+    assert result.status == "partial"
