@@ -120,7 +120,7 @@ def render_workbook(ir: WorkbookIR, output_path: str | Path) -> list[ArtifactRef
                 _, row, column = _coordinates(formula.target)
                 worksheet.write_formula(row, column, formula.expression, formats["formula"], _cached_value(evaluation.values[formula.target]))
                 written.add(formula.target)
-            if sheet.name == "Detail":
+            if sheet.name != "Summary":
                 worksheet.set_column(0, max(0, len(sheet.column_labels) - 1), 18)
             else:
                 worksheet.set_column(0, 0, 24)

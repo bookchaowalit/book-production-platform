@@ -19,7 +19,7 @@ from .recipe import WorkbookBuildError, build_workbook_ir
 from .render import RenderError, render_workbook
 from .telemetry import JobTelemetry
 
-RECIPE_VERSION = "workbook-builder-v1"
+RECIPE_VERSION = "workbook-builder-v2"
 
 
 class IdempotencyConflict(ValueError):
