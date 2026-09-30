@@ -19,7 +19,7 @@ from book_production_platform.bim_production.runtime import (
 )
 from tests.bim_production.fixtures import (
     load_fixture_cases,
-    pinned_runtime_paths,
+    require_pinned_runtime,
     run_fixture_case,
 )
 
@@ -32,10 +32,7 @@ def case(case_id: str) -> dict[str, Any]:
 
 @pytest.fixture(scope="module")
 def runtime() -> tuple[Path, Path]:
-    freecadcmd, site_packages = pinned_runtime_paths()
-    assert freecadcmd.is_file(), "the pinned FreeCADCmd runtime must exist locally"
-    assert site_packages.is_dir(), "the pinned IfcOpenShell site-packages must exist locally"
-    return freecadcmd, site_packages
+    return require_pinned_runtime()
 
 
 def generate(

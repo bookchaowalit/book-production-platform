@@ -235,7 +235,11 @@ python -m book_production_platform.graphics_production.scripts.benchmark `
 ```
 
 The root `scripts/check.py` entrypoint runs the full repository test suite,
-Ruff and strict mypy for the Graphics and Spreadsheet modules. These remain
+Ruff and strict mypy (pinned to the Windows platform in `pyproject.toml`) for
+every product module listed in the script, and GitHub Actions runs the same
+script on Ubuntu (`.github/workflows/ci.yml`). Tests that need Blender, the
+pinned FreeCAD runtime, FFmpeg or a Chromium-family browser skip with a reason
+when that runtime is absent. These remain
 domain adapters inside this shared product repository and do not create another
 agent or model runtime.
 

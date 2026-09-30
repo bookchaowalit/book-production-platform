@@ -15,6 +15,10 @@ from book_production_platform.graphics_production.export import (
     export_batch,
 )
 from book_production_platform.graphics_production.jobs import run_batch
+from tests.graphics.browser import requires_browser
+
+# Every export test builds its source batch through the browser renderer.
+pytestmark = requires_browser
 
 
 def _item(request_id: str = "quote-001") -> dict[str, object]:

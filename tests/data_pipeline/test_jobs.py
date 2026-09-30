@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
@@ -205,6 +206,7 @@ def test_concurrent_identical_jobs_publish_once_and_replay_the_second(
     assert sorted(result.bytes_written for result in results) == [0, max(result.bytes_written for result in results)]
 
 
+@pytest.mark.skipif(os.name != "nt", reason="transient sharing-lock retries apply only on Windows")
 def test_transient_publish_permission_error_retries_once(
     tmp_path: Path,
     valid_pipeline_request: dict[str, Any],
@@ -227,6 +229,35 @@ def test_transient_publish_permission_error_retries_once(
 
     assert result.status == "accepted"
     assert attempts == 2
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX hosts do not retry publish permission errors")
+def test_publish_permission_error_fails_closed_without_retry_on_posix(
+    tmp_path: Path,
+    valid_pipeline_request: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_rename = Path.rename
+    attempts = 0
+
+    def denied_rename(path: Path, target: str | Path) -> Path:
+        nonlocal attempts
+        if ".staging-" in path.name and path.parent.name == "jobs":
+            attempts += 1
+            raise PermissionError(13, "permission denied")
+        return original_rename(path, target)
+
+    monkeypatch.setattr(Path, "rename", denied_rename)
+
+    with pytest.raises(PipelineJobError) as error:
+        run_pipeline_job(valid_pipeline_request, tmp_path)
+
+    assert error.value.code == "artifact_publish_failed"
+    assert attempts == 1
+    jobs_dir = tmp_path / "jobs"
+    assert not jobs_dir.exists() or not any(jobs_dir.iterdir())
+    receipts_dir = tmp_path / ".receipts"
+    assert not receipts_dir.exists() or not any(receipts_dir.iterdir())
 
 
 def test_symlinked_output_root_is_rejected(tmp_path: Path, valid_pipeline_request: dict[str, Any]) -> None:

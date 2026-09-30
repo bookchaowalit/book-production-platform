@@ -11,6 +11,7 @@ from book_production_platform.graphics_production.render import (
     render_svg,
 )
 from book_production_platform.graphics_production.templates import compile_template
+from tests.graphics.browser import requires_browser
 from tests.graphics.test_templates import request_for
 
 
@@ -28,6 +29,7 @@ def test_render_svg_is_editable_and_escaped() -> None:
     assert "https://" not in svg
 
 
+@requires_browser
 def test_render_png_has_canvas_dimensions() -> None:
     ir = compile_template(request_for("announcement", variant="portrait"))
 

@@ -25,6 +25,7 @@ from book_production_platform.bim_production.runtime import (
 from tests.bim_production.fixtures import (
     load_fixture_cases,
     pinned_runtime_paths,
+    require_pinned_runtime,
     run_fixture_case,
 )
 
@@ -133,8 +134,7 @@ def _worker_result(records: list[dict[str, Any]]) -> BimWorkerResult:
 
 @pytest.fixture(scope="module")
 def real_ifc(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    freecadcmd, site_packages = pinned_runtime_paths()
-    assert freecadcmd.is_file() and site_packages.is_dir()
+    freecadcmd, site_packages = require_pinned_runtime()
     cases = load_fixture_cases("ifc-validation-cases.json")
     result, work_root = run_fixture_case(
         cases["ifc4-extraction-rich"], freecadcmd, site_packages,

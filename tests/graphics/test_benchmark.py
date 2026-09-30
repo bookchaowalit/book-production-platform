@@ -2,8 +2,10 @@ import json
 from pathlib import Path
 
 from book_production_platform.graphics_production.scripts.benchmark import run_benchmark
+from tests.graphics.browser import requires_browser
 
 
+@requires_browser
 def test_batch_30_benchmark_has_zero_model_calls_and_complete_outputs(tmp_path: Path) -> None:
     fixture = Path(__file__).parent / "fixtures" / "batch_30.json"
 

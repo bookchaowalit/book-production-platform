@@ -39,6 +39,14 @@ pythonpath = ["src"]
 testpaths = ["tests"]
 addopts = "-ra"
 
+[tool.mypy]
+# Job locking and the BIM runtime use Windows-only APIs (msvcrt, ctypes.WinDLL,
+# os.add_dll_directory) behind os.name checks that mypy cannot narrow. Pin the
+# checked platform to the primary Windows host so strict mypy gives the same
+# result on Linux CI and developer machines; POSIX branches load fcntl
+# dynamically and stay typed as Any.
+platform = "win32"
+
 [[tool.mypy.overrides]]
 # The scene3d internals include Blender-worker modules and are intentionally
 # not part of MYPY_TARGETS; pipeline code imports their public functions, so
