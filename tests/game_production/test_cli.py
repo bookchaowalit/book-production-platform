@@ -29,7 +29,10 @@ def test_build_reports_json_and_model_calls_zero(tmp_path: Path, monkeypatch, ca
     expected = GameJobResult("accepted", "a" * 64, artifact_dir, {"scene_sha256": "b" * 64}, False, 0)
     calls: list[tuple[Path, Path, Path, int]] = []
 
-    def fake_compose(game_path: Path, output_root: Path, unity_bin: Path, timeout_s: int) -> GameJobResult:
+    def fake_compose(
+        game_path: Path, output_root: Path, unity_bin: Path, timeout_s: int, asset_root: Path | None = None
+    ) -> GameJobResult:
+        assert asset_root is None
         calls.append((game_path, output_root, unity_bin, timeout_s))
         return expected
 

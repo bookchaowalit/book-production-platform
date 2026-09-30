@@ -9,8 +9,11 @@ namespace BookProduction.Runtime
         private bool movementRecorded;
         [SerializeField] private int totalObjectives;
         [SerializeField] private bool isWon;
+        [SerializeField] private AudioSource collectSound;
 
         public int TotalObjectives { get { return totalObjectives; } }
+        public bool HasCollectSound { get { return collectSound != null && collectSound.clip != null; } }
+        public int CollectSoundCount { get; private set; }
         public int CollectedCount { get { return collectedIds.Count; } }
         public bool IsWon { get { return isWon; } }
         public List<string> Events { get; private set; } = new List<string>();
@@ -22,6 +25,7 @@ namespace BookProduction.Runtime
             Events.Clear();
             isWon = false;
             movementRecorded = false;
+            CollectSoundCount = 0;
         }
 
         public bool TryCollect(string id)
@@ -32,7 +36,17 @@ namespace BookProduction.Runtime
             }
 
             Events.Add("objective_collected:" + id);
+            if (HasCollectSound)
+            {
+                collectSound.PlayOneShot(collectSound.clip);
+                CollectSoundCount += 1;
+            }
             return true;
+        }
+
+        public void ConfigureCollectSound(AudioSource source)
+        {
+            collectSound = source;
         }
 
         public void TryWin(string exitId)

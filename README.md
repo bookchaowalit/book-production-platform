@@ -479,6 +479,28 @@ book-production game build `
   --timeout-s 120
 ```
 
+### Audio from local files (`game-ir.v2`)
+
+`game-ir.v2` is `game-ir.v1` plus optional `assets` and `audio`. Each asset is a
+WAV or Ogg file named in `assets[].filename`, pinned by `sha256`, and read from
+the folder passed with `--asset-root`. `audio.music` loops for the whole scene
+and `audio.collect_sfx` plays once per collected objective:
+
+```json
+"assets": [{"asset_id": "theme", "kind": "audio", "filename": "theme.wav", "sha256": "…"}],
+"audio": {"music": "theme", "collect_sfx": null}
+```
+
+Before Unity starts, every file must sit directly in the asset root, match its
+hash, be at most 20 MB and 10 minutes, and probe as WAV/Ogg with `ffprobe`
+(`FFPROBE_BIN` or `PATH`). Files are copied to `Assets/BookProduction/Audio/`
+with deterministic `.meta` GUIDs; the audio slots are part of the composer
+template, so the scene stays byte-identical across rebuilds. The QA manifest
+lists each asset and the worker report checks the music source and collect
+sound. A `game-ir.v1` input produces the same canonical IR and worker input as
+before; the template gained the built-in `com.unity.modules.audio` module (no
+download), so v1 builds get new fingerprints.
+
 On Windows, keep the output root short because Unity creates its `Library`
 database below the fingerprinted project path. A deeply nested repository
 output root can exceed the host path limit when opening the project in Unity.

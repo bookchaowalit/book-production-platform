@@ -85,6 +85,8 @@ def install_fake_stages(
                 "external_resource_count": 0,
                 "disallowed_component_count": 0,
                 "trusted_template_no_network_references": True,
+                "music_source_count": 1 if worker_input.get("audio", {}).get("music") else 0,
+                "collect_sound_configured": bool(worker_input.get("audio", {}).get("collect_sfx")),
             }
             (private_root / "worker-report.json").write_text(json.dumps(report), encoding="utf-8")
         if stage in {"editmode", "playmode"}:

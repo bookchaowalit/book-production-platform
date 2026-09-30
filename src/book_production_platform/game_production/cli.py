@@ -32,6 +32,7 @@ def _parser() -> argparse.ArgumentParser:
     build.add_argument("--output-root", type=Path, required=True)
     build.add_argument("--unity", type=Path, required=True)
     build.add_argument("--timeout-s", type=int, default=120)
+    build.add_argument("--asset-root", type=Path, default=None, help="folder holding GameIR v2 audio assets")
 
     benchmark = commands.add_parser("benchmark", help="run the 20-case local acceptance suite")
     benchmark.add_argument("--fixtures", type=Path, required=True)
@@ -58,6 +59,7 @@ def game_main(argv: list[str]) -> int:
                 args.output_root,
                 args.unity,
                 timeout_s=args.timeout_s,
+                asset_root=args.asset_root,
             )
         except (GameInputError, GameJobError) as error:
             _emit({"status": "rejected", "error": error.code})

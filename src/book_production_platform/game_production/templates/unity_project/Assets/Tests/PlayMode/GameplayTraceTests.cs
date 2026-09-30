@@ -38,6 +38,10 @@ namespace BookProduction.Tests.PlayMode
             Assert.That(lastCollection, Is.GreaterThanOrEqualTo(0));
             Assert.That(winIndex, Is.GreaterThan(lastCollection));
             Assert.That(progress.Events[progress.Events.Count - 1], Is.EqualTo("game_won:" + input.exit.id));
+            Assert.That(
+                progress.CollectSoundCount,
+                Is.EqualTo(progress.HasCollectSound ? progress.TotalObjectives : 0)
+            );
 
             CollectionTraceWriter.Write(progress.Events);
             Assert.That(

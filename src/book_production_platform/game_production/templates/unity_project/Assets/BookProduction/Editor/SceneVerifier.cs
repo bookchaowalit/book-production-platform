@@ -20,6 +20,8 @@ namespace BookProduction.Editor
         public int ExternalResourceCount;
         public int DisallowedComponentCount;
         public bool TrustedTemplateNoNetworkReferences;
+        public int MusicSourceCount;
+        public bool CollectSoundConfigured;
 
         public bool IsValid
         {
@@ -52,6 +54,12 @@ namespace BookProduction.Editor
                 .SelectMany(root => root.GetComponentsInChildren<Component>(true))
                 .ToArray();
             string[] entityIds = identities.Select(identity => identity.EntityId).ToArray();
+            AudioSource[] audioSources = roots
+                .SelectMany(root => root.GetComponentsInChildren<AudioSource>(true))
+                .ToArray();
+            GameProgress progress = roots
+                .SelectMany(root => root.GetComponentsInChildren<GameProgress>(true))
+                .SingleOrDefault();
 
             var report = new SceneVerificationReport
             {
@@ -71,7 +79,13 @@ namespace BookProduction.Editor
                     if (renderer.sprite == null) return true;
                     string path = AssetDatabase.GetAssetPath(renderer.sprite);
                     return !path.StartsWith("Assets/BookProduction/Art/", StringComparison.Ordinal);
-                })
+                }) + audioSources.Count(source =>
+                    source.clip == null
+                    || !AssetDatabase.GetAssetPath(source.clip).StartsWith(SceneCompiler.AudioRoot, StringComparison.Ordinal)),
+                MusicSourceCount = audioSources.Count(source =>
+                    source.gameObject.name == SceneCompiler.MusicObjectName
+                    && source.gameObject.activeSelf && source.loop && source.playOnAwake && source.clip != null),
+                CollectSoundConfigured = progress != null && progress.HasCollectSound
             };
             if (!report.IsValid)
             {
@@ -94,7 +108,9 @@ namespace BookProduction.Editor
                 typeof(CircleCollider2D),
                 typeof(TopDownPlayerController),
                 typeof(Collectible),
-                typeof(ExitGate)
+                typeof(ExitGate),
+                typeof(AudioSource),
+                typeof(AudioListener)
             };
             return components.Count(component => component == null || !allowed.Contains(component.GetType()));
         }

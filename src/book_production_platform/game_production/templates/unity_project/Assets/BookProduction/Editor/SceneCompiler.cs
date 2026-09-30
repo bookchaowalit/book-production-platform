@@ -22,8 +22,12 @@ namespace BookProduction.Editor
         public WallDTO[] walls;
         public ObjectiveDTO[] objectives;
         public ExitDTO exit;
+        public AssetDTO[] assets;
+        public AudioDTO audio;
     }
 
+    [Serializable] public sealed class AssetDTO { public string asset_id; public string kind; public string filename; public string sha256; public string unity_path; }
+    [Serializable] public sealed class AudioDTO { public string music; public string collect_sfx; }
     [Serializable] public sealed class CellDTO { public int x; public int y; }
     [Serializable] public sealed class WorldDTO { public int width; public int height; public float tile_size; }
     [Serializable] public sealed class PlayerDTO { public string id; public CellDTO spawn; public float speed; }
@@ -45,12 +49,16 @@ namespace BookProduction.Editor
         public int external_resource_count;
         public int disallowed_component_count;
         public bool trusted_template_no_network_references;
+        public int music_source_count;
+        public bool collect_sound_configured;
     }
 
     public static class SceneCompiler
     {
         private const string WorkerInputPath = ".book-production/worker-input.json";
         private const string ArtRoot = "Assets/BookProduction/Art/";
+        internal const string AudioRoot = "Assets/BookProduction/Audio/";
+        internal const string MusicObjectName = "Music";
         private const string ComposerTemplatePath = "Assets/BookProduction/Source/scene-composer-template.unity";
         private const int WallSlotCount = 192;
         private const int ObjectiveSlotCount = 32;
@@ -76,6 +84,7 @@ namespace BookProduction.Editor
             CopyComposerTemplate(scenePath);
             Scene scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
             ApplyGameIRToScene(scene, input);
+            ApplyAudio(scene, input);
             EditorSceneManager.SaveScene(scene, scenePath);
             WriteStableSceneMeta(scenePath, input.scene_id);
             AssetDatabase.Refresh();
@@ -103,7 +112,22 @@ namespace BookProduction.Editor
             var progressObject = new GameObject("GameProgress");
             GameProgress progress = progressObject.AddComponent<GameProgress>();
             progress.Initialize(0);
+            // Audio slots (GameIR v2) live in the template so their file IDs are stable;
+            // the compiler fills them or removes them, it never adds new objects.
+            AudioSource collectSlot = progressObject.AddComponent<AudioSource>();
+            collectSlot.playOnAwake = false;
+            collectSlot.loop = false;
+            collectSlot.spatialBlend = 0f;
+            collectSlot.enabled = false;
             CreateCamera(world);
+            AudioListener listenerSlot = UnityEngine.Object.FindAnyObjectByType<Camera>().gameObject.AddComponent<AudioListener>();
+            listenerSlot.enabled = false;
+            var musicSlot = new GameObject(MusicObjectName);
+            AudioSource musicSource = musicSlot.AddComponent<AudioSource>();
+            musicSource.playOnAwake = true;
+            musicSource.loop = true;
+            musicSource.spatialBlend = 0f;
+            musicSlot.SetActive(false);
             CreateWorldBounds(world);
 
             var player = CreateEntity("PlayerSlot", "player-slot", "player-slot", new CellDTO(), world, "player");
@@ -166,7 +190,7 @@ namespace BookProduction.Editor
 
         private static void ValidateWorkerInput(UnityWorkerIR input)
         {
-            if (input.schema_version != "game-ir.v1"
+            if ((input.schema_version != "game-ir.v1" && input.schema_version != "game-ir.v2")
                 || input.template != "top-down-collect.v1"
                 || input.palette != "palette-minimal.v1"
                 || !Regex.IsMatch(input.scene_id, "^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -201,6 +225,116 @@ namespace BookProduction.Editor
             if (input.objectives.Any(item => item == null || item.cell == null))
             {
                 throw new InvalidDataException("worker_input_invalid");
+            }
+            ValidateAudioInput(input);
+        }
+
+        private static void ValidateAudioInput(UnityWorkerIR input)
+        {
+            AssetDTO[] assets = input.assets ?? new AssetDTO[0];
+            string music = input.audio == null ? "" : input.audio.music ?? "";
+            string collectSfx = input.audio == null ? "" : input.audio.collect_sfx ?? "";
+            if (input.schema_version == "game-ir.v1")
+            {
+                if (assets.Length > 0 || music.Length > 0 || collectSfx.Length > 0)
+                {
+                    throw new InvalidDataException("worker_input_invalid");
+                }
+                return;
+            }
+            if (assets.Length > 4)
+            {
+                throw new InvalidDataException("worker_input_invalid");
+            }
+            foreach (AssetDTO asset in assets)
+            {
+                if (asset == null
+                    || asset.kind != "audio"
+                    || asset.asset_id == null
+                    || !Regex.IsMatch(asset.asset_id, "^[a-z0-9]+(?:-[a-z0-9]+)*$")
+                    || (asset.unity_path != AudioRoot + asset.asset_id + ".wav" && asset.unity_path != AudioRoot + asset.asset_id + ".ogg")
+                    || !File.Exists(asset.unity_path))
+                {
+                    throw new InvalidDataException("worker_input_invalid");
+                }
+            }
+            if (assets.Select(item => item.asset_id).Distinct(StringComparer.Ordinal).Count() != assets.Length
+                || (music.Length > 0 && FindAsset(input, music) == null)
+                || (collectSfx.Length > 0 && FindAsset(input, collectSfx) == null))
+            {
+                throw new InvalidDataException("worker_input_invalid");
+            }
+        }
+
+        private static AssetDTO FindAsset(UnityWorkerIR input, string assetId)
+        {
+            return (input.assets ?? new AssetDTO[0]).FirstOrDefault(item => item != null && item.asset_id == assetId);
+        }
+
+        private static AudioClip LoadClip(UnityWorkerIR input, string assetId)
+        {
+            if (string.IsNullOrEmpty(assetId))
+            {
+                return null;
+            }
+            AssetDTO asset = FindAsset(input, assetId);
+            AudioClip clip = asset == null ? null : AssetDatabase.LoadAssetAtPath<AudioClip>(asset.unity_path);
+            if (clip == null)
+            {
+                throw new InvalidDataException("audio_asset_invalid");
+            }
+            return clip;
+        }
+
+        /// <summary>GameIR v2: looping music and a collect sound, both from staged local assets.</summary>
+        private static void ApplyAudio(Scene scene, UnityWorkerIR input)
+        {
+            AudioClip music = LoadClip(input, input.audio == null ? null : input.audio.music);
+            AudioClip collectSfx = LoadClip(input, input.audio == null ? null : input.audio.collect_sfx);
+
+            GameObject[] roots = scene.GetRootGameObjects();
+            GameObject progressObject = roots.FirstOrDefault(item => item.name == "GameProgress");
+            GameObject musicObject = roots.FirstOrDefault(item => item.name == MusicObjectName);
+            AudioListener listener = roots
+                .SelectMany(root => root.GetComponentsInChildren<AudioListener>(true))
+                .SingleOrDefault();
+            AudioSource collectSource = progressObject == null ? null : progressObject.GetComponent<AudioSource>();
+            AudioSource musicSource = musicObject == null ? null : musicObject.GetComponent<AudioSource>();
+            if (listener == null || collectSource == null || musicSource == null)
+            {
+                throw new InvalidDataException("composer_audio_slot_missing");
+            }
+
+            if (music != null)
+            {
+                musicSource.clip = music;
+                musicSource.loop = true;
+                musicSource.playOnAwake = true;
+                musicObject.SetActive(true);
+            }
+            else
+            {
+                UnityEngine.Object.DestroyImmediate(musicObject);
+            }
+
+            if (collectSfx != null)
+            {
+                collectSource.clip = collectSfx;
+                collectSource.enabled = true;
+                progressObject.GetComponent<GameProgress>().ConfigureCollectSound(collectSource);
+            }
+            else
+            {
+                UnityEngine.Object.DestroyImmediate(collectSource);
+            }
+
+            if (music != null || collectSfx != null)
+            {
+                listener.enabled = true;
+            }
+            else
+            {
+                UnityEngine.Object.DestroyImmediate(listener);
             }
         }
 
@@ -511,7 +645,9 @@ namespace BookProduction.Editor
                 unique_entity_ids = verification.UniqueEntityIds,
                 external_resource_count = verification.ExternalResourceCount,
                 disallowed_component_count = verification.DisallowedComponentCount,
-                trusted_template_no_network_references = verification.TrustedTemplateNoNetworkReferences
+                trusted_template_no_network_references = verification.TrustedTemplateNoNetworkReferences,
+                music_source_count = verification.MusicSourceCount,
+                collect_sound_configured = verification.CollectSoundConfigured
             };
             File.WriteAllText(Path.Combine(folder, "worker-report.json"), JsonUtility.ToJson(report, true));
             if (!verification.IsValid)

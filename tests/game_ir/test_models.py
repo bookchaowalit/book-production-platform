@@ -83,7 +83,7 @@ def test_parse_rejects_unknown_fields() -> None:
 
 
 def test_parse_rejects_unsupported_schema_version() -> None:
-    value = {**VALID_GAME, "schema_version": "game-ir.v2"}
+    value = {**VALID_GAME, "schema_version": "game-ir.v3"}
 
     with pytest.raises(GameInputError) as error:
         parse_game_ir(encode_game(value))

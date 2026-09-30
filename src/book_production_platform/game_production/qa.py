@@ -28,6 +28,8 @@ WORKER_REPORT_FIELDS = frozenset(
         "external_resource_count",
         "disallowed_component_count",
         "trusted_template_no_network_references",
+        "music_source_count",
+        "collect_sound_configured",
     }
 )
 
@@ -68,6 +70,7 @@ def verify_worker_report(project_path: Path, game_ir: GameIR, unity_version: str
         raise
     except (OSError, UnicodeDecodeError, ValueError, RecursionError) as error:
         raise GameJobError("scene_qa_failed", "Unity worker report is invalid") from error
+    audio = game_ir.audio
     expected_walls = sum(len(wall.cells) for wall in game_ir.walls)
     expected_scene = f"Assets/Scenes/{game_ir.scene_id}.unity"
     if (
@@ -84,6 +87,8 @@ def verify_worker_report(project_path: Path, game_ir: GameIR, unity_version: str
         or report.get("external_resource_count") != 0
         or report.get("disallowed_component_count") != 0
         or report.get("trusted_template_no_network_references") is not True
+        or report.get("music_source_count") != (1 if audio and audio.music else 0)
+        or report.get("collect_sound_configured") is not bool(audio and audio.collect_sfx)
     ):
         raise GameJobError("scene_qa_failed", "Unity scene verification did not match the GameIR")
     return report

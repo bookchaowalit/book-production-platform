@@ -5,12 +5,14 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import deque
+from pathlib import PurePosixPath
 
 from .errors import GameInputError
-from .models import Cell, GameIR, WorldIR
+from .models import GAME_IR_SCHEMA_VERSION, AssetIR, Cell, GameIR, WorldIR
 
 MAX_GAME_WALL_CELLS = 192
 MAX_GAME_ENTITIES = 256
+UNITY_AUDIO_ROOT = "Assets/BookProduction/Audio"
 
 
 def collect_entity_ids(ir: GameIR) -> tuple[str, ...]:
@@ -58,7 +60,15 @@ def canonicalize_game_ir(ir: GameIR) -> GameIR:
         for wall in sorted(ir.walls, key=lambda item: item.id)
     )
     objectives = tuple(sorted(ir.objectives, key=lambda item: item.id))
-    return ir.model_copy(update={"walls": walls, "objectives": objectives})
+    assets = tuple(sorted(ir.assets, key=lambda item: item.asset_id))
+    return ir.model_copy(update={"walls": walls, "objectives": objectives, "assets": assets})
+
+
+def _json_view(ir: GameIR) -> dict[str, object]:
+    """JSON projection; v1 omits the v2-only fields so its bytes never change."""
+    if ir.schema_version == GAME_IR_SCHEMA_VERSION:
+        return ir.model_dump(mode="json", exclude={"assets", "audio"})
+    return ir.model_dump(mode="json")
 
 
 def validate_game_ir(ir: GameIR) -> GameIR:
@@ -109,7 +119,7 @@ def canonical_game_ir_bytes(ir: GameIR) -> bytes:
 
     normalized = validate_game_ir(ir)
     return json.dumps(
-        normalized.model_dump(mode="json"),
+        _json_view(normalized),
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
@@ -128,7 +138,7 @@ def _cell_object(cell: Cell) -> dict[str, int]:
 def worker_dto_with_cell_objects(ir: GameIR) -> dict[str, object]:
     """Project GameIR into object-cell DTOs supported by Unity JsonUtility."""
 
-    return {
+    dto: dict[str, object] = {
         "schema_version": ir.schema_version,
         "scene_id": ir.scene_id,
         "template": ir.template,
@@ -153,6 +163,23 @@ def worker_dto_with_cell_objects(ir: GameIR) -> dict[str, object]:
         ],
         "exit": {"id": ir.exit.id, "cell": _cell_object(ir.exit.cell)},
     }
+    if ir.schema_version != GAME_IR_SCHEMA_VERSION:
+        audio = ir.audio
+        dto["assets"] = [
+            {"asset_id": asset.asset_id, "kind": asset.kind, "filename": asset.filename, "sha256": asset.sha256,
+             "unity_path": unity_asset_path(asset)}
+            for asset in ir.assets
+        ]
+        dto["audio"] = {
+            "music": (audio.music if audio else None) or "",
+            "collect_sfx": (audio.collect_sfx if audio else None) or "",
+        }
+    return dto
+
+
+def unity_asset_path(asset: AssetIR) -> str:
+    """Project-relative path a staged asset is copied to (named by id, keeps its extension)."""
+    return f"{UNITY_AUDIO_ROOT}/{asset.asset_id}{PurePosixPath(asset.filename).suffix}"
 
 
 def to_unity_worker_json(ir: GameIR) -> bytes:
@@ -171,12 +198,14 @@ def to_unity_worker_json(ir: GameIR) -> bytes:
 __all__ = [
     "MAX_GAME_ENTITIES",
     "MAX_GAME_WALL_CELLS",
+    "UNITY_AUDIO_ROOT",
     "canonical_game_ir_bytes",
     "canonicalize_game_ir",
     "collect_entity_ids",
     "game_ir_sha256",
     "reachable_cells",
     "to_unity_worker_json",
+    "unity_asset_path",
     "validate_game_ir",
     "worker_dto_with_cell_objects",
 ]

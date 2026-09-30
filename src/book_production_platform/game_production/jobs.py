@@ -27,6 +27,12 @@ from book_production_platform.game_ir import (
     validate_game_ir,
 )
 from book_production_platform.game_production import runtime
+from book_production_platform.game_production.assets import (
+    ResolvedAsset,
+    resolve_assets,
+    stage_assets,
+    verify_published_assets,
+)
 from book_production_platform.game_production.errors import GameJobError
 from book_production_platform.game_production.qa import (
     UnityQaEvidence,
@@ -42,7 +48,7 @@ else:
 
     fcntl: Any = import_module("fcntl")
 
-COMPOSER_VERSION = "game-scene-composer.v1a.1"
+COMPOSER_VERSION = "game-scene-composer.v1a.2"
 QA_MANIFEST_SCHEMA = "game-production.qa.v1"
 RECEIPT_SCHEMA = "game-production.receipt.v1"
 MAX_UNITY_TIMEOUT_SECONDS = 120
@@ -454,6 +460,7 @@ def verify_replay_and_load_result(artifact_dir: Path) -> GameJobResult:
                 or item.get("bytes") != size
             ):
                 raise GameJobError("replay_integrity_error", "Published QA manifest output hash is invalid")
+        verify_published_assets(project, game_ir, manifest.get("assets"))
         qa = manifest.get("qa")
         if not isinstance(qa, dict) or qa.get("gameplay_events") != list(trace_events):
             raise GameJobError("replay_integrity_error", "Published gameplay evidence does not match its trace")
@@ -570,6 +577,7 @@ def write_manifest_and_receipt(
     source_bytes: int,
     job_elapsed_seconds: float,
     timeout_s: int,
+    assets: list[ResolvedAsset] | None = None,
 ) -> GameJobResult:
     """Write the complete QA manifest and pinned receipt inside one staging directory."""
     if not FINGERPRINT_PATTERN.fullmatch(fingerprint):
@@ -635,6 +643,7 @@ def write_manifest_and_receipt(
             "gameplay_event_counts": dict(sorted(Counter(events).items())),
         },
         "outputs": outputs,
+        **({"assets": [item.manifest_entry() for item in assets]} if assets else {}),
         "resource_usage": {
             "project_bytes": project_bytes,
             "staging_bytes": 0,
@@ -711,6 +720,7 @@ def compose_game_scene(
     output_root: Path,
     unity_bin: Path,
     timeout_s: int = MAX_UNITY_TIMEOUT_SECONDS,
+    asset_root: Path | None = None,
 ) -> GameJobResult:
     """Validate, build, QA, and atomically publish one editable Unity project."""
     if isinstance(timeout_s, bool) or not isinstance(timeout_s, int) or not 0 < timeout_s <= MAX_UNITY_TIMEOUT_SECONDS:
@@ -718,6 +728,7 @@ def compose_game_scene(
     job_started = time.monotonic()
     deadline = job_started + timeout_s
     game_ir, source_bytes = _read_game_ir(game_path)
+    resolved_assets = resolve_assets(game_ir, asset_root)
     normalized_bytes = canonical_game_ir_bytes(game_ir)
     source_hash = sha256_bytes(source_bytes)
     normalized_hash = sha256_bytes(normalized_bytes)
@@ -740,6 +751,7 @@ def compose_game_scene(
             shutil.copytree(TEMPLATE_PROJECT, project)
             if project_tree_sha256(project) != template_hash:
                 raise GameJobError("template_unavailable", "Unity project template changed during staging")
+            stage_assets(project, resolved_assets)
             if _tree_size(staging) > MAX_STAGING_BYTES:
                 raise GameJobError("resource_cap_exceeded", "Job staging exceeds its size limit")
 
@@ -766,6 +778,7 @@ def compose_game_scene(
                 source_bytes=len(source_bytes),
                 job_elapsed_seconds=time.monotonic() - job_started,
                 timeout_s=timeout_s,
+                assets=resolved_assets,
             )
             if _tree_size(staging) > MAX_STAGING_BYTES:
                 raise GameJobError("resource_cap_exceeded", "Job staging exceeds its size limit")
