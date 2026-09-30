@@ -30,7 +30,7 @@
       }
     },
     "recipe": { "const": "product-hero.studio.v1" },
-    "composition": { "const": "three-quarter.v1" },
+    "composition": { "enum": ["three-quarter.v1", "three-quarter-fit.v1"] },
     "lighting": { "const": "softbox-three-point.v1" },
     "background": { "const": "studio-neutral.v1" },
     "material_preset": { "const": "preserve-source.v1" },

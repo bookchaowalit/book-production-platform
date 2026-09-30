@@ -13,6 +13,11 @@ RENDER_PROFILES = {
 }
 RECIPE_ID = "product-hero.studio.v1"
 COMPOSITION_ID = "three-quarter.v1"
+FIT_COMPOSITION_ID = "three-quarter-fit.v1"
+COMPOSITION_IDS = {COMPOSITION_ID, FIT_COMPOSITION_ID}
+_CAMERA_OFFSET = (3.7, -6.0, 3.1)
+_LEGACY_TARGET = (0.0, 0.0, 0.8)
+_FIT_MARGIN = 1.15
 LIGHTING_ID = "softbox-three-point.v1"
 BACKGROUND_ID = "studio-neutral.v1"
 MATERIAL_ID = "preserve-source.v1"
@@ -45,7 +50,7 @@ def _load_validated_scene_ir(path: Path) -> dict[str, Any]:
         raise ValueError("invalid_scene_ir")
     allowlists = {
         "recipe": {RECIPE_ID},
-        "composition": {COMPOSITION_ID},
+        "composition": COMPOSITION_IDS,
         "lighting": {LIGHTING_ID},
         "background": {BACKGROUND_ID},
         "material_preset": {MATERIAL_ID},
@@ -98,7 +103,36 @@ def _make_light(bpy: Any, name: str, location: tuple[float, float, float], energ
     _point_at(light_object, (0.0, 0.0, 0.8))
 
 
-def _configure_studio(bpy: Any, render_profile: str) -> None:
+def _fit_camera(camera: Any, size: tuple[float, float, float], resolution: tuple[int, int]) -> tuple[float, float, float]:
+    """Place the camera on the three-quarter axis so the product's bounding sphere fills the frame.
+
+    ``size`` is the product's fitted bounding box (x, y, z) with its base on the
+    ground. The camera keeps the legacy viewing direction but aims at the
+    product centre and backs off just far enough for the sphere to fit the
+    narrower field of view, so flat or small parts are no longer left low and
+    tiny in the frame.
+    """
+    from mathutils import Vector
+
+    target = Vector((0.0, 0.0, size[2] * 0.5))
+    radius = Vector(size).length * 0.5
+    sensor = camera.data.sensor_width
+    horizontal = 2.0 * math.atan(sensor * 0.5 / camera.data.lens)
+    width, height = resolution
+    vertical = 2.0 * math.atan(math.tan(horizontal * 0.5) * height / width) if width >= height else horizontal
+    half = min(horizontal, vertical) * 0.5
+    distance = radius * _FIT_MARGIN / math.sin(half)
+    direction = (Vector(_CAMERA_OFFSET) - Vector(_LEGACY_TARGET)).normalized()
+    camera.location = target + direction * distance
+    return (target.x, target.y, target.z)
+
+
+def _configure_studio(
+    bpy: Any,
+    render_profile: str,
+    composition: str = COMPOSITION_ID,
+    product_size: tuple[float, float, float] = (2.0, 2.0, 2.0),
+) -> None:
     scene = bpy.context.scene
     width, height = RENDER_PROFILES[render_profile]
     scene.render.engine = RENDER_ENGINE
@@ -120,10 +154,14 @@ def _configure_studio(bpy: Any, render_profile: str) -> None:
     camera_data = bpy.data.cameras.new("Product Hero Camera")
     camera = bpy.data.objects.new("Product Hero Camera", camera_data)
     scene.collection.objects.link(camera)
-    camera.location = (3.7, -6.0, 3.1)
     camera_data.lens = 55
     camera_data.dof.use_dof = False
-    _point_at(camera, (0.0, 0.0, 0.8))
+    if composition == FIT_COMPOSITION_ID:
+        target = _fit_camera(camera, product_size, (width, height))
+    else:
+        camera.location = _CAMERA_OFFSET
+        target = _LEGACY_TARGET
+    _point_at(camera, target)
     scene.camera = camera
 
     _make_light(bpy, "Key Softbox", (-3.5, -4.0, 5.0), 720.0, 4.0, (1.0, 0.86, 0.72))
@@ -132,7 +170,7 @@ def _configure_studio(bpy: Any, render_profile: str) -> None:
 
     scene["book_production_scene_ir_version"] = "scene-ir.v1"
     scene["book_production_recipe"] = RECIPE_ID
-    scene["book_production_composition"] = COMPOSITION_ID
+    scene["book_production_composition"] = composition
     scene["book_production_lighting"] = LIGHTING_ID
     scene["book_production_background"] = BACKGROUND_ID
     scene["book_production_material_preset"] = MATERIAL_ID
@@ -188,7 +226,8 @@ def build_scene(scene_ir_path: Path, asset_path: Path, blend_path: Path) -> None
         obj.matrix_basis = original_world
         obj["book_production_imported_asset"] = True
 
-    _configure_studio(bpy, scene_ir["render_profile"])
+    fitted = dimensions * fit_scale
+    _configure_studio(bpy, scene_ir["render_profile"], scene_ir["composition"], (fitted.x, fitted.y, fitted.z))
     bpy.ops.file.pack_all()
     for image in bpy.data.images:
         if image.source == "FILE" and image.packed_file is None:
