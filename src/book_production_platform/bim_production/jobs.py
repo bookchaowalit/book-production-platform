@@ -8,6 +8,8 @@ import json
 import os
 import re
 import shutil
+import sys
+import tempfile
 import time
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -71,6 +73,7 @@ class BimJobResult:
     row_count: int
     coverage_gap_count: int
     model_calls: int
+    receipt_recovered: bool = False
 
 
 def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -163,16 +166,28 @@ def _safe_root(root: Path) -> Path:
     return resolved
 
 
+def _lock_descriptor(descriptor: int, *, unlock: bool = False) -> None:
+    """Take or release a non-blocking exclusive lock (msvcrt or flock)."""
+
+    if sys.platform == "win32":
+        import msvcrt
+
+        msvcrt.locking(descriptor, msvcrt.LK_UNLCK if unlock else msvcrt.LK_NBLCK, 1)
+        return
+    import fcntl
+
+    fcntl.flock(descriptor, fcntl.LOCK_UN if unlock else fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+
 @contextlib.contextmanager
 def _fingerprint_lock(receipts: Path, fingerprint: str) -> Iterator[None]:
-    import msvcrt
-
     lock_path = receipts / f"{fingerprint}.lock"
     handle = lock_path.open("a+b")
     deadline = time.monotonic() + LOCK_TIMEOUT_SECONDS
     while True:
         try:
-            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            handle.seek(0)
+            _lock_descriptor(handle.fileno())
             break
         except OSError:
             if time.monotonic() >= deadline:
@@ -184,13 +199,20 @@ def _fingerprint_lock(receipts: Path, fingerprint: str) -> Iterator[None]:
     finally:
         try:
             handle.seek(0)
-            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            _lock_descriptor(handle.fileno(), unlock=True)
         except OSError:
             pass
         handle.close()
 
 
 def _write_receipt(path: Path, receipt: dict[str, object]) -> None:
+    """Write the receipt atomically; the caller holds the fingerprint lock.
+
+    A private temporary name (not a fixed ``.tmp``) means a crash mid-write
+    can never block later runs, and ``os.replace`` means a crash leaves either
+    no receipt or a complete one.
+    """
+
     payload = (
         json.dumps(
             receipt,
@@ -201,12 +223,18 @@ def _write_receipt(path: Path, receipt: dict[str, object]) -> None:
         ).encode("utf-8")
         + b"\n"
     )
-    temporary = path.with_name(path.name + ".tmp")
-    with temporary.open("xb") as stream:
-        stream.write(payload)
-        stream.flush()
-        os.fsync(stream.fileno())
-    os.replace(temporary, path)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def _load_receipt(path: Path) -> dict[str, Any]:
@@ -285,10 +313,32 @@ def _check_existing_job(
         return None
     if job_dir.is_symlink() or not job_dir.is_dir():
         raise BimProductionError("takeoff_integrity_error")
+    if not receipt_path.exists() and not receipt_path.is_symlink():
+        # Published without a receipt (a crash between the publish rename and
+        # the receipt write): the caller rebuilds and recovers under the lock.
+        return None
     if not receipt_path.is_file():
         raise BimProductionError("takeoff_integrity_error")
     receipt = _load_receipt(receipt_path)
     return _verify_published_job(job_dir, receipt, fingerprint)
+
+
+def _published_matches_rebuild(job_dir: Path, build_dir: Path) -> bool:
+    """True when the published job holds exactly the rebuilt artifact bytes."""
+
+    try:
+        published = sorted(entry.name for entry in job_dir.iterdir())
+    except OSError:
+        return False
+    if published != sorted(JOB_ARTIFACTS):
+        return False
+    for name in JOB_ARTIFACTS:
+        candidate = job_dir / name
+        if candidate.is_symlink() or not candidate.is_file():
+            return False
+        if _artifact_digest(candidate) != _artifact_digest(build_dir / name):
+            return False
+    return True
 
 
 def shutil_rmtree(directory: Path) -> None:
@@ -317,7 +367,13 @@ def build_bim_takeoff_job(
     ifc_site_packages: Path,
     timeout_s: int = 120,
 ) -> BimJobResult:
-    """Validate, extract, QA, and atomically publish (or replay) one takeoff job."""
+    """Validate, extract, QA, and atomically publish (or replay) one takeoff job.
+
+    Crash recovery: a published job directory without a receipt (a crash
+    between the publish rename and the receipt write) is rebuilt in staging;
+    the receipt is written only when the rebuild reproduces every published
+    artifact byte for byte. Anything else fails closed, leaving it untouched.
+    """
 
     try:
         ir = load_bim_takeoff_ir(ir_path)
@@ -342,6 +398,7 @@ def build_bim_takeoff_job(
         existing = _check_existing_job(job_dir, receipt_path, fingerprint)
         if existing is not None:
             return existing
+        recovering = job_dir.exists()
         build_dir = staging_root / f"build-{fingerprint[:16]}"
         worker_dir = staging_root / f"worker-{fingerprint[:16]}"
         for directory in (build_dir, worker_dir):
@@ -376,6 +433,8 @@ def build_bim_takeoff_job(
                 timeout_s=timeout_s,
             )
             if worker_result.error_code is not None or worker_result.result_json is None:
+                if recovering:
+                    raise BimProductionError("takeoff_integrity_error")
                 return BimJobResult(
                     status="rejected",
                     fingerprint=fingerprint,
@@ -397,6 +456,8 @@ def build_bim_takeoff_job(
             extraction = build_extraction(extraction_records)
             report = build_takeoff_report(ir, source_sha256, validation, extraction)
             if report["status"] == "needs_input":
+                if recovering:
+                    raise BimProductionError("takeoff_integrity_error")
                 return BimJobResult(
                     status="needs_input",
                     fingerprint=fingerprint,
@@ -423,6 +484,8 @@ def build_bim_takeoff_job(
             (build_dir / "qa-manifest.json").write_bytes(manifest_payload)
             qa = verify_takeoff_artifacts(build_dir)
             if qa.status == "needs_input":
+                if recovering:
+                    raise BimProductionError("takeoff_integrity_error")
                 return BimJobResult(
                     status="needs_input",
                     fingerprint=fingerprint,
@@ -448,7 +511,13 @@ def build_bim_takeoff_job(
                     for name in JOB_ARTIFACTS
                 },
             }
-            _rename_directory(build_dir, job_dir)
+            if recovering:
+                if not _published_matches_rebuild(job_dir, build_dir):
+                    raise BimProductionError("takeoff_integrity_error")
+            else:
+                _rename_directory(build_dir, job_dir)
+            # A crash between the rename and this write leaves a published job
+            # without a receipt; the next run takes the recovering path above.
             _write_receipt(receipt_path, receipt)
             return BimJobResult(
                 status=qa.status,
@@ -457,6 +526,7 @@ def build_bim_takeoff_job(
                 row_count=qa.row_count,
                 coverage_gap_count=qa.coverage_gap_count,
                 model_calls=0,
+                receipt_recovered=recovering,
             )
         finally:
             shutil_rmtree(build_dir)

@@ -144,11 +144,30 @@ def real_ifc(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return work_root / str(cases["ifc4-extraction-rich"]["output_name"])
 
 
+SYNTHETIC_IFC = (
+    "ISO-10303-21;\nHEADER;\nFILE_DESCRIPTION(('ViewDefinition [ReferenceView]'),'2;1');\n"
+    "FILE_NAME('synthetic.ifc','2026-01-01T00:00:00',(''),(''),'','','');\n"
+    "FILE_SCHEMA(('IFC4'));\nENDSEC;\nDATA;\nENDSEC;\nEND-ISO-10303-21;\n"
+)
+
+
 @pytest.fixture
-def inputs(tmp_path: Path, real_ifc: Path) -> tuple[Path, Path]:
+def synthetic_ifc(tmp_path: Path) -> Path:
+    """A header-only IFC4 file: enough for fingerprinting and staging.
+
+    Tests that use it stub the worker, so they run on every host instead of
+    only where the pinned Windows FreeCAD runtime exists.
+    """
+    path = tmp_path / "synthetic.ifc"
+    path.write_text(SYNTHETIC_IFC, encoding="ascii")
+    return path
+
+
+@pytest.fixture
+def inputs(tmp_path: Path, synthetic_ifc: Path) -> tuple[Path, Path]:
     ir_path = tmp_path / "ir.bimreq"
     ir_path.write_text(json.dumps(IR_JSON), encoding="utf-8")
-    return ir_path, real_ifc
+    return ir_path, synthetic_ifc
 
 
 @pytest.fixture
@@ -159,9 +178,7 @@ def fast_worker(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-def test_fingerprint_covers_every_semantic_input(
-    monkeypatch: pytest.MonkeyPatch, real_ifc: Path
-) -> None:
+def test_fingerprint_covers_every_semantic_input(monkeypatch: pytest.MonkeyPatch) -> None:
     ir = parse_bim_takeoff_ir(IR_JSON)
     ir_other = parse_bim_takeoff_ir({**IR_JSON, "takeoff_id": "other"})
     base = compute_fingerprint(ir, "c" * 64, "IFC4")
@@ -262,7 +279,7 @@ def test_partial_jobs_publish_with_gaps(
 
 
 def test_changed_inputs_change_the_fingerprint(
-    inputs: tuple[Path, Path], tmp_path: Path, real_ifc: Path, fast_worker: None
+    inputs: tuple[Path, Path], tmp_path: Path, fast_worker: None
 ) -> None:
     ir_path, ifc_path = inputs
     output = tmp_path / "out"
@@ -298,18 +315,101 @@ def test_forged_receipt_fails_without_overwrite(
     assert before == after
 
 
-def test_missing_receipt_fails_closed(
-    inputs: tuple[Path, Path], tmp_path: Path, fast_worker: None
+def test_crash_between_publish_and_receipt_is_recovered(
+    inputs: tuple[Path, Path], tmp_path: Path, fast_worker: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ir_path, ifc_path = inputs
+    output = tmp_path / "out"
+    original_write = jobs_module._write_receipt
+
+    def crash(path: Path, receipt: dict[str, object]) -> None:
+        raise KeyboardInterrupt("simulated crash after publish")
+
+    monkeypatch.setattr(jobs_module, "_write_receipt", crash)
+    with pytest.raises(KeyboardInterrupt):
+        build_bim_takeoff_job(ir_path, ifc_path, output, Path("FreeCADCmd.exe"), Path("sp"))
+    [job_dir] = list((output / "jobs").iterdir())
+    receipt_path = output / ".receipts" / f"{job_dir.name}.json"
+    assert not receipt_path.exists()
+    before = {entry.name: entry.read_bytes() for entry in job_dir.iterdir()}
+
+    monkeypatch.setattr(jobs_module, "_write_receipt", original_write)
+    recovered = build_bim_takeoff_job(ir_path, ifc_path, output, Path("FreeCADCmd.exe"), Path("sp"))
+
+    assert recovered.status == "complete"
+    assert recovered.receipt_recovered is True
+    assert recovered.fingerprint == job_dir.name
+    assert receipt_path.is_file()
+    assert before == {entry.name: entry.read_bytes() for entry in job_dir.iterdir()}
+    replay = build_bim_takeoff_job(ir_path, ifc_path, output, Path("FreeCADCmd.exe"), Path("sp"))
+    assert replay.status == "replayed"
+    assert replay.receipt_recovered is False
+
+
+@pytest.mark.parametrize("mutation", ["tampered", "missing-file", "extra-file"])
+def test_missing_receipt_with_mismatched_artifacts_fails_closed(
+    inputs: tuple[Path, Path], tmp_path: Path, fast_worker: None, mutation: str
 ) -> None:
     ir_path, ifc_path = inputs
     output = tmp_path / "out"
     first = build_bim_takeoff_job(ir_path, ifc_path, output, Path("FreeCADCmd.exe"), Path("sp"))
-    (output / ".receipts" / f"{first.fingerprint}.json").unlink()
+    receipt_path = output / ".receipts" / f"{first.fingerprint}.json"
+    receipt_path.unlink()
+    job_dir = output / "jobs" / str(first.fingerprint)
+    if mutation == "tampered":
+        report = job_dir / "takeoff.json"
+        report.write_bytes(report.read_bytes().replace(b"2.5000", b"2.5001"))
+    elif mutation == "missing-file":
+        (job_dir / "takeoff.csv").unlink()
+    else:
+        (job_dir / "notes.txt").write_bytes(b"extra")
+    before = {entry.name: entry.read_bytes() for entry in job_dir.iterdir()}
 
     with pytest.raises(BimProductionError) as error:
         build_bim_takeoff_job(ir_path, ifc_path, output, Path("FreeCADCmd.exe"), Path("sp"))
 
     assert error.value.code == "takeoff_integrity_error"
+    assert not receipt_path.exists()
+    assert before == {entry.name: entry.read_bytes() for entry in job_dir.iterdir()}
+
+
+def test_missing_receipt_when_rebuild_needs_input_fails_closed(
+    inputs: tuple[Path, Path], tmp_path: Path, fast_worker: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ir_path, ifc_path = inputs
+    output = tmp_path / "out"
+    first = build_bim_takeoff_job(ir_path, ifc_path, output, Path("FreeCADCmd.exe"), Path("sp"))
+    receipt_path = output / ".receipts" / f"{first.fingerprint}.json"
+    receipt_path.unlink()
+    monkeypatch.setattr(
+        jobs_module,
+        "run_bim_worker",
+        lambda *args, **kwargs: _worker_result(_records_needs_input()),
+    )
+
+    with pytest.raises(BimProductionError) as error:
+        build_bim_takeoff_job(ir_path, ifc_path, output, Path("FreeCADCmd.exe"), Path("sp"))
+
+    assert error.value.code == "takeoff_integrity_error"
+    assert not receipt_path.exists()
+
+
+def test_stale_receipt_temp_file_does_not_block_publication(
+    inputs: tuple[Path, Path], tmp_path: Path, fast_worker: None
+) -> None:
+    ir_path, ifc_path = inputs
+    output = tmp_path / "out"
+    fingerprint = compute_fingerprint(
+        parse_bim_takeoff_ir(IR_JSON), validate_ifc_source(ifc_path), "IFC4"
+    )
+    receipts = output / ".receipts"
+    receipts.mkdir(parents=True)
+    (receipts / f"{fingerprint}.json.tmp").write_bytes(b"{truncated")
+
+    result = build_bim_takeoff_job(ir_path, ifc_path, output, Path("FreeCADCmd.exe"), Path("sp"))
+
+    assert result.status == "complete"
+    assert json.loads((receipts / f"{fingerprint}.json").read_text(encoding="utf-8"))["fingerprint"] == fingerprint
 
 
 def test_tampered_artifact_fails_replay(
@@ -330,7 +430,7 @@ def test_tampered_artifact_fails_replay(
 
 
 def test_pre_existing_directory_without_receipt_is_never_overwritten(
-    inputs: tuple[Path, Path], tmp_path: Path, real_ifc: Path
+    inputs: tuple[Path, Path], tmp_path: Path, fast_worker: None
 ) -> None:
     ir_path, ifc_path = inputs
     output = tmp_path / "out"
@@ -405,7 +505,8 @@ def test_concurrent_identical_jobs_publish_once(
     inputs: tuple[Path, Path], tmp_path: Path, real_ifc: Path
 ) -> None:
     freecadcmd, site_packages = pinned_runtime_paths()
-    ir_path, ifc_path = inputs
+    ir_path, _ = inputs
+    ifc_path = real_ifc
     output = tmp_path / "out"
     results: list[BimJobResult] = []
     errors: list[BaseException] = []
@@ -439,7 +540,8 @@ def test_real_worker_values_reach_the_published_report(
     inputs: tuple[Path, Path], tmp_path: Path, real_ifc: Path
 ) -> None:
     freecadcmd, site_packages = pinned_runtime_paths()
-    ir_path, ifc_path = inputs
+    ir_path, _ = inputs
+    ifc_path = real_ifc
     output = tmp_path / "out"
 
     result = build_bim_takeoff_job(ir_path, ifc_path, output, freecadcmd, site_packages, timeout_s=120)

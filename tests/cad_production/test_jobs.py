@@ -327,7 +327,7 @@ def test_linked_replay_artifact_fails_closed(
     assert artifact.read_bytes() == original
 
 
-@pytest.mark.parametrize("mutation", ["missing-file", "extra-file", "missing-receipt"])
+@pytest.mark.parametrize("mutation", ["missing-file", "extra-file"])
 def test_incomplete_or_extra_replay_state_fails_closed(
     valid_job: dict[str, object], monkeypatch: pytest.MonkeyPatch, mutation: str
 ) -> None:
@@ -336,15 +336,103 @@ def test_incomplete_or_extra_replay_state_fails_closed(
     assert first.artifact_dir is not None and first.fingerprint is not None
     if mutation == "missing-file":
         (first.artifact_dir / "part.stl").unlink()
-    elif mutation == "extra-file":
-        (first.artifact_dir / "unexpected.bin").write_bytes(b"extra")
     else:
-        (Path(valid_job["output_root"]) / ".receipts" / f"{first.fingerprint}.json").unlink()
+        (first.artifact_dir / "unexpected.bin").write_bytes(b"extra")
 
     result = jobs.build_cad_job(**valid_job)  # type: ignore[arg-type]
 
     assert result.status == "rejected"
     assert result.error_code == "replay_integrity_error"
+
+
+def _crash_before_receipt(monkeypatch: pytest.MonkeyPatch) -> None:
+    def crash(_path: Path, _payload: bytes) -> int:
+        raise KeyboardInterrupt("simulated crash after publish")
+
+    monkeypatch.setattr(jobs, "_write_receipt_exclusive", crash)
+
+
+def test_crash_between_publish_and_receipt_is_recovered_without_rebuild(
+    valid_job: dict[str, object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = install_fake_engine(monkeypatch)
+    original_write = jobs._write_receipt_exclusive
+    _crash_before_receipt(monkeypatch)
+    with pytest.raises(KeyboardInterrupt):
+        jobs.build_cad_job(**valid_job)  # type: ignore[arg-type]
+    root = Path(valid_job["output_root"])
+    [published] = [path for path in root.iterdir() if not path.name.startswith(".")]
+    receipt_path = root / ".receipts" / f"{published.name}.json"
+    assert not receipt_path.exists()
+    before = {path.name: path.read_bytes() for path in published.iterdir()}
+
+    monkeypatch.setattr(jobs, "_write_receipt_exclusive", original_write)
+    recovered = jobs.build_cad_job(**valid_job)  # type: ignore[arg-type]
+
+    assert recovered.status == "replayed"
+    assert recovered.receipt_recovered is True
+    assert recovered.to_dict()["receipt_recovered"] is True
+    assert recovered.fingerprint == published.name
+    assert recovered.bytes_written > 0
+    assert calls == ["build"], "recovery must not start FreeCAD again"
+    assert receipt_path.is_file()
+    assert before == {path.name: path.read_bytes() for path in published.iterdir()}
+
+    replay = jobs.build_cad_job(**valid_job)  # type: ignore[arg-type]
+    assert replay.status == "replayed"
+    assert replay.receipt_recovered is False
+    assert replay.artifact_hashes == recovered.artifact_hashes
+
+
+@pytest.mark.parametrize("mutation", ["step", "manifest", "missing-file", "extra-file"])
+def test_missing_receipt_with_inconsistent_artifacts_fails_closed(
+    valid_job: dict[str, object], monkeypatch: pytest.MonkeyPatch, mutation: str
+) -> None:
+    install_fake_engine(monkeypatch)
+    first = jobs.build_cad_job(**valid_job)  # type: ignore[arg-type]
+    assert first.artifact_dir is not None and first.fingerprint is not None
+    receipt_path = Path(valid_job["output_root"]) / ".receipts" / f"{first.fingerprint}.json"
+    receipt_path.unlink()
+    if mutation == "step":
+        target = first.artifact_dir / "part.step"
+        target.write_bytes(target.read_bytes() + b"x")
+    elif mutation == "manifest":
+        target = first.artifact_dir / "qa-manifest.json"
+        manifest = json.loads(target.read_text(encoding="utf-8"))
+        manifest["fingerprint"] = "0" * 64
+        target.write_bytes(jobs._json_bytes(manifest))
+    elif mutation == "missing-file":
+        (first.artifact_dir / "preview.png").unlink()
+    else:
+        (first.artifact_dir / "unexpected.bin").write_bytes(b"extra")
+    before = {path.name: path.read_bytes() for path in first.artifact_dir.iterdir()}
+
+    result = jobs.build_cad_job(**valid_job)  # type: ignore[arg-type]
+
+    assert result.status == "rejected"
+    assert result.error_code == "replay_integrity_error"
+    assert not receipt_path.exists(), "no receipt may be written for an inconsistent job"
+    assert before == {path.name: path.read_bytes() for path in first.artifact_dir.iterdir()}
+
+
+def test_abandoned_staging_for_the_fingerprint_is_removed(
+    valid_job: dict[str, object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    install_fake_engine(monkeypatch)
+    first = jobs.build_cad_job(**valid_job)  # type: ignore[arg-type]
+    assert first.fingerprint is not None
+    staging_root = Path(valid_job["output_root"]) / ".staging"
+    stale = staging_root / f".{first.fingerprint}.staging-crashed"
+    stale.mkdir()
+    (stale / "part.step").write_bytes(b"half written")
+    other = staging_root / f".{'f' * 64}.staging-other"
+    other.mkdir()
+
+    replay = jobs.build_cad_job(**valid_job)  # type: ignore[arg-type]
+
+    assert replay.status == "replayed"
+    assert not stale.exists()
+    assert other.is_dir(), "staging for other fingerprints is not ours to remove"
 
 
 def test_worker_timeout_leaves_no_published_job_or_receipt(
