@@ -461,6 +461,15 @@ platform or creative brief. Numerical QA does not prove speech intelligibility
 or subjective quality; human listening review remains a separate product gate.
 Without an approved local rate card, monetary cost is reported as `unknown`.
 
+Audio ownership: Audio Master is not a copy of `book-audio-production`. This
+repository owns the `audio-ir.v1` contract (one WAV, fixed presets);
+`book-audio-production` owns `audio-batch.v1` (batch trim and per-track
+loudness targets) and its pinned FFmpeg build. Keep new audio features on the
+side that owns their contract. `python scripts/audio_boundary_check.py
+--sibling ..\book-audio-production` fails if either side starts handling the
+other's contract or importing the other's package, and prints the sibling's
+FFmpeg pin for comparison with the `ffmpeg_version` in Audio Master manifests.
+
 ## Game Scene Prototype Builder V1A
 
 Game V1A converts a validated `game-ir.v1` into a native, editable Unity 2D

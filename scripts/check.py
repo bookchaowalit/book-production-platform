@@ -76,6 +76,7 @@ RUFF_TARGETS = (
     GAME,
     SCRIPTS,
     PARITY_TESTS,
+    ROOT / "tests" / "test_audio_boundary_check.py",
 )
 MYPY_TARGETS = (
     GRAPHICS_IR,
@@ -95,6 +96,7 @@ MYPY_TARGETS = (
     PIPELINE,
     DOCTOR,
     SCRIPTS / "graphics_fork_parity.py",
+    SCRIPTS / "audio_boundary_check.py",
 )
 
 
