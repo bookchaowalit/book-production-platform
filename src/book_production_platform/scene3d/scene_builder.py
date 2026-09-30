@@ -14,7 +14,14 @@ RENDER_PROFILES = {
 RECIPE_ID = "product-hero.studio.v1"
 COMPOSITION_ID = "three-quarter.v1"
 FIT_COMPOSITION_ID = "three-quarter-fit.v1"
-COMPOSITION_IDS = {COMPOSITION_ID, FIT_COMPOSITION_ID}
+# View directions (camera minus target) for the product-fitted compositions.
+FIT_DIRECTIONS = {
+    FIT_COMPOSITION_ID: (3.7, -6.0, 2.3),
+    "front-fit.v1": (0.0, -1.0, 0.18),
+    "side-fit.v1": (1.0, 0.0, 0.18),
+    "top-fit.v1": (0.0, -0.3, 1.0),
+}
+COMPOSITION_IDS = {COMPOSITION_ID, *FIT_DIRECTIONS}
 _CAMERA_OFFSET = (3.7, -6.0, 3.1)
 _LEGACY_TARGET = (0.0, 0.0, 0.8)
 _FIT_MARGIN = 1.15
@@ -103,14 +110,19 @@ def _make_light(bpy: Any, name: str, location: tuple[float, float, float], energ
     _point_at(light_object, (0.0, 0.0, 0.8))
 
 
-def _fit_camera(camera: Any, size: tuple[float, float, float], resolution: tuple[int, int]) -> tuple[float, float, float]:
-    """Place the camera on the three-quarter axis so the product's bounding sphere fills the frame.
+def _fit_camera(
+    camera: Any,
+    size: tuple[float, float, float],
+    resolution: tuple[int, int],
+    view: tuple[float, float, float] = FIT_DIRECTIONS[FIT_COMPOSITION_ID],
+) -> tuple[float, float, float]:
+    """Place the camera along ``view`` so the product's bounding sphere fills the frame.
 
     ``size`` is the product's fitted bounding box (x, y, z) with its base on the
-    ground. The camera keeps the legacy viewing direction but aims at the
-    product centre and backs off just far enough for the sphere to fit the
-    narrower field of view, so flat or small parts are no longer left low and
-    tiny in the frame.
+    ground. The camera looks along the composition's view direction (the
+    three-quarter one matches the legacy camera), aims at the product centre and
+    backs off just far enough for the sphere to fit the narrower field of view,
+    so flat or small parts are no longer left low and tiny in the frame.
     """
     from mathutils import Vector
 
@@ -122,7 +134,7 @@ def _fit_camera(camera: Any, size: tuple[float, float, float], resolution: tuple
     vertical = 2.0 * math.atan(math.tan(horizontal * 0.5) * height / width) if width >= height else horizontal
     half = min(horizontal, vertical) * 0.5
     distance = radius * _FIT_MARGIN / math.sin(half)
-    direction = (Vector(_CAMERA_OFFSET) - Vector(_LEGACY_TARGET)).normalized()
+    direction = Vector(view).normalized()
     camera.location = target + direction * distance
     return (target.x, target.y, target.z)
 
@@ -156,8 +168,8 @@ def _configure_studio(
     scene.collection.objects.link(camera)
     camera_data.lens = 55
     camera_data.dof.use_dof = False
-    if composition == FIT_COMPOSITION_ID:
-        target = _fit_camera(camera, product_size, (width, height))
+    if composition in FIT_DIRECTIONS:
+        target = _fit_camera(camera, product_size, (width, height), FIT_DIRECTIONS[composition])
     else:
         camera.location = _CAMERA_OFFSET
         target = _LEGACY_TARGET

@@ -59,6 +59,10 @@ def test_fit_composition_is_accepted_and_unknown_compositions_are_not() -> None:
     }
     assert parse_scene_ir(base).composition == "three-quarter-fit.v1"
     schema = json.loads((Path(__file__).parents[1] / "scene3d" / "scene-ir.v1.schema.json").read_text(encoding="utf-8"))
-    assert schema["properties"]["composition"]["enum"] == ["three-quarter.v1", "three-quarter-fit.v1"]
+    assert schema["properties"]["composition"]["enum"] == [
+        "three-quarter.v1", "three-quarter-fit.v1", "front-fit.v1", "side-fit.v1", "top-fit.v1",
+    ]
+    for composition in ("front-fit.v1", "side-fit.v1", "top-fit.v1"):
+        assert parse_scene_ir({**base, "composition": composition}).composition == composition
     with pytest.raises(SceneInputError):
         parse_scene_ir({**base, "composition": "top-down.v1"})
