@@ -146,7 +146,7 @@ def test_run_batch_reuses_a_name_whose_first_owner_was_rejected(
     assert result.status == "partial"
 
 
-def test_later_batch_cannot_overwrite_files_an_earlier_manifest_hashes(
+def test_later_batch_reusing_a_request_id_gets_its_own_folder(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _stub_browser(monkeypatch)
@@ -155,26 +155,57 @@ def test_later_batch_cannot_overwrite_files_an_earlier_manifest_hashes(
 
     second = run_batch([changed], tmp_path, "second-batch")
 
-    assert second.status == "rejected"
-    assert second.items[0].error_code == "artifact_exists_with_different_content"
-    # Every file the first manifest records still has the recorded hash.
-    assert first.manifest_path is not None
-    manifest = json.loads(first.manifest_path.read_text(encoding="utf-8"))
-    for artifact in manifest["items"][0]["artifacts"]:
-        data = (tmp_path / artifact["filename"]).read_bytes()
-        assert hashlib.sha256(data).hexdigest() == artifact["content_hash"]
+    assert second.status == "accepted"
+    first_names = {artifact.filename for artifact in first.items[0].artifacts}
+    second_names = {artifact.filename for artifact in second.items[0].artifacts}
+    assert first_names == {f"{first.batch_id}/quote-001.svg", f"{first.batch_id}/quote-001.png"}
+    assert second_names == {f"{second.batch_id}/quote-001.svg", f"{second.batch_id}/quote-001.png"}
+    # Every file either manifest records still has the recorded hash.
+    for result in (first, second):
+        assert result.manifest_path is not None
+        manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
+        for artifact in manifest["items"][0]["artifacts"]:
+            data = (tmp_path / artifact["filename"]).read_bytes()
+            assert hashlib.sha256(data).hexdigest() == artifact["content_hash"]
 
 
-def test_later_batch_with_identical_output_reuses_existing_files(
+def test_non_deterministic_png_bytes_no_longer_reject_a_later_batch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _stub_browser(monkeypatch)
+    counter = iter(range(1, 100))
+
+    def jittery_png(ir: object, *, asset_root: object = None) -> bytes:
+        buffer = BytesIO()
+        Image.new("RGB", (4, 4), (next(counter), 0, 0)).save(buffer, format="PNG")
+        return buffer.getvalue()
+
+    monkeypatch.setattr(jobs, "render_png", jittery_png)
+    first = run_batch([item("quote-001")], tmp_path, "first-batch")
+    second = run_batch([item("quote-001")], tmp_path, "another-key")
+
+    assert first.status == second.status == "accepted"
+    first_png = next(a for a in first.items[0].artifacts if a.media_type == "image/png")
+    second_png = next(a for a in second.items[0].artifacts if a.media_type == "image/png")
+    assert first_png.content_hash != second_png.content_hash
+    assert hashlib.sha256((tmp_path / first_png.filename).read_bytes()).hexdigest() == first_png.content_hash
+
+
+def test_leftover_folder_with_different_bytes_is_never_overwritten(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _stub_browser(monkeypatch)
     first = run_batch([item("quote-001")], tmp_path, "first-batch")
+    assert first.manifest_path is not None
+    svg = next(a for a in first.items[0].artifacts if a.media_type == "image/svg+xml")
+    (tmp_path / svg.filename).write_bytes(b"<svg>edited by hand</svg>")
+    first.manifest_path.unlink()
 
-    second = run_batch([item("quote-001")], tmp_path, "another-key")
+    rerun = run_batch([item("quote-001")], tmp_path, "first-batch")
 
-    assert second.status == "accepted"
-    assert second.items[0].artifacts == first.items[0].artifacts
+    assert rerun.status == "rejected"
+    assert rerun.items[0].error_code == "artifact_exists_with_different_content"
+    assert (tmp_path / svg.filename).read_bytes() == b"<svg>edited by hand</svg>"
 
 
 def test_non_object_items_are_rejected_per_item(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

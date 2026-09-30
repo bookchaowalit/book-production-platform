@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 from io import BytesIO
 from pathlib import Path
 
@@ -56,10 +57,8 @@ def test_export_writes_scaled_png_and_print_pdf(batch: Path, tmp_path: Path) -> 
 
 def test_export_rejects_tampered_svg(batch: Path, tmp_path: Path) -> None:
     copy_dir = tmp_path / "copy"
-    copy_dir.mkdir()
-    for path in batch.parent.iterdir():
-        (copy_dir / path.name).write_bytes(path.read_bytes())
-    svg = next(copy_dir.glob("*.svg"))
+    shutil.copytree(batch.parent, copy_dir)
+    svg = next(copy_dir.glob("*/*.svg"))
     svg.write_text(svg.read_text(encoding="utf-8") + "<!-- edited -->", encoding="utf-8")
     with pytest.raises(ExportError, match="does not match"):
         export_batch(copy_dir / batch.name, tmp_path / "out")
@@ -87,3 +86,4 @@ def test_export_fails_clearly_without_browser(batch: Path, tmp_path: Path, monke
 def test_cli_export(batch: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["export", "--manifest", str(batch), "--output", str(tmp_path), "--scale", "1", "--dpi", "72"]) == 0
     assert json.loads(capsys.readouterr().out)["items"] == 1
+

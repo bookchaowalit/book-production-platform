@@ -234,13 +234,16 @@ python -m book_production_platform.graphics_production.scripts.benchmark `
   --output-dir .\.runtime\graphics\benchmark
 ```
 
-Artifacts are named after each item's `request_id` and live directly in the
-output directory next to every batch manifest that hashes them. An item whose
-name collides with another item in the same batch is rejected with
-`artifact_name_collision`; an item that would replace a file another batch
-already wrote with different bytes is rejected with
-`artifact_exists_with_different_content` (identical bytes are reused). Use a
-new output directory or `request_id` for a changed render.
+Artifacts are named after each item's `request_id` and written to a private
+per-batch folder, `<output>/<batch_id>/`; manifests record them as
+`<batch_id>/<name>.svg|png`. Batches therefore never share files, so a later
+batch that reuses a `request_id` (or whose browser-rendered PNG bytes differ
+run to run) cannot break an earlier manifest. An item whose name collides with
+another item in the same batch is rejected with `artifact_name_collision`; a
+batch folder left behind with different bytes (for example after its manifest
+was deleted) is never overwritten and the item is rejected with
+`artifact_exists_with_different_content`. Manifests written before per-batch
+folders (bare file names) still export.
 
 This repository is the owner of graphics production. `book-graphics-production`
 is an older frozen fork kept only until it is archived; safety fixes are

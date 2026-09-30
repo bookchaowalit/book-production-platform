@@ -20,7 +20,7 @@ import subprocess
 import tempfile
 import time
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from PIL import Image
@@ -89,6 +89,17 @@ def _atomic_write(path: Path, data: bytes) -> None:
     os.replace(staging, path)
 
 
+def _artifact_path(batch_root: Path, filename: str) -> Path:
+    """Resolve a manifest artifact name (``<batch_id>/<file>`` or a legacy bare name) safely."""
+
+    parts = PurePosixPath(filename).parts
+    if not 1 <= len(parts) <= 2 or PurePosixPath(filename).is_absolute() or any(
+        part in {"", ".", ".."} or "\\" in part or ":" in part for part in parts
+    ):
+        raise ExportError(f"{filename}: unsafe artifact path in the batch manifest")
+    return batch_root.joinpath(*parts)
+
+
 def export_batch(manifest_path: str | Path, output_dir: str | Path, *, scale: int = 3, dpi: int = 300) -> ExportResult:
     if not MIN_SCALE <= scale <= MAX_SCALE:
         raise ExportError(f"scale must be between {MIN_SCALE} and {MAX_SCALE}")
@@ -112,8 +123,8 @@ def export_batch(manifest_path: str | Path, output_dir: str | Path, *, scale: in
         svg = next((artifact for artifact in item.get("artifacts", []) if artifact.get("media_type") == "image/svg+xml"), None)
         if svg is None:
             raise ExportError(f"{item.get('request_id')}: no SVG artifact to export")
-        name = Path(str(svg["filename"])).name
-        svg_path = source.parent / name
+        name = str(svg["filename"])
+        svg_path = _artifact_path(source.parent, name)
         if not svg_path.is_file() or _sha256(svg_path.read_bytes()) != svg.get("content_hash"):
             raise ExportError(f"{name}: SVG is missing or does not match the batch manifest")
         width, height = int(svg["width"]), int(svg["height"])

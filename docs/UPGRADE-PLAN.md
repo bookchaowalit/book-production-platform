@@ -2,11 +2,11 @@
 
 ## Current state
 
-Score: 8/10 (7.5 after pass 2 graphics work, 7 after pass 1, 5 before) —
-broad, well-tested deterministic adapters; graphics batches can no longer
-break each other's manifests and data_pipeline now survives a crash between
-publish and receipt, but Blender, FreeCAD and Unity paths are only exercised
-on the Windows host.
+Score: 8.5/10 (8 after pass 2, 7 after pass 1, 5 before) — broad,
+well-tested deterministic adapters; data_pipeline, BIM and CAD jobs all
+survive a crash between publish and receipt, graphics batches write private
+folders, and the audio boundary is checked, but Blender, FreeCAD and Unity
+paths are only exercised on the Windows host.
 
 ## Backlog
 
@@ -19,21 +19,12 @@ on the Windows host.
 
 - Add a Windows CI job (`windows-latest`) so the `os.name == "nt"` branches
   (msvcrt locking, publish retries, short paths) run somewhere automatically.
-- `bim_production/jobs.py` (`_rename_directory` then `_write_receipt`) and
-  `cad_production/jobs.py` (`_publish` then `_write_receipt_exclusive`) have
-  the same publish-then-receipt window data_pipeline had. Port the
-  data_pipeline recovery (rebuild, compare hashes, then write the receipt;
-  clean `.staging-*` for the fingerprint under the lock). `game_production`
-  keeps its receipt inside the published directory and is not affected.
-
-- Graphics now fails closed (`artifact_exists_with_different_content`) when a
-  later batch would change a file in the shared output directory. If PNG
-  bytes from the local browser turn out not to be reproducible run-to-run,
-  switch to per-batch artifact directories (`<batch_id>/`), updating
-  `pipeline/jobs.py` and `export.py` (which joins by bare file name) together.
-- `audio_production` duplicates `book-audio-production` the same way graphics
-  duplicated `book-graphics-production`; decide the owner and add a drift check
-  like `scripts/graphics_fork_parity.py`.
+- Run the browser-marked graphics tests (CI with Chrome, or a local
+  Chromium) against the per-batch folder layout; they were updated but only
+  the stubbed-browser tests ran in pass 3.
+- `spreadsheet_production` and `audio_production` jobs: audit for the same
+  publish-then-receipt window (audio writes `.receipt.json` inside the
+  published directory, like `game_production`, so check before porting).
 
 ### P2
 
@@ -90,3 +81,27 @@ on the Windows host.
 - Abandoned `.<fingerprint>.staging-*` directories are removed under the lock.
 - Tests simulate crashes before the receipt write and during the link, plus
   tampered/incomplete recovery, no-hard-link filesystems and stale staging.
+
+## Done in this pass (pass 3)
+
+- BIM and CAD jobs now recover from a crash between the publish rename and
+  the receipt write (was a permanent `takeoff_integrity_error` /
+  `replay_integrity_error`). BIM rebuilds and writes the receipt only if the
+  rebuild matches every published byte; CAD (not byte-reproducible: the QA
+  manifest records timings) derives the receipt from the published bytes and
+  requires every replay check, including the manifest's fingerprint, runtime
+  and artifact hashes. Results report `receipt_recovered`; inconsistent
+  directories fail closed untouched. CAD removes abandoned staging dirs.
+- Fixed: a crash mid BIM receipt write left a fixed-name `.tmp` that made
+  every later run fail; the temp name is now private. The BIM fingerprint lock
+  uses `flock` on POSIX, and BIM job tests use a synthetic IFC with a stubbed
+  worker, so 17 of them run on Linux/CI instead of skipping.
+- Graphics batches write artifacts to `<output>/<batch_id>/` (manifests record
+  `<batch_id>/<name>`), so a later batch reusing a `request_id` or producing
+  different PNG bytes is accepted instead of rejected. Export resolves these
+  paths safely (rejects `..`, absolute, drive and deep paths) and still reads
+  legacy bare names; browser-free export test added.
+- Audio ownership documented: not a fork. This repository owns `audio-ir.v1`,
+  `book-audio-production` owns `audio-batch.v1` and the FFmpeg pin;
+  `scripts/audio_boundary_check.py` (tested, in Ruff/mypy gates) fails if
+  either side crosses that line.

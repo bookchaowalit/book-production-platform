@@ -128,10 +128,10 @@ def _write_atomic(path: Path, data: bytes) -> int:
 def _conflicting_existing_file(path: Path, data: bytes) -> bool:
     """Return True when ``path`` already holds different bytes (or is not a regular file).
 
-    Artifacts live directly in the shared output directory and manifests refer to
-    them by file name, so a later batch that reuses a ``request_id`` must never
-    replace bytes an earlier manifest still hashes. Identical bytes are fine: the
-    earlier manifest stays valid.
+    Each batch writes into its own ``<batch_id>/`` folder, so batches never share
+    artifact files; this still guards a folder left behind by a batch whose
+    manifest was removed, so bytes a surviving copy of that manifest hashes are
+    never replaced. Identical bytes are fine.
     """
 
     if path.is_symlink():
@@ -147,8 +147,11 @@ def _conflicting_existing_file(path: Path, data: bytes) -> bool:
 
 
 def _artifact(path: Path, media_type: str, width: int, height: int) -> ArtifactRef:
+    """Describe an artifact by its POSIX path relative to the output directory (``<batch_id>/<name>``)."""
+
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
-    return ArtifactRef(filename=path.name, media_type=media_type, content_hash=digest, byte_size=path.stat().st_size, width=width, height=height)
+    filename = f"{path.parent.name}/{path.name}"
+    return ArtifactRef(filename=filename, media_type=media_type, content_hash=digest, byte_size=path.stat().st_size, width=width, height=height)
 
 
 def _from_manifest(path: Path, payload: dict[str, Any], *, replay: bool) -> BatchResult:
@@ -194,6 +197,10 @@ def run_batch(items: list[dict[str, Any]], output_dir: str | Path, idempotency_k
         return _from_manifest(manifest_path, payload, replay=True)
 
     batch_id = hashlib.sha256(f"{idempotency_key}:{input_hash}".encode()).hexdigest()[:20]
+    # Every batch owns a private artifact folder, so a later batch that reuses a
+    # request_id (and whose PNG bytes may differ run to run) never collides with
+    # files an earlier manifest hashes.
+    batch_dir = output_path / batch_id
     output_items: list[ItemResult] = []
     bytes_written = 0
     accepted = 0
@@ -219,12 +226,12 @@ def run_batch(items: list[dict[str, Any]], output_dir: str | Path, idempotency_k
             issues = run_graphic_qa(svg, png, ir)
             if issues:
                 raise RenderError("qa_failed:" + ",".join(issues))
-            svg_path = output_path / f"{prefix}.svg"
-            png_path = output_path / f"{prefix}.png"
+            svg_path = batch_dir / f"{prefix}.svg"
+            png_path = batch_dir / f"{prefix}.png"
             svg_bytes = svg.encode("utf-8")
             if _conflicting_existing_file(svg_path, svg_bytes) or _conflicting_existing_file(png_path, png):
-                # Another batch in this directory already published different
-                # bytes under this name; overwriting would break its manifest.
+                # An earlier run left different bytes in this batch folder;
+                # never replace files a manifest may still hash.
                 output_items.append(ItemResult(request_id=request_id, status="rejected", error_code="artifact_exists_with_different_content"))
                 continue
             bytes_written += _write_atomic(svg_path, svg_bytes)
