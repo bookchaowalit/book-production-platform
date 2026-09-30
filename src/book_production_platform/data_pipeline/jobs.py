@@ -12,7 +12,7 @@ import tempfile
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -327,23 +327,48 @@ def _build_receipt(fingerprint: str, hashes: dict[str, str]) -> dict[str, Any]:
     return {"schema_version": RECEIPT_SCHEMA, "fingerprint": fingerprint, "hashes": dict(hashes)}
 
 
-def _write_receipt_exclusive(receipt_path: Path, receipt: dict[str, Any]) -> None:
+def _write_receipt_exclusive(receipt_path: Path, receipt: dict[str, Any]) -> int:
+    """Publish a complete receipt atomically; never leave a truncated one.
+
+    The bytes are written and fsynced to a private temporary file first and
+    then hard-linked into place, so a crash leaves either no receipt or a
+    complete one. Linking also keeps the create-exclusive guarantee.
+    """
     _ensure_directory(receipt_path.parent)
     _reject_symlink_components(receipt_path)
     data = _json_bytes(receipt)
-    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
-    if hasattr(os, "O_BINARY"):
-        flags |= os.O_BINARY
     try:
-        descriptor = os.open(receipt_path, flags, 0o600)
+        descriptor, temp_name = tempfile.mkstemp(
+            prefix=f".{receipt_path.stem}.", suffix=".tmp", dir=receipt_path.parent
+        )
+    except OSError:
+        raise PipelineJobError("artifact_write_failed") from None
+    temp_path = Path(temp_name)
+    try:
         with os.fdopen(descriptor, "wb") as output:
             output.write(data)
             output.flush()
             os.fsync(output.fileno())
-    except FileExistsError:
-        raise PipelineJobError("replay_integrity_error") from None
+        try:
+            os.link(temp_path, receipt_path)
+        except FileExistsError:
+            raise PipelineJobError("replay_integrity_error") from None
+        except OSError:
+            # Filesystems without hard links: the per-fingerprint lock is held,
+            # so an existence check followed by an atomic replace is exclusive.
+            if receipt_path.exists() or receipt_path.is_symlink():
+                raise PipelineJobError("replay_integrity_error") from None
+            os.replace(temp_path, receipt_path)
+    except PipelineJobError:
+        raise
     except OSError:
         raise PipelineJobError("artifact_write_failed") from None
+    finally:
+        try:
+            temp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+    return len(data)
 
 
 def _publish_job(staging_dir: Path, artifact_dir: Path, receipt_path: Path, receipt: dict[str, Any]) -> None:
@@ -366,6 +391,8 @@ def _publish_job(staging_dir: Path, artifact_dir: Path, receipt_path: Path, rece
             time.sleep(0.025 * (attempt + 1))
         except OSError:
             raise PipelineJobError("artifact_publish_failed") from None
+    # A crash after the rename and before this write leaves published
+    # artifacts without a receipt; run_pipeline_job recovers that state.
     _write_receipt_exclusive(receipt_path, receipt)
 
 
@@ -509,8 +536,56 @@ def _rejected_result(error_code: str, qa: tuple[str, ...] = ()) -> PipelineJobRe
     )
 
 
+def _remove_stale_staging_dirs(root: Path, fingerprint: str) -> None:
+    """Remove staging dirs a crashed run left for this fingerprint.
+
+    Staging names embed the fingerprint and are only created while holding
+    this fingerprint's lock, so any that exist now are abandoned.
+    """
+    jobs_dir = root / "jobs"
+    if jobs_dir.is_symlink() or not jobs_dir.is_dir():
+        return
+    for candidate in jobs_dir.glob(f".{fingerprint}.staging-*"):
+        _remove_staging_dir(candidate)
+
+
+def _recover_missing_receipt(
+    fingerprint: str,
+    staging_dir: Path,
+    artifact_dir: Path,
+    receipt_path: Path,
+    rebuilt_hashes: dict[str, str],
+) -> PipelineJobResult:
+    """Write the receipt a crashed publish never wrote, if the bytes match.
+
+    The job is deterministic, so a fresh rebuild in ``staging_dir`` must hash
+    identically to the published directory. Any difference (tampering, or a
+    different SQLite/recipe) fails closed and leaves the directory untouched.
+    """
+    try:
+        published_hashes = _hash_all_artifacts(artifact_dir)
+    except PipelineJobError:
+        raise PipelineJobError("replay_integrity_error") from None
+    if published_hashes != rebuilt_hashes:
+        raise PipelineJobError("replay_integrity_error")
+    _remove_staging_dir(staging_dir)
+    receipt_bytes = _write_receipt_exclusive(receipt_path, _build_receipt(fingerprint, rebuilt_hashes))
+    verified = _verify_replay(fingerprint, artifact_dir, receipt_path)
+    return replace(
+        verified,
+        bytes_written=receipt_bytes,
+        metadata={**verified.metadata, "receipt_recovered": True},
+    )
+
+
 def run_pipeline_job(request: PipelineRequest | dict[str, Any], output_root: str | Path) -> PipelineJobResult:
-    """Validate, compile, plan-check, and publish private replay-safe artifacts."""
+    """Validate, compile, plan-check, and publish private replay-safe artifacts.
+
+    Crash recovery: abandoned staging directories for the fingerprint are
+    removed, and published artifacts without a receipt (a crash between the
+    publish rename and the receipt write) get their receipt only after a
+    deterministic rebuild reproduces them byte for byte.
+    """
     try:
         parsed = _parse_pipeline_request(request)
         pipeline = build_pipeline_ir(parsed)
@@ -529,13 +604,19 @@ def run_pipeline_job(request: PipelineRequest | dict[str, Any], output_root: str
     lock_path = root / ".locks" / f"{fingerprint}.lock"
 
     with _idempotency_lock(lock_path):
-        if artifact_dir.exists() or artifact_dir.is_symlink() or receipt_path.exists() or receipt_path.is_symlink():
+        _remove_stale_staging_dirs(root, fingerprint)
+        artifacts_present = artifact_dir.exists() or artifact_dir.is_symlink()
+        receipt_present = receipt_path.exists() or receipt_path.is_symlink()
+        if receipt_present or (artifacts_present and (artifact_dir.is_symlink() or not artifact_dir.is_dir())):
             return _verify_replay(fingerprint, artifact_dir, receipt_path)
+        recovering = artifacts_present
 
         compiled = compile_pipeline_ir(pipeline)
         try:
             query_plan = explain_pipeline_sql(pipeline, compiled)
         except PipelineExplainError:
+            if recovering:
+                raise PipelineJobError("replay_integrity_error") from None
             return _rejected_result("pipeline_sql_invalid")
 
         report = build_pipeline_report(pipeline, compiled, query_plan.steps, query_plan.sqlite_version)
@@ -549,11 +630,15 @@ def run_pipeline_job(request: PipelineRequest | dict[str, Any], output_root: str
             _write_staged_artifacts(staging_dir, pre_manifest_files)
             qa = qa_pipeline_artifacts(pipeline, compiled, query_plan, staging_dir)
             if qa:
+                if recovering:
+                    raise PipelineJobError("replay_integrity_error")
                 return _rejected_result("pipeline_artifact_qa_failed", qa)
             hashes = _hash_artifacts(staging_dir, pre_manifest_files)
             manifest = _build_qa_manifest(parsed, fingerprint, hashes, qa, query_plan)
             _write_staged_artifacts(staging_dir, {"qa-manifest.json": _json_bytes(manifest)})
             all_hashes = _hash_all_artifacts(staging_dir)
+            if recovering:
+                return _recover_missing_receipt(fingerprint, staging_dir, artifact_dir, receipt_path, all_hashes)
             receipt = _build_receipt(fingerprint, all_hashes)
             _publish_job(staging_dir, artifact_dir, receipt_path, receipt)
         except PipelineJobError:

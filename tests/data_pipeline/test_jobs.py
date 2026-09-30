@@ -123,16 +123,142 @@ def test_tampered_receipt_fails_closed(tmp_path: Path, valid_pipeline_request: d
         run_pipeline_job(valid_pipeline_request, tmp_path)
 
 
-def test_missing_receipt_for_existing_artifacts_fails_closed(
+def test_missing_receipt_for_intact_artifacts_is_recovered(
     tmp_path: Path,
     valid_pipeline_request: dict[str, Any],
 ) -> None:
     first = run_pipeline_job(valid_pipeline_request, tmp_path)
     receipt = tmp_path / ".receipts" / f"{first.fingerprint}.json"
+    original = receipt.read_bytes()
     receipt.unlink()
+
+    recovered = run_pipeline_job(valid_pipeline_request, tmp_path)
+
+    assert recovered.status == "accepted" and recovered.replay is True
+    assert recovered.artifact_hashes == first.artifact_hashes
+    assert recovered.metadata["receipt_recovered"] is True
+    assert recovered.bytes_written == len(original)
+    assert receipt.read_bytes() == original
+    replay = run_pipeline_job(valid_pipeline_request, tmp_path)
+    assert replay.replay is True and replay.bytes_written == 0
+    assert "receipt_recovered" not in replay.metadata
+
+
+def test_missing_receipt_for_tampered_artifacts_fails_closed(
+    tmp_path: Path,
+    valid_pipeline_request: dict[str, Any],
+) -> None:
+    first = run_pipeline_job(valid_pipeline_request, tmp_path)
+    assert first.artifact_dir is not None
+    receipt = tmp_path / ".receipts" / f"{first.fingerprint}.json"
+    receipt.unlink()
+    tampered = first.artifact_dir / "pipeline.sql"
+    tampered.write_text("SELECT 1", encoding="utf-8")
 
     with pytest.raises(PipelineJobError, match="replay_integrity_error"):
         run_pipeline_job(valid_pipeline_request, tmp_path)
+
+    assert not receipt.exists()
+    assert tampered.read_text(encoding="utf-8") == "SELECT 1"
+    assert not any(path.name.startswith(".") for path in (tmp_path / "jobs").iterdir())
+
+
+def test_missing_receipt_with_incomplete_artifacts_fails_closed(
+    tmp_path: Path,
+    valid_pipeline_request: dict[str, Any],
+) -> None:
+    first = run_pipeline_job(valid_pipeline_request, tmp_path)
+    assert first.artifact_dir is not None
+    (tmp_path / ".receipts" / f"{first.fingerprint}.json").unlink()
+    (first.artifact_dir / "report.json").unlink()
+
+    with pytest.raises(PipelineJobError, match="replay_integrity_error"):
+        run_pipeline_job(valid_pipeline_request, tmp_path)
+
+
+def test_crash_between_publish_and_receipt_is_recovered_on_retry(
+    tmp_path: Path,
+    valid_pipeline_request: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class SimulatedCrash(BaseException):
+        pass
+
+    def crash(*_args: object, **_kwargs: object) -> int:
+        raise SimulatedCrash
+
+    with monkeypatch.context() as patched:
+        patched.setattr(jobs_module, "_write_receipt_exclusive", crash)
+        with pytest.raises(SimulatedCrash):
+            run_pipeline_job(valid_pipeline_request, tmp_path)
+
+    published = [path for path in (tmp_path / "jobs").iterdir() if not path.name.startswith(".")]
+    assert len(published) == 1
+    receipts_dir = tmp_path / ".receipts"
+    assert not receipts_dir.exists() or not any(receipts_dir.iterdir())
+
+    recovered = run_pipeline_job(valid_pipeline_request, tmp_path)
+    assert recovered.status == "accepted" and recovered.metadata["receipt_recovered"] is True
+    assert recovered.artifact_dir == published[0]
+
+
+def test_crash_while_linking_receipt_leaves_no_partial_receipt(
+    tmp_path: Path,
+    valid_pipeline_request: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class SimulatedCrash(BaseException):
+        pass
+
+    def crash(*_args: object, **_kwargs: object) -> None:
+        raise SimulatedCrash
+
+    with monkeypatch.context() as patched:
+        patched.setattr(jobs_module.os, "link", crash)
+        with pytest.raises(SimulatedCrash):
+            run_pipeline_job(valid_pipeline_request, tmp_path)
+
+    receipts_dir = tmp_path / ".receipts"
+    assert not any(receipts_dir.iterdir())
+
+    recovered = run_pipeline_job(valid_pipeline_request, tmp_path)
+    assert recovered.metadata["receipt_recovered"] is True
+
+
+def test_receipt_falls_back_to_replace_without_hard_links(
+    tmp_path: Path,
+    valid_pipeline_request: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def no_links(*_args: object, **_kwargs: object) -> None:
+        raise OSError(1, "hard links not supported")
+
+    monkeypatch.setattr(jobs_module.os, "link", no_links)
+
+    first = run_pipeline_job(valid_pipeline_request, tmp_path)
+    second = run_pipeline_job(valid_pipeline_request, tmp_path)
+
+    assert first.status == "accepted" and second.replay is True
+    assert [path.name for path in (tmp_path / ".receipts").iterdir()] == [f"{first.fingerprint}.json"]
+
+
+def test_abandoned_staging_dirs_are_removed_on_next_run(
+    tmp_path: Path,
+    valid_pipeline_request: dict[str, Any],
+) -> None:
+    first = run_pipeline_job(valid_pipeline_request, tmp_path)
+    jobs_dir = tmp_path / "jobs"
+    stale = jobs_dir / f".{first.fingerprint}.staging-crashed"
+    stale.mkdir()
+    (stale / "pipeline.sql").write_text("partial", encoding="utf-8")
+    other = jobs_dir / f".{'0' * 64}.staging-other"
+    other.mkdir()
+
+    replay = run_pipeline_job(valid_pipeline_request, tmp_path)
+
+    assert replay.replay is True
+    assert not stale.exists()
+    assert other.exists()
 
 
 def test_invalid_pipeline_returns_a_stable_rejection_without_artifacts(

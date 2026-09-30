@@ -2,10 +2,11 @@
 
 ## Current state
 
-Score: 7.5/10 (was 7/10 after pass 1, 5/10 before) — broad, well-tested
-deterministic adapters; graphics batches can no longer break each other's
-manifests and graphics ownership is documented with a drift check, but
-Blender, FreeCAD and Unity paths are only exercised on the Windows host.
+Score: 8/10 (7.5 after pass 2 graphics work, 7 after pass 1, 5 before) —
+broad, well-tested deterministic adapters; graphics batches can no longer
+break each other's manifests and data_pipeline now survives a crash between
+publish and receipt, but Blender, FreeCAD and Unity paths are only exercised
+on the Windows host.
 
 ## Backlog
 
@@ -18,10 +19,12 @@ Blender, FreeCAD and Unity paths are only exercised on the Windows host.
 
 - Add a Windows CI job (`windows-latest`) so the `os.name == "nt"` branches
   (msvcrt locking, publish retries, short paths) run somewhere automatically.
-- `data_pipeline/jobs.py` publishes the artifact directory before writing the
-  receipt; a crash in between leaves a job that every replay rejects with
-  `replay_integrity_error`. Check the other `*_production/jobs.py` for the same
-  order, then document the manual recovery or add a repair command.
+- `bim_production/jobs.py` (`_rename_directory` then `_write_receipt`) and
+  `cad_production/jobs.py` (`_publish` then `_write_receipt_exclusive`) have
+  the same publish-then-receipt window data_pipeline had. Port the
+  data_pipeline recovery (rebuild, compare hashes, then write the receipt;
+  clean `.staging-*` for the fingerprint under the lock). `game_production`
+  keeps its receipt inside the published directory and is not affected.
 
 - Graphics now fails closed (`artifact_exists_with_different_content`) when a
   later batch would change a file in the shared output directory. If PNG
@@ -73,3 +76,17 @@ Blender, FreeCAD and Unity paths are only exercised on the Windows host.
   report drift and fail if the fork has a module this repository lacks.
   Current drift: `cli`, `jobs` (recipe version only), `layout` (Thai cluster
   wrapping), `main`, `templates` (announcement layout); `export` platform-only.
+
+## Done in pass 2 (data_pipeline crash recovery)
+
+- `data_pipeline/jobs.py`: receipts are written to a private temp file,
+  fsynced, then hard-linked into place (fallback: checked `os.replace` under
+  the fingerprint lock), so a crash never leaves a truncated receipt.
+- Published artifacts without a receipt (crash after the publish rename) are
+  recovered on the next run: the job is rebuilt in staging and the receipt is
+  written only if every artifact hashes identically; tampered or incomplete
+  directories still fail closed with `replay_integrity_error` and are left
+  untouched. The result reports `metadata.receipt_recovered: true`.
+- Abandoned `.<fingerprint>.staging-*` directories are removed under the lock.
+- Tests simulate crashes before the receipt write and during the link, plus
+  tampered/incomplete recovery, no-hard-link filesystems and stale staging.
