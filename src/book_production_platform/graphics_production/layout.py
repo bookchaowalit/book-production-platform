@@ -20,6 +20,10 @@ class TextLayout:
 # after them.
 _THAI_COMBINING = frozenset(chr(code) for code in (0x0E31, *range(0x0E34, 0x0E3B), *range(0x0E47, 0x0E4F)))
 _THAI_LEADING = frozenset(chr(code) for code in range(0x0E40, 0x0E45))
+# Following vowels (sara a, sara aa, sara am, lakkhangyao) and the repetition
+# mark mai yamok take horizontal space but can never begin a line, so they stay
+# with the cluster before them.
+_THAI_FOLLOWING = frozenset(chr(code) for code in (0x0E30, 0x0E32, 0x0E33, 0x0E45, 0x0E46))
 
 
 def visible_length(text: str) -> int:
@@ -32,7 +36,7 @@ def _clusters(word: str) -> list[str]:
     clusters: list[str] = []
     pending = ""
     for char in word:
-        if char in _THAI_COMBINING and clusters and not pending:
+        if (char in _THAI_COMBINING or char in _THAI_FOLLOWING) and clusters and not pending:
             clusters[-1] += char
         elif char in _THAI_LEADING:
             pending += char
@@ -61,7 +65,7 @@ def wrap_text(text: str, width: float, font_size: float) -> tuple[str, ...]:
     """Wrap by a conservative width estimate, preferring spaces and never splitting a Thai cluster.
 
     Lines break at whitespace first; a word longer than one line is split between
-    character clusters so a vowel or tone mark never starts a line. Every
+    character clusters so a vowel, tone mark or mai yamok never starts a line. Every
     non-space character of the input is kept in order.
     """
 

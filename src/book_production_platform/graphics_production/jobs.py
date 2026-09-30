@@ -111,9 +111,19 @@ def _canonical_hash(items: list[dict[str, Any]]) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+# Windows refuses these device names as a file stem, with or without an
+# extension ("CON.svg", "com1.png"), so an artifact named after one can never
+# be written or copied there.
+_WINDOWS_RESERVED_STEMS = frozenset(
+    {"CON", "PRN", "AUX", "NUL", *(f"COM{n}" for n in range(10)), *(f"LPT{n}" for n in range(10))}
+)
+
+
 def _safe_name(request_id: str, fallback: str) -> str:
-    value = re.sub(r"[^A-Za-z0-9._-]+", "_", request_id).strip("._")
-    return value[:80] or fallback
+    value = re.sub(r"[^A-Za-z0-9._-]+", "_", request_id).strip("._")[:80]
+    if value.split(".", 1)[0].upper() in _WINDOWS_RESERVED_STEMS:
+        value = f"_{value}"[:80]
+    return value or fallback
 
 
 def _write_atomic(path: Path, data: bytes) -> int:

@@ -216,3 +216,16 @@ def test_non_object_items_are_rejected_per_item(tmp_path: Path, monkeypatch: pyt
     assert [entry.status for entry in result.items] == ["accepted", "rejected", "rejected"]
     assert [entry.error_code for entry in result.items[1:]] == ["invalid_request", "invalid_request"]
     assert result.status == "partial"
+
+
+@pytest.mark.parametrize("request_id", ["CON", "nul", "Com1", "lpt9.card", "aux"])
+def test_safe_name_never_produces_a_windows_reserved_device_stem(request_id: str) -> None:
+    name = jobs._safe_name(request_id, "item-1")
+    assert name.split(".", 1)[0].upper() not in {"CON", "PRN", "AUX", "NUL", "COM1", "LPT9"}
+    assert name.endswith(request_id)
+
+
+def test_safe_name_keeps_ordinary_ids_and_falls_back_for_empty_ones() -> None:
+    assert jobs._safe_name("quote-001", "item-1") == "quote-001"
+    assert jobs._safe_name("CONSOLE", "item-1") == "CONSOLE"
+    assert jobs._safe_name("ข้อความ", "item-3") == "item-3"

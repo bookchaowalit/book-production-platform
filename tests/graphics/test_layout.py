@@ -64,3 +64,17 @@ def test_announcement_cta_stays_inside_canvas(variant: str) -> None:
         assert node.y + node.height <= height, node_id
     assert nodes["body"].y + nodes["body"].height <= nodes["cta-bg"].y
     assert nodes["headline"].y + nodes["headline"].height <= nodes["body"].y
+
+
+THAI_FOLLOWING = {chr(code) for code in (0x0E30, 0x0E32, 0x0E33, 0x0E45, 0x0E46)}
+
+
+@pytest.mark.parametrize("width", [60, 90, 120, 150])
+def test_hard_split_never_starts_a_line_with_a_following_vowel_or_mai_yamok(width: int) -> None:
+    # Sara am, sara aa, sara a and mai yamok are spacing characters but must stay
+    # with the consonant before them; "ทำ" split as "ท" / "ำ..." is unreadable.
+    text = "ทำนาจะดีมากๆกำนันทำนาะ" * 2
+    lines = wrap_text(text, width=width, font_size=42)
+    assert _chars(lines) == text
+    for line in lines:
+        assert line[0] not in THAI_FOLLOWING | THAI_COMBINING

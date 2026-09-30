@@ -105,3 +105,19 @@ paths are only exercised on the Windows host.
   `book-audio-production` owns `audio-batch.v1` and the FFmpeg pin;
   `scripts/audio_boundary_check.py` (tested, in Ruff/mypy gates) fails if
   either side crosses that line.
+
+## Done in this pass (pass 4: edge-case bug hunt)
+
+- Fixed: Thai hard-wrap split before following vowels (sara a/aa/am,
+  lakkhangyao) and mai yamok, so a line could start with `ำ`/`า`/`ๆ`
+  ("ทำ" became "ท" / "ำ..."). They now stay in the cluster before them.
+- Fixed: graphics artifact names for request ids `CON`, `nul`, `COM1`,
+  `lpt9.card`... were Windows device names (`CON.svg` cannot be written or
+  copied on Windows); they now get a `_` prefix.
+- Fixed: GameIR accepted `scene_id`/`asset_id` values `con`, `aux`, `nul`,
+  `com1`... that become `Scenes/<id>.unity`, `Audio/<id>.wav` and the build
+  name; they are now rejected at parse time. Regression tests for all three.
+- Checked and found already safe: NaN/inf in loudnorm stats, ffprobe
+  durations, STL vertices, BIM units, pipeline literals and limits; audio
+  source paths (reserved names, traversal, trailing dots); resample duration
+  tolerance.
