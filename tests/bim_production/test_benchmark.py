@@ -11,7 +11,7 @@ from book_production_platform.bim_production.benchmark import (
     load_benchmark_cases,
     run_benchmark,
 )
-from tests.bim_production.fixtures import pinned_runtime_paths
+from tests.bim_production.fixtures import require_pinned_runtime
 
 CASES_PATH = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "bim" / "cases.json"
 FIXTURE_MACRO = Path(__file__).resolve().parents[1] / "bim_production" / "fixture_worker.FCMacro"
@@ -53,10 +53,7 @@ def test_registry_rejects_a_broken_composition(tmp_path: Path) -> None:
 
 @pytest.fixture(scope="module")
 def runtime() -> tuple[Path, Path]:
-    freecadcmd, site_packages = pinned_runtime_paths()
-    assert freecadcmd.is_file(), "the pinned FreeCADCmd runtime must exist locally"
-    assert site_packages.is_dir(), "the pinned IfcOpenShell site-packages must exist locally"
-    return freecadcmd, site_packages
+    return require_pinned_runtime()
 
 
 def test_full_benchmark_passes_twenty_cases(

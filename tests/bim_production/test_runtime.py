@@ -9,6 +9,19 @@ from typing import Any
 
 import pytest
 
+_PINNED_RUNTIME_ROOT = (
+    Path(__file__).resolve().parents[2]
+    / ".runtime"
+    / "cad"
+    / "freecad-1.1.3"
+    / "extracted"
+    / "FreeCAD_1.1.3-Windows-x86_64-py311"
+)
+requires_pinned_windows_runtime = pytest.mark.skipif(
+    not (_PINNED_RUNTIME_ROOT / "FreeCADCmd.exe").is_file(),
+    reason="the pinned local FreeCAD 1.1.3 Windows runtime is unavailable",
+)
+
 
 def _runtime_module() -> Any:
     try:
@@ -21,6 +34,7 @@ def _runtime_module() -> Any:
     return importlib.import_module("book_production_platform.bim_production.runtime")
 
 
+@requires_pinned_windows_runtime
 def test_windows_short_path_resolves_the_existing_wrapper_below_260_characters() -> None:
     runtime = _runtime_module()
     product_root = Path(__file__).resolve().parents[2]
@@ -99,6 +113,7 @@ def test_windows_short_path_fails_closed_for_a_linked_site_packages_path(
     assert error.value.code == "bim_runtime_path_unsupported"
 
 
+@requires_pinned_windows_runtime
 def test_runtime_identity_accepts_the_existing_pinned_freecad_and_wrapper(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

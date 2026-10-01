@@ -70,6 +70,7 @@ class CadJobResult:
     bytes_written: int
     model_calls: int
     error_code: str | None
+    receipt_recovered: bool = False
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -83,6 +84,7 @@ class CadJobResult:
             "bytes_written": self.bytes_written,
             "model_calls": self.model_calls,
             "error_code": self.error_code,
+            "receipt_recovered": self.receipt_recovered,
         }
 
 
@@ -412,9 +414,23 @@ def _verify_replay(
     identity: dict[str, str],
 ) -> CadJobResult:
     try:
-        _reject_link_components(artifact_dir)
         _reject_link_components(receipt_path)
         receipt = _canonical_json_object(receipt_path, MAX_RECEIPT_BYTES)
+    except CadProductionError:
+        _fail("replay_integrity_error")
+    except (OSError, ValueError, TypeError, RecursionError):
+        _fail("replay_integrity_error")
+    return _verify_against_receipt(fingerprint, artifact_dir, receipt, identity)
+
+
+def _verify_against_receipt(
+    fingerprint: str,
+    artifact_dir: Path,
+    receipt: dict[str, object],
+    identity: dict[str, str],
+) -> CadJobResult:
+    try:
+        _reject_link_components(artifact_dir)
         if (
             artifact_dir.is_symlink()
             or not artifact_dir.is_dir()
@@ -606,6 +622,58 @@ def _publish(staging: Path, destination: Path) -> None:
         _fail("publication_failed")
 
 
+def _remove_stale_staging(staging_root: Path, fingerprint: str) -> None:
+    """Remove staging dirs a crashed run left for this fingerprint.
+
+    Staging names embed the fingerprint and are only created while holding
+    this fingerprint's lock, so any that exist while it is held are abandoned.
+    """
+    if _is_link(staging_root) or not staging_root.is_dir():
+        return
+    for candidate in staging_root.glob(f".{fingerprint}.staging-*"):
+        _cleanup_staging(candidate, staging_root, fingerprint)
+
+
+def _recover_missing_receipt(
+    fingerprint: str,
+    artifact_dir: Path,
+    receipt_path: Path,
+    identity: dict[str, str],
+) -> CadJobResult:
+    """Write the receipt a crash between publish and receipt never wrote.
+
+    A CAD rebuild is not byte-reproducible (the QA manifest records timings),
+    so recovery cannot compare against a fresh build. Instead the published
+    directory must hold exactly the five artifacts and pass every replay check
+    against a receipt derived from its bytes: the QA manifest must name this
+    fingerprint and runtime and hash the four other artifacts. Anything else
+    fails closed and leaves the directory untouched, with no receipt written.
+    """
+    try:
+        _reject_link_components(artifact_dir)
+        metadata = _artifact_metadata(artifact_dir, ARTIFACT_NAMES)
+    except CadProductionError:
+        _fail("replay_integrity_error")
+    receipt_data = _receipt_bytes(fingerprint, identity, metadata)
+    if len(receipt_data) > MAX_RECEIPT_BYTES:
+        _fail("replay_integrity_error")
+    receipt = json.loads(receipt_data.decode("utf-8"))
+    verified = _verify_against_receipt(fingerprint, artifact_dir, receipt, identity)
+    receipt_bytes = _write_receipt_exclusive(receipt_path, receipt_data)
+    return CadJobResult(
+        fingerprint=fingerprint,
+        status="replayed",
+        artifact_dir=artifact_dir,
+        artifact_hashes=verified.artifact_hashes,
+        qa=verified.qa,
+        replay=True,
+        bytes_written=receipt_bytes,
+        model_calls=0,
+        error_code=None,
+        receipt_recovered=True,
+    )
+
+
 def build_cad_job(
     input_path: Path,
     output_root: Path,
@@ -648,9 +716,14 @@ def build_cad_job(
         lock_path = root / ".locks" / f"{fingerprint}.lock"
         staging_root = root / ".staging"
         with _job_lock(lock_path):
-            if artifact_dir.exists() or _is_link(artifact_dir) or receipt_path.exists() or _is_link(receipt_path):
-                replay = _verify_replay(fingerprint, artifact_dir, receipt_path, identity)
-                return replay
+            _remove_stale_staging(staging_root, fingerprint)
+            receipt_present = receipt_path.exists() or _is_link(receipt_path)
+            if receipt_present:
+                return _verify_replay(fingerprint, artifact_dir, receipt_path, identity)
+            if artifact_dir.exists() or _is_link(artifact_dir):
+                # Published without a receipt: a crash hit between the publish
+                # rename and the receipt write.
+                return _recover_missing_receipt(fingerprint, artifact_dir, receipt_path, identity)
 
             _ensure_directory(staging_root)
             try:
@@ -727,6 +800,8 @@ def build_cad_job(
                 if len(receipt_data) > MAX_RECEIPT_BYTES:
                     _fail("publication_failed")
                 _publish(staging, artifact_dir)
+                # A crash here leaves a published job without a receipt; the
+                # next run recovers it through _recover_missing_receipt.
                 receipt_bytes = _write_receipt_exclusive(receipt_path, receipt_data)
                 hashes = {
                     name: str(metadata["sha256"])

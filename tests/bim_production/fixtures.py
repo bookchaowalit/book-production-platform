@@ -40,6 +40,22 @@ def pinned_runtime_paths() -> tuple[Path, Path]:
     return runtime_root / "FreeCADCmd.exe", runtime_root / "bin" / "Lib" / "site-packages"
 
 
+def require_pinned_runtime() -> tuple[Path, Path]:
+    """Return the pinned runtime paths or skip when this host does not have them.
+
+    The pinned FreeCAD 1.1.3 + IfcOpenShell runtime is a local Windows build under
+    ``.runtime/`` that is never committed, so hosts without it (CI, Linux, macOS)
+    skip the real-worker tests instead of failing, matching the CAD test suite.
+    """
+
+    import pytest
+
+    freecadcmd, site_packages = pinned_runtime_paths()
+    if not freecadcmd.is_file() or not site_packages.is_dir():
+        pytest.skip("the pinned local FreeCAD + IfcOpenShell runtime is unavailable")
+    return freecadcmd, site_packages
+
+
 def load_fixture_cases(filename: str) -> dict[str, dict[str, Any]]:
     """Load and minimally bound a descriptor registry of fixture cases."""
 

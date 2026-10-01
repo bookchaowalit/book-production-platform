@@ -98,3 +98,20 @@ def test_v2_schema_documents_assets() -> None:
     assert schema["properties"]["schema_version"]["const"] == "game-ir.v2"
     assert schema["properties"]["assets"]["maxItems"] == 4
     assert schema["$defs"]["AssetIR"]["properties"]["kind"]["const"] == "audio"
+
+
+@pytest.mark.parametrize("reserved", ["con", "nul", "aux", "prn", "com1", "lpt9"])
+def test_ids_that_become_file_names_reject_windows_device_names(reserved: str) -> None:
+    # scene_id names Assets/Scenes/<id>.unity and the player build; asset_id names
+    # Assets/BookProduction/Audio/<id>.<ext>. Windows cannot create either file.
+    with pytest.raises(GameInputError):
+        parse(v2(scene_id=reserved))
+    asset = {"asset_id": reserved, "kind": "audio", "filename": "a.wav", "sha256": SHA}
+    with pytest.raises(GameInputError):
+        parse(v2(assets=[asset], audio=None))
+
+
+def test_ids_that_only_start_with_a_device_name_are_still_valid() -> None:
+    game = parse(v2(scene_id="console-room", assets=[
+        {"asset_id": "con-theme", "kind": "audio", "filename": "a.wav", "sha256": SHA}], audio=None))
+    assert game.scene_id == "console-room"

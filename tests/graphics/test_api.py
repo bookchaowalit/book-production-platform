@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from book_production_platform.graphics_production.main import app
+from tests.graphics.browser import requires_browser
 
 
 def payload() -> dict[str, object]:
@@ -29,6 +30,7 @@ def test_health_exposes_graphics_contract() -> None:
     assert response.json()["model_calls_supported"] is False
 
 
+@requires_browser
 def test_create_batch_returns_artifact_manifest(tmp_path: Path, monkeypatch: object) -> None:
     monkeypatch.setenv("GRAPHICS_PRODUCTION_OUTPUT_ROOT", str(tmp_path))  # type: ignore[attr-defined]
     client = TestClient(app)

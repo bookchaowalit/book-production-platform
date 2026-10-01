@@ -81,6 +81,9 @@ def _asset_fingerprints(items: list[dict[str, Any]]) -> list[dict[str, str]]:
     fingerprints: list[dict[str, str]] = []
     for item in items:
         item_fingerprints: dict[str, str] = {}
+        if not isinstance(item, dict):
+            fingerprints.append(item_fingerprints)
+            continue
         root = item.get("asset_root")
         references = dict(item.get("assets", {})) if isinstance(item.get("assets"), dict) else {}
         font_ref = item.get("font_ref", "builtin:sans")
@@ -100,14 +103,27 @@ def _asset_fingerprints(items: list[dict[str, Any]]) -> list[dict[str, str]]:
 
 
 def _canonical_hash(items: list[dict[str, Any]]) -> str:
-    canonical_items = [{key: value for key, value in item.items() if key != "asset_root"} for item in items]
+    canonical_items = [
+        {key: value for key, value in item.items() if key != "asset_root"} if isinstance(item, dict) else item
+        for item in items
+    ]
     payload = json.dumps({"recipe": RECIPE_VERSION, "items": canonical_items, "asset_fingerprints": _asset_fingerprints(items)}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+# Windows refuses these device names as a file stem, with or without an
+# extension ("CON.svg", "com1.png"), so an artifact named after one can never
+# be written or copied there.
+_WINDOWS_RESERVED_STEMS = frozenset(
+    {"CON", "PRN", "AUX", "NUL", *(f"COM{n}" for n in range(10)), *(f"LPT{n}" for n in range(10))}
+)
+
+
 def _safe_name(request_id: str, fallback: str) -> str:
-    value = re.sub(r"[^A-Za-z0-9._-]+", "_", request_id).strip("._")
-    return value[:80] or fallback
+    value = re.sub(r"[^A-Za-z0-9._-]+", "_", request_id).strip("._")[:80]
+    if value.split(".", 1)[0].upper() in _WINDOWS_RESERVED_STEMS:
+        value = f"_{value}"[:80]
+    return value or fallback
 
 
 def _write_atomic(path: Path, data: bytes) -> int:
@@ -119,9 +135,33 @@ def _write_atomic(path: Path, data: bytes) -> int:
     return len(data)
 
 
+def _conflicting_existing_file(path: Path, data: bytes) -> bool:
+    """Return True when ``path`` already holds different bytes (or is not a regular file).
+
+    Each batch writes into its own ``<batch_id>/`` folder, so batches never share
+    artifact files; this still guards a folder left behind by a batch whose
+    manifest was removed, so bytes a surviving copy of that manifest hashes are
+    never replaced. Identical bytes are fine.
+    """
+
+    if path.is_symlink():
+        return True
+    if not path.exists():
+        return False
+    if not path.is_file():
+        return True
+    try:
+        return path.read_bytes() != data
+    except OSError:
+        return True
+
+
 def _artifact(path: Path, media_type: str, width: int, height: int) -> ArtifactRef:
+    """Describe an artifact by its POSIX path relative to the output directory (``<batch_id>/<name>``)."""
+
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
-    return ArtifactRef(filename=path.name, media_type=media_type, content_hash=digest, byte_size=path.stat().st_size, width=width, height=height)
+    filename = f"{path.parent.name}/{path.name}"
+    return ArtifactRef(filename=filename, media_type=media_type, content_hash=digest, byte_size=path.stat().st_size, width=width, height=height)
 
 
 def _from_manifest(path: Path, payload: dict[str, Any], *, replay: bool) -> BatchResult:
@@ -167,11 +207,27 @@ def run_batch(items: list[dict[str, Any]], output_dir: str | Path, idempotency_k
         return _from_manifest(manifest_path, payload, replay=True)
 
     batch_id = hashlib.sha256(f"{idempotency_key}:{input_hash}".encode()).hexdigest()[:20]
+    # Every batch owns a private artifact folder, so a later batch that reuses a
+    # request_id (and whose PNG bytes may differ run to run) never collides with
+    # files an earlier manifest hashes.
+    batch_dir = output_path / batch_id
     output_items: list[ItemResult] = []
     bytes_written = 0
     accepted = 0
+    # Artifact names already written by this batch, case-folded because Windows
+    # and macOS file systems treat "Card" and "card" as the same file.
+    claimed_names: set[str] = set()
     for index, raw in enumerate(items):
+        if not isinstance(raw, dict):
+            output_items.append(ItemResult(request_id=f"item-{index + 1}", status="rejected", error_code="invalid_request"))
+            continue
         request_id = str(raw.get("request_id", f"item-{index + 1}"))
+        prefix = _safe_name(request_id, f"item-{index + 1}")
+        if prefix.casefold() in claimed_names:
+            # A duplicate or sanitize-equivalent request_id would overwrite an
+            # accepted item's files and invalidate the hashes in this manifest.
+            output_items.append(ItemResult(request_id=request_id, status="rejected", error_code="artifact_name_collision"))
+            continue
         try:
             ir = compile_template(raw)
             asset_root = raw.get("asset_root")
@@ -180,15 +236,21 @@ def run_batch(items: list[dict[str, Any]], output_dir: str | Path, idempotency_k
             issues = run_graphic_qa(svg, png, ir)
             if issues:
                 raise RenderError("qa_failed:" + ",".join(issues))
-            prefix = _safe_name(request_id, f"item-{index + 1}")
-            svg_path = output_path / f"{prefix}.svg"
-            png_path = output_path / f"{prefix}.png"
-            bytes_written += _write_atomic(svg_path, svg.encode("utf-8"))
+            svg_path = batch_dir / f"{prefix}.svg"
+            png_path = batch_dir / f"{prefix}.png"
+            svg_bytes = svg.encode("utf-8")
+            if _conflicting_existing_file(svg_path, svg_bytes) or _conflicting_existing_file(png_path, png):
+                # An earlier run left different bytes in this batch folder;
+                # never replace files a manifest may still hash.
+                output_items.append(ItemResult(request_id=request_id, status="rejected", error_code="artifact_exists_with_different_content"))
+                continue
+            bytes_written += _write_atomic(svg_path, svg_bytes)
             bytes_written += _write_atomic(png_path, png)
             output_items.append(ItemResult(request_id=request_id, status="accepted", artifacts=(
                 _artifact(svg_path, "image/svg+xml", ir.canvas.width, ir.canvas.height),
                 _artifact(png_path, "image/png", ir.canvas.width, ir.canvas.height),
             )))
+            claimed_names.add(prefix.casefold())
             accepted += 1
         except (TemplateError, LayoutError, RenderError, ValidationError, ValueError) as exc:
             code = "invalid_request" if isinstance(exc, ValidationError) else str(exc).split(":", 1)[0] or exc.__class__.__name__

@@ -11,6 +11,7 @@ import json
 from typing import Annotated, Literal, NoReturn
 
 from pydantic import (
+    AfterValidator,
     BaseModel,
     BeforeValidator,
     ConfigDict,
@@ -39,6 +40,21 @@ def _array_to_tuple(value: object) -> object:
 
 Cell = Annotated[tuple[int, int], BeforeValidator(_array_to_tuple)]
 EntityId = Annotated[str, Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$", max_length=64)]
+# Windows device names cannot be a file stem with any extension, so an id that
+# becomes a file name ("Scenes/con.unity", "Audio/nul.wav", "aux.exe") must not
+# be one of them.
+_WINDOWS_RESERVED_STEMS = frozenset(
+    {"con", "prn", "aux", "nul", *(f"com{n}" for n in range(10)), *(f"lpt{n}" for n in range(10))}
+)
+
+
+def _not_windows_reserved(value: str) -> str:
+    if value in _WINDOWS_RESERVED_STEMS:
+        raise ValueError("id names a reserved Windows device and cannot be a file name")
+    return value
+
+
+FileNameId = Annotated[EntityId, AfterValidator(_not_windows_reserved)]
 
 
 class StrictModel(BaseModel):
@@ -81,7 +97,7 @@ Sha256Hex = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 class AssetIR(StrictModel):
     """One audio file inside the build's asset root, pinned by content hash."""
 
-    asset_id: EntityId
+    asset_id: FileNameId
     kind: Literal["audio"]
     filename: AssetFilename
     sha256: Sha256Hex
@@ -94,7 +110,7 @@ class AudioIR(StrictModel):
 
 class GameIR(StrictModel):
     schema_version: Literal["game-ir.v1", "game-ir.v2"]
-    scene_id: EntityId
+    scene_id: FileNameId
     template: Literal["top-down-collect.v1"]
     palette: Literal["palette-minimal.v1"] = GAME_PALETTE
     world: WorldIR

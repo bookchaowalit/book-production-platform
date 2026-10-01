@@ -234,8 +234,29 @@ python -m book_production_platform.graphics_production.scripts.benchmark `
   --output-dir .\.runtime\graphics\benchmark
 ```
 
+Artifacts are named after each item's `request_id` and written to a private
+per-batch folder, `<output>/<batch_id>/`; manifests record them as
+`<batch_id>/<name>.svg|png`. Batches therefore never share files, so a later
+batch that reuses a `request_id` (or whose browser-rendered PNG bytes differ
+run to run) cannot break an earlier manifest. An item whose name collides with
+another item in the same batch is rejected with `artifact_name_collision`; a
+batch folder left behind with different bytes (for example after its manifest
+was deleted) is never overwritten and the item is rejected with
+`artifact_exists_with_different_content`. Manifests written before per-batch
+folders (bare file names) still export.
+
+This repository is the owner of graphics production. `book-graphics-production`
+is an older frozen fork kept only until it is archived; safety fixes are
+mirrored there, features are not. `python scripts/graphics_fork_parity.py
+--fork ..\book-graphics-production` reports which modules have drifted and
+fails if the fork has a module this repository lacks.
+
 The root `scripts/check.py` entrypoint runs the full repository test suite,
-Ruff and strict mypy for the Graphics and Spreadsheet modules. These remain
+Ruff and strict mypy (pinned to the Windows platform in `pyproject.toml`) for
+every product module listed in the script, and GitHub Actions runs the same
+script on Ubuntu (`.github/workflows/ci.yml`). Tests that need Blender, the
+pinned FreeCAD runtime, FFmpeg or a Chromium-family browser skip with a reason
+when that runtime is absent. These remain
 domain adapters inside this shared product repository and do not create another
 agent or model runtime.
 
@@ -442,6 +463,15 @@ dBTP. These are pilot recipes, not a claim that one mastering target fits every
 platform or creative brief. Numerical QA does not prove speech intelligibility
 or subjective quality; human listening review remains a separate product gate.
 Without an approved local rate card, monetary cost is reported as `unknown`.
+
+Audio ownership: Audio Master is not a copy of `book-audio-production`. This
+repository owns the `audio-ir.v1` contract (one WAV, fixed presets);
+`book-audio-production` owns `audio-batch.v1` (batch trim and per-track
+loudness targets) and its pinned FFmpeg build. Keep new audio features on the
+side that owns their contract. `python scripts/audio_boundary_check.py
+--sibling ..\book-audio-production` fails if either side starts handling the
+other's contract or importing the other's package, and prints the sibling's
+FFmpeg pin for comparison with the `ffmpeg_version` in Audio Master manifests.
 
 ## Game Scene Prototype Builder V1A
 
