@@ -52,7 +52,8 @@ def test_export_reads_svgs_from_the_batch_folder(tmp_path: Path, monkeypatch: py
 
     exported = json.loads(result.manifest_path.read_text(encoding="utf-8"))
     assert exported["items"][0]["source_svg"]["filename"] == f"{batch.batch_id}/quote-001.svg"
-    assert sorted(path.name for path in (tmp_path / "out").iterdir() if path.suffix != ".json") == [
+    trace_files = {"MANUAL-STEPS.md", "history.jsonl"}
+    assert sorted(path.name for path in (tmp_path / "out").iterdir() if path.suffix != ".json" and path.name not in trace_files) == [
         "quote-001-print.pdf",
         "quote-001@1x.png",
     ]

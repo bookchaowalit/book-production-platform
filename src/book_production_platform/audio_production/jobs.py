@@ -8,6 +8,7 @@ import os
 import shutil
 import tempfile
 import time
+import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -17,8 +18,10 @@ from typing import Any
 from pydantic import ValidationError
 
 from book_production_platform.audio_ir import AudioIR
+from book_production_platform.production_trace import TraceRecorder
 
 from .errors import AudioProductionError
+from .manual import build_audacity_guide
 from .presets import (
     MASTERING_RECIPE_VERSION,
     MAX_LOCK_WAIT_SECONDS,
@@ -42,6 +45,9 @@ _RECEIPT_SCHEMA = "audio-master.receipt.v1"
 _MAX_IR_BYTES = 1024 * 1024
 _MAX_MANIFEST_BYTES = 1024 * 1024
 _MAX_RECEIPT_BYTES = 4096
+TOOL_ID = "audio-master-v1a"
+ENGINE_VERSION = "audio-master.v1a/ffmpeg-loudnorm-2pass"
+FAILED_TRACE_DIR = "failed"
 
 
 @dataclass(frozen=True)
@@ -191,6 +197,13 @@ def _loudnorm_graph(preset: MasteringPreset, *, mono_measurement: LoudnessStats 
     return "loudnorm=" + ":".join(values)
 
 
+def _filter_graph(preset: MasteringPreset, *, mono_measurement: LoudnessStats | None = None, chain: bool = True) -> str:
+    """The preset's fixed clean-up chain (in order) followed by ``loudnorm``."""
+
+    stages = [stage.graph() for stage in preset.chain] if chain else []
+    return ",".join([*stages, _loudnorm_graph(preset, mono_measurement=mono_measurement)])
+
+
 def _input_args(executable: Path, source: Path) -> list[str]:
     return [
         str(executable),
@@ -228,9 +241,13 @@ def _run_checked(argv: list[str], deadline: float) -> ProcessOutput:
     return result
 
 
-def _measure(executable: Path, source: Path, preset: MasteringPreset, deadline: float) -> tuple[LoudnessStats, float]:
+def _measure(
+    executable: Path, source: Path, preset: MasteringPreset, deadline: float, chain: bool = False
+) -> tuple[LoudnessStats, float]:
+    """Run a measurement pass; ``chain`` puts the preset's clean-up filters before ``loudnorm``."""
+
     result = _run_checked(
-        _input_args(executable, source) + ["-af", _loudnorm_graph(preset), "-f", "null", "-"],
+        _input_args(executable, source) + ["-af", _filter_graph(preset, chain=chain), "-f", "null", "-"],
         deadline,
     )
     return parse_loudness_stats(result.stderr), result.elapsed_seconds
@@ -330,6 +347,22 @@ def _reject(code: str) -> AudioJobResult:
     return AudioJobResult("rejected", "", None, None, None, {}, error_code=code)
 
 
+def _trace_failure(trace: TraceRecorder, root: Path, code: str) -> None:
+    """Record rejected jobs in the history too; tracing must never mask the real failure.
+
+    Failed jobs are traced under ``<output_root>/failed/<job_id>/``. Nothing is
+    written when the output root itself is unsafe (a symlink or not a directory).
+    """
+
+    try:
+        if code == "unsafe_output_path" or not _safe_path_components(root) or (root.exists() and (root.is_symlink() or not root.is_dir())):
+            return
+        trace.record_step("outcome", "failed", note=code)
+        trace.finish(status="failed", job_dir=root / FAILED_TRACE_DIR / trace.job_id, output_root=root)
+    except OSError:
+        pass
+
+
 def master_audio(
     audio_ir: AudioIR | dict[str, Any],
     input_root: str | Path,
@@ -338,35 +371,81 @@ def master_audio(
     *,
     timeout_s: int = MAX_PROCESS_TIMEOUT_SECONDS,
 ) -> AudioJobResult:
-    """Master one local PCM WAV and publish an integrity-checked WAV + QA report."""
+    """Master one local PCM WAV, publish an integrity-checked WAV + QA report, and trace the job.
+
+    Fresh accepted jobs write ``trace.json``, ``ir.json``, and
+    ``MANUAL-STEPS.md`` (Audacity) next to ``master.wav``; rejected jobs write
+    a trace under ``failed/<job_id>/``; both append ``<output_root>/history.jsonl``.
+    Exact replays return the stored artifacts and write nothing.
+    """
+    root = Path(output_root).absolute()
+    trace = TraceRecorder(
+        tool_id=TOOL_ID,
+        job_id=str(uuid.uuid4()),
+        engine_version=ENGINE_VERSION,
+        recipe_version=MASTERING_RECIPE_VERSION,
+        schema_version="audio-ir.v1",
+    )
+    try:
+        trace.input_json("audio_ir", audio_ir.model_dump(mode="json") if isinstance(audio_ir, AudioIR) else audio_ir)
+    except (TypeError, ValueError):
+        trace.inputs.append({"name": "audio_ir", "role": "request", "sha256": None})
+    result = _master(audio_ir, input_root, root, ffmpeg, timeout_s=timeout_s, trace=trace)
+    if result.status != "accepted":
+        _trace_failure(trace, root, result.error_code or "rejected")
+    return result
+
+
+def _master(
+    audio_ir: AudioIR | dict[str, Any],
+    input_root: str | Path,
+    root: Path,
+    ffmpeg: str | Path | None,
+    *,
+    timeout_s: int,
+    trace: TraceRecorder,
+) -> AudioJobResult:
     if isinstance(timeout_s, bool) or not isinstance(timeout_s, int) or not 1 <= timeout_s <= MAX_PROCESS_TIMEOUT_SECONDS:
         return _reject("invalid_timeout")
     try:
-        parsed = audio_ir if isinstance(audio_ir, AudioIR) else AudioIR.model_validate(audio_ir)
+        with trace.step("validate", "parse_audio_ir"):
+            parsed = audio_ir if isinstance(audio_ir, AudioIR) else AudioIR.model_validate(audio_ir)
     except ValidationError:
         return _reject("invalid_audio_ir")
     started = time.monotonic()
     deadline = started + timeout_s
     try:
-        source = _resolve_source(Path(input_root), parsed.source_path)
-        source_hash = _sha256_file(source, deadline)
-        source_info = inspect_pcm_wave(source)
         preset = PRESETS[parsed.preset]
-        if source_info.channels != preset.channels:
-            raise AudioProductionError("preset_channel_mismatch", "Selected preset requires a different channel count")
-        executable = _find_ffmpeg(ffmpeg)
-        version = _tool_version(executable, deadline)
+        with trace.step("validate", "inspect_source", preset=preset.name) as inspect_step:
+            source = _resolve_source(Path(input_root), parsed.source_path)
+            source_hash = _sha256_file(source, deadline)
+            source_info = inspect_pcm_wave(source)
+            trace.inputs.append({"name": "source", "role": "source", "file": source.name, "bytes": source_info.byte_size, "sha256": source_hash})
+            inspect_step.params.update({
+                "channels": source_info.channels,
+                "sample_rate": source_info.sample_rate,
+                "sample_width_bytes": source_info.sample_width_bytes,
+                "duration_seconds": round(source_info.duration_seconds, 6),
+            })
+            if source_info.channels != preset.channels:
+                raise AudioProductionError("preset_channel_mismatch", "Selected preset requires a different channel count")
+        with trace.step("toolchain", "ffmpeg_version") as version_step:
+            executable = _find_ffmpeg(ffmpeg)
+            version = _tool_version(executable, deadline)
+            version_step.params["ffmpeg_version"] = version
         ir_payload = parsed.model_dump(mode="json")
         ir_hash = hashlib.sha256(_canonical_json(ir_payload)).hexdigest()
-        fingerprint_payload = {
+        fingerprint_payload: dict[str, Any] = {
             "recipe": MASTERING_RECIPE_VERSION,
             "audio_ir_sha256": ir_hash,
             "source_sha256": source_hash,
             "ffmpeg_version": version,
             "preset": preset.name,
         }
+        if preset.chain:
+            # Presets without a clean-up chain keep their original fingerprints.
+            fingerprint_payload["filter_chain"] = [stage.graph() for stage in preset.chain]
         fingerprint = hashlib.sha256(_canonical_json(fingerprint_payload)).hexdigest()
-        root = Path(output_root).absolute()
         if not _safe_path_components(root):
             raise AudioProductionError("unsafe_output_path", "Output root contains a symlink")
         if root.exists() and (root.is_symlink() or not root.is_dir()):
@@ -387,43 +466,63 @@ def master_audio(
             staging_dir = Path(tempfile.mkdtemp(prefix=f"{fingerprint}.", dir=staging_root))
             master_path = staging_dir / "master.wav"
             try:
-                input_stats, analysis_seconds = _measure(executable, source, preset, deadline)
+                with trace.step("analyze", "measure_loudness", graph=_filter_graph(preset)) as measure_step:
+                    input_stats, analysis_seconds = _measure(executable, source, preset, deadline, bool(preset.chain))
+                    measure_step.params["measured"] = input_stats.to_dict()
                 if input_stats.integrated_lufs <= -70:
                     raise AudioProductionError("silent_audio", "Silent audio cannot be loudness mastered")
-                render_graph = _loudnorm_graph(preset, mono_measurement=input_stats)
+                render_graph = _filter_graph(preset, mono_measurement=input_stats)
                 render_started = time.monotonic()
-                render_result = _run_checked(
-                    _input_args(executable, source)
-                    + [
-                        "-af",
-                        render_graph,
-                        "-ar",
-                        str(OUTPUT_SAMPLE_RATE),
-                        "-c:a",
-                        OUTPUT_CODEC,
-                        "-map_metadata",
-                        "-1",
-                        "-map_metadata:s:a",
-                        "-1",
-                        "-map_chapters",
-                        "-1",
-                        "-f",
-                        "wav",
-                        "-y",
-                        str(master_path),
-                    ],
-                    deadline,
-                )
+                with trace.step(
+                    "render", "ffmpeg_master", graph=render_graph, chain=[stage.to_dict() for stage in preset.chain],
+                    sample_rate=OUTPUT_SAMPLE_RATE, codec=OUTPUT_CODEC, strip_metadata=True,
+                ) as render_step:
+                    render_result = _run_checked(
+                        _input_args(executable, source)
+                        + [
+                            "-af",
+                            render_graph,
+                            "-ar",
+                            str(OUTPUT_SAMPLE_RATE),
+                            "-c:a",
+                            OUTPUT_CODEC,
+                            "-map_metadata",
+                            "-1",
+                            "-map_metadata:s:a",
+                            "-1",
+                            "-map_chapters",
+                            "-1",
+                            "-f",
+                            "wav",
+                            "-y",
+                            str(master_path),
+                        ],
+                        deadline,
+                    )
+                    render_stats = parse_loudness_stats(render_result.stderr)
+                    render_step.params["normalization_type"] = render_stats.normalization_type
+                    render_step.outputs = ["master.wav"]
                 render_seconds = max(render_result.elapsed_seconds, time.monotonic() - render_started)
-                render_stats = parse_loudness_stats(render_result.stderr)
-                output_info = inspect_pcm_wave(master_path, output=True)
-                output_stats, qa_measure_seconds = _measure(executable, master_path, preset, deadline)
-                checks = master_qa(source_info, output_info, output_stats, preset)
-                if not all(checks.values()):
-                    raise AudioProductionError("audio_qa_failed", "Master WAV did not meet preset QA targets")
+                with trace.step("qa", "master_qa") as qa_step:
+                    output_info = inspect_pcm_wave(master_path, output=True)
+                    output_stats, qa_measure_seconds = _measure(executable, master_path, preset, deadline)
+                    checks = master_qa(source_info, output_info, output_stats, preset)
+                    qa_step.params.update({"measured": output_stats.to_dict(), "checks": checks})
+                    if not all(checks.values()):
+                        qa_step.status = "failed"
+                        raise AudioProductionError("audio_qa_failed", "Master WAV did not meet preset QA targets")
                 if _sha256_file(source, deadline) != source_hash:
                     raise AudioProductionError("source_changed_during_processing", "Source WAV changed while it was being mastered")
                 master_hash = _sha256_file(master_path, deadline)
+                preset_record: dict[str, Any] = {
+                    "name": preset.name,
+                    "integrated_lufs": preset.integrated_lufs,
+                    "true_peak_dbtp": preset.true_peak_dbtp,
+                    "loudness_range_lu": preset.loudness_range_lu,
+                    "dual_mono": preset.dual_mono,
+                }
+                if preset.chain:
+                    preset_record["filter_chain"] = [stage.to_dict() for stage in preset.chain]
                 manifest: dict[str, Any] = {
                     "schema_version": _MANIFEST_SCHEMA,
                     "status": "accepted",
@@ -435,13 +534,7 @@ def master_audio(
                     "source_relative_path": parsed.source_path,
                     "recipe_version": MASTERING_RECIPE_VERSION,
                     "ffmpeg_version": version,
-                    "preset": {
-                        "name": preset.name,
-                        "integrated_lufs": preset.integrated_lufs,
-                        "true_peak_dbtp": preset.true_peak_dbtp,
-                        "loudness_range_lu": preset.loudness_range_lu,
-                        "dual_mono": preset.dual_mono,
-                    },
+                    "preset": preset_record,
                     "measurements": {
                         "before": input_stats.to_dict(),
                         "after": output_stats.to_dict(),
@@ -492,6 +585,8 @@ def master_audio(
                 if artifact_dir.exists() or artifact_dir.is_symlink():
                     raise AudioProductionError("output_collision", "Fingerprint output path already exists")
                 staging_dir.replace(artifact_dir)
+                trace.record_step("publish", "publish_master", outputs=["master.wav", "qa-manifest.json"], fingerprint=fingerprint)
+                _finish_trace(trace, parsed, preset, manifest, artifact_dir, root)
                 return AudioJobResult(
                     status="accepted",
                     fingerprint=fingerprint,
@@ -508,3 +603,36 @@ def master_audio(
         return _reject(error.code)
     except OSError:
         return _reject("audio_io_error")
+
+
+def _finish_trace(
+    trace: TraceRecorder,
+    parsed: AudioIR,
+    preset: MasteringPreset,
+    manifest: dict[str, Any],
+    artifact_dir: Path,
+    root: Path,
+) -> None:
+    """Write ``ir.json``, ``trace.json``, ``MANUAL-STEPS.md`` next to the published master (best effort)."""
+
+    try:
+        ir_payload = parsed.model_dump(mode="json")
+        _atomic_write(artifact_dir / "ir.json", json.dumps(ir_payload, ensure_ascii=False, sort_keys=True, indent=2).encode("utf-8") + b"\n")
+        trace.ir_document(ir_payload, schema=parsed.schema_version, path=artifact_dir / "ir.json")
+        trace.artifact(artifact_dir / "master.wav", media_type="audio/wav")
+        trace.artifact(artifact_dir / "qa-manifest.json", media_type="application/json")
+        checks = manifest["qa"]["checks"]
+        trace.finish(
+            status="accepted",
+            job_dir=artifact_dir,
+            output_root=root,
+            guide=build_audacity_guide(parsed, preset, manifest),
+            qa={"status": "passed", "checks": [name for name, passed in checks.items() if passed]},
+        )
+    except OSError:
+        # The master is already published and receipt-verified; a trace write
+        # failure must not turn it into a rejected job.
+        pass
+
+
+__all__ = ["FAILED_TRACE_DIR", "TOOL_ID", "AudioJobResult", "master_audio"]

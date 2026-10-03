@@ -55,7 +55,18 @@ def _run_brief(args: argparse.Namespace) -> int:
     if result.status == "complete" and result.batch is not None:
         output = Path(args.output)
         output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(json.dumps(result.batch, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        # Metadata only (adapter, calls, chosen templates): ``batch`` copies it
+        # into the job trace so the history shows the items were AI-proposed.
+        proposal = {
+            "adapter": result.adapter,
+            "adapter_version": result.adapter_version,
+            "mode": adapter.mode,
+            "model_calls": result.model_calls,
+            "templates": list(result.templates),
+            "variants": list(result.variants),
+            "shorten_requested": result.shorten_requested,
+        }
+        output.write_text(json.dumps({**result.batch, "proposal": proposal}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         summary["batch_path"] = str(output)
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     if result.status == "needs_input":
@@ -143,7 +154,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("input error: expected an items array of objects", file=sys.stderr)
         return 2
     try:
-        result = run_batch(items, args.output, args.idempotency_key)
+        proposal = payload.get("proposal") if isinstance(payload, dict) else None
+        result = run_batch(items, args.output, args.idempotency_key, ai_proposal=proposal if isinstance(proposal, dict) else None)
     except IdempotencyConflict as exc:
         print(f"idempotency error: {exc}", file=sys.stderr)
         return 2

@@ -12,7 +12,7 @@ import sys
 import tempfile
 import time
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from importlib import resources
 from pathlib import Path
 from typing import Any
@@ -25,6 +25,7 @@ from book_production_platform.bim_ir import (
 )
 from book_production_platform.bim_production.errors import BimProductionError
 from book_production_platform.bim_production.extract import build_extraction
+from book_production_platform.bim_production.manual import build_takeoff_guide
 from book_production_platform.bim_production.qa import (
     build_qa_manifest,
     render_qa_manifest_json,
@@ -44,6 +45,14 @@ from book_production_platform.bim_production.runtime import (
     stage_ifc_input,
     validate_ifc_source,
 )
+from book_production_platform.bim_production.tracing import (
+    record_artifact,
+    record_source_file,
+    trace_job_dir,
+    trace_root,
+    write_ir_file,
+)
+from book_production_platform.production_trace import TraceRecorder
 
 RECIPE_VERSION = "bim-takeoff-recipe.v1"
 RECEIPT_SCHEMA_VERSION = "bim-takeoff-receipt.v1"
@@ -74,6 +83,7 @@ class BimJobResult:
     coverage_gap_count: int
     model_calls: int
     receipt_recovered: bool = False
+    trace_job_id: str | None = field(default=None, compare=False)
 
 
 def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -359,6 +369,82 @@ def _rename_directory(source: Path, target: Path) -> None:
             time.sleep(0.1)
 
 
+_TRACE_STATUS = {
+    "complete": "accepted",
+    "partial": "accepted",
+    "replayed": "replayed",
+    "needs_input": "needs_input",
+}
+
+
+class _TraceSession:
+    """One takeoff run's trace; persisted under ``<output_root>/.trace/`` once the IR is valid."""
+
+    def __init__(self, *, ifc_path: Path, output_root: Path, timeout_s: int) -> None:
+        self.trace = TraceRecorder(
+            tool_id="bim-v1a",
+            engine_version="bim-worker.v1",
+            recipe_version=RECIPE_VERSION,
+            schema_version="bim-takeoff.v1",
+        )
+        self.ifc_path = ifc_path
+        self.output_root = output_root
+        self.timeout_s = timeout_s
+        self.ir: BimTakeoffIR | None = None
+        self.source_ok = False
+        self.root: Path | None = None
+        self.job_dir: Path | None = None
+
+    def _persist(self, status: str, *, report: dict[str, Any] | None, error_code: str | None) -> str | None:
+        if self.ir is None:
+            return None
+        trace = self.trace
+        try:
+            root = self.root or _safe_root(self.output_root)
+            directory = trace_job_dir(root, trace.job_id)
+            directory.mkdir(parents=True, exist_ok=True)
+            ir_value = self.ir.model_dump(mode="json")
+            trace.input_json("bim_takeoff_ir", ir_value)
+            if self.source_ok:
+                record_source_file(trace, "ifc_source", self.ifc_path)
+            ir_file = write_ir_file(directory, ir_value)
+            trace.ir_document(ir_value, schema=self.ir.schema_version, path=ir_file)
+            record_artifact(trace, ir_file, job_dir=directory, media_type="application/json", role="ir")
+            if report is not None and self.job_dir is not None:
+                for name in JOB_ARTIFACTS:
+                    media = "text/csv" if name.endswith(".csv") else "application/json"
+                    record_artifact(trace, self.job_dir / name, job_dir=directory, media_type=media)
+            if error_code is not None:
+                trace.record_step("outcome", "failed", note=error_code)
+            qa = None
+            if report is not None:
+                qa = {"status": report.get("status"), "checks": report.get("coverage_gaps", [])}
+            trace.finish(
+                status=status, job_dir=directory, output_root=trace_root(root),
+                guide=build_takeoff_guide(self.ir, report), qa=qa,
+            )
+        except (BimProductionError, OSError, ValueError, TypeError, KeyError):
+            return None
+        return trace.job_id
+
+    def finalize(self, result: BimJobResult) -> BimJobResult:
+        """Trace the returned outcome; a tracing problem never changes it."""
+
+        status = _TRACE_STATUS.get(result.status, "failed")
+        report: dict[str, Any] | None = None
+        if status in {"accepted", "replayed"} and self.job_dir is not None:
+            try:
+                report = _load_receipt(self.job_dir / "takeoff.json")
+            except BimProductionError:
+                report = None
+        error = result.error_code if status == "failed" else None
+        job_id = self._persist(status, report=report, error_code=error)
+        return replace(result, trace_job_id=job_id) if job_id else result
+
+    def fail(self, code: str) -> None:
+        self._persist("failed", report=None, error_code=code)
+
+
 def build_bim_takeoff_job(
     ir_path: Path,
     ifc_path: Path,
@@ -373,23 +459,76 @@ def build_bim_takeoff_job(
     between the publish rename and the receipt write) is rebuilt in staging;
     the receipt is written only when the rebuild reproduces every published
     artifact byte for byte. Anything else fails closed, leaving it untouched.
+
+    Every run with a valid takeoff IR also records a production trace under
+    ``<output_root>/.trace/`` (accepted, replayed, needs_input, and failed runs,
+    including raised errors, which are re-raised unchanged).
     """
 
+    session = _TraceSession(ifc_path=ifc_path, output_root=output_root, timeout_s=timeout_s)
+    try:
+        result = _run_bim_takeoff_job(
+            ir_path, ifc_path, output_root, freecadcmd, ifc_site_packages, timeout_s, session
+        )
+    except BimProductionError as error:
+        session.fail(error.code)
+        raise
+    except (OSError, ValueError, TypeError) as error:
+        session.fail(type(error).__name__)
+        raise
+    return session.finalize(result)
+
+
+def _worker_summary(ir: BimTakeoffIR, timeout_s: int) -> dict[str, object]:
+    return {
+        "protocol": "bim-worker.v1",
+        "mode": "takeoff",
+        "element_classes": list(ir.element_classes),
+        "expected_schemas": ["IFC2X3", "IFC4"],
+        "max_instances": 250_000,
+        "timeout_s": timeout_s,
+        "reads": "occurrence-level IfcElementQuantity via IsDefinedBy",
+    }
+
+
+def _run_bim_takeoff_job(
+    ir_path: Path,
+    ifc_path: Path,
+    output_root: Path,
+    freecadcmd: Path,
+    ifc_site_packages: Path,
+    timeout_s: int,
+    session: _TraceSession,
+) -> BimJobResult:
+    trace = session.trace
     try:
         ir = load_bim_takeoff_ir(ir_path)
     except BimTakeoffIRError as error:
         raise BimProductionError("invalid_bim_takeoff_ir") from error
-    source_sha256 = validate_ifc_source(ifc_path)
-    ifc_schema = detect_ifc_schema(ifc_path)
-    fingerprint = compute_fingerprint(ir, source_sha256, ifc_schema)
+    session.ir = ir
+    trace.record_step(
+        "validate", "parse_bim_takeoff_ir", schema=ir.schema_version,
+        element_classes=list(ir.element_classes), output_units=ir.output_units,
+    )
+    with trace.step("validate", "ifc_source_and_schema") as source_step:
+        source_sha256 = validate_ifc_source(ifc_path)
+        session.source_ok = True
+        ifc_schema = detect_ifc_schema(ifc_path)
+        source_step.params = {"ifc_schema": ifc_schema, "source_sha256": source_sha256}
+    with trace.step("fingerprint", "content_address", recipe=RECIPE_VERSION, report_schema=REPORT_SCHEMA_VERSION) as step:
+        fingerprint = compute_fingerprint(ir, source_sha256, ifc_schema)
+        step.outputs = [fingerprint]
 
     root = _safe_root(output_root)
+    session.root = root
     jobs_dir = _safe_root(root / JOB_DIR)
     receipts_dir = _safe_root(root / RECEIPT_DIR)
     job_dir = jobs_dir / fingerprint
+    session.job_dir = job_dir
     receipt_path = receipts_dir / f"{fingerprint}.json"
 
-    existing = _check_existing_job(job_dir, receipt_path, fingerprint)
+    with trace.step("replay", "check_published_job"):
+        existing = _check_existing_job(job_dir, receipt_path, fingerprint)
     if existing is not None:
         return existing
 
@@ -406,8 +545,10 @@ def build_bim_takeoff_job(
                 shutil_rmtree(directory)
             directory.mkdir(parents=True)
         try:
-            live_identity = inspect_bim_runtime(freecadcmd, ifc_site_packages)
-            live_runtime = runtime_identity_payload(live_identity)
+            with trace.step("runtime", "inspect_bim_runtime") as runtime_step:
+                live_identity = inspect_bim_runtime(freecadcmd, ifc_site_packages)
+                live_runtime = runtime_identity_payload(live_identity)
+                runtime_step.params = {"runtime": live_runtime}
             staged, staged_hash = stage_ifc_input(ifc_path, worker_dir)
             if staged_hash != source_sha256:
                 raise BimProductionError("takeoff_integrity_error")
@@ -424,14 +565,20 @@ def build_bim_takeoff_job(
             request_path.write_text(
                 json.dumps(request, sort_keys=True), encoding="utf-8"
             )
-            worker_result = run_bim_worker(
-                freecadcmd,
-                ifc_site_packages,
-                "takeoff",
-                request_path,
-                worker_dir,
-                timeout_s=timeout_s,
-            )
+            with trace.step("worker", "ifcopenshell_takeoff", **_worker_summary(ir, timeout_s)) as worker_step:
+                worker_result = run_bim_worker(
+                    freecadcmd,
+                    ifc_site_packages,
+                    "takeoff",
+                    request_path,
+                    worker_dir,
+                    timeout_s=timeout_s,
+                )
+                worker_step.params["exit_code"] = worker_result.exit_code
+                worker_step.params["elapsed_seconds"] = round(worker_result.elapsed_seconds, 6)
+                if worker_result.error_code is not None or worker_result.result_json is None:
+                    worker_step.status = "failed"
+                    worker_step.note = worker_result.error_code or "worker_failed"
             if worker_result.error_code is not None or worker_result.result_json is None:
                 if recovering:
                     raise BimProductionError("takeoff_integrity_error")
@@ -453,8 +600,12 @@ def build_bim_takeoff_job(
                 extraction_records, list
             ):
                 raise BimProductionError("worker_failed")
-            extraction = build_extraction(extraction_records)
-            report = build_takeoff_report(ir, source_sha256, validation, extraction)
+            with trace.step("extract", "normalize_quantities_to_si") as extract_step:
+                extraction = build_extraction(extraction_records)
+                extract_step.params = {"rows": len(extraction.rows), "coverage_gaps": len(extraction.findings)}
+            with trace.step("report", "aggregate_exact_keys") as report_step:
+                report = build_takeoff_report(ir, source_sha256, validation, extraction)
+                report_step.params = {"status": report["status"], "aggregates": len(report["aggregates"])}  # type: ignore[arg-type]
             if report["status"] == "needs_input":
                 if recovering:
                     raise BimProductionError("takeoff_integrity_error")
@@ -482,7 +633,9 @@ def build_bim_takeoff_job(
             (build_dir / "takeoff.json").write_bytes(report_payload)
             write_takeoff_csv(extraction.rows, build_dir / "takeoff.csv")
             (build_dir / "qa-manifest.json").write_bytes(manifest_payload)
-            qa = verify_takeoff_artifacts(build_dir)
+            with trace.step("qa", "verify_takeoff_artifacts") as qa_step:
+                qa = verify_takeoff_artifacts(build_dir)
+                qa_step.params = {"status": qa.status, "rows": qa.row_count, "coverage_gaps": qa.coverage_gap_count}
             if qa.status == "needs_input":
                 if recovering:
                     raise BimProductionError("takeoff_integrity_error")
@@ -511,14 +664,16 @@ def build_bim_takeoff_job(
                     for name in JOB_ARTIFACTS
                 },
             }
-            if recovering:
-                if not _published_matches_rebuild(job_dir, build_dir):
-                    raise BimProductionError("takeoff_integrity_error")
-            else:
-                _rename_directory(build_dir, job_dir)
-            # A crash between the rename and this write leaves a published job
-            # without a receipt; the next run takes the recovering path above.
-            _write_receipt(receipt_path, receipt)
+            with trace.step("publish", "recover_receipt" if recovering else "atomic_publish_and_receipt") as publish_step:
+                if recovering:
+                    if not _published_matches_rebuild(job_dir, build_dir):
+                        raise BimProductionError("takeoff_integrity_error")
+                else:
+                    _rename_directory(build_dir, job_dir)
+                # A crash between the rename and this write leaves a published job
+                # without a receipt; the next run takes the recovering path above.
+                _write_receipt(receipt_path, receipt)
+                publish_step.outputs = list(JOB_ARTIFACTS)
             return BimJobResult(
                 status=qa.status,
                 fingerprint=fingerprint,

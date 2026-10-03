@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import get_args
 
 import pytest
 from pydantic import ValidationError
@@ -46,4 +47,9 @@ def test_json_schema_matches_the_allowlisted_audio_ir_contract() -> None:
         "podcast-mono.v1",
         "podcast-stereo.v1",
         "music-stereo.v1",
+        "apple-music-stereo.v1",
+        "broadcast-r128-stereo.v1",
+        "audiobook-acx-mono.v1",
+        "voice-clean-mono.v1",
     ]
+    assert schema["properties"]["preset"]["enum"] == list(get_args(AudioIR.model_fields["preset"].annotation))

@@ -176,6 +176,42 @@ structured 0 calls, ≤ 2 calls/job, canary 0) AC-S3D-01a ยังต้อง 
 ชุด 30 เคส: structured 10 / clear 10 / ambiguous 5 / adversarial 5 ไทย/อังกฤษ
 รวมอย่างละ 15 (หมวดที่มี 5 เคสต่างกันได้ 1)
 
+### Job history, trace & manual steps
+
+งาน `scene compose` ใหม่ทุกงาน (ผ่านหรือไม่ผ่าน) บันทึก `production-trace.v1`
+ไว้ที่ `<output-root>/traces/<job_id>/` และเพิ่มหนึ่งบรรทัดใน
+`<output-root>/history.jsonl` โฟลเดอร์ `<fingerprint>/` ยังมีไฟล์สามรายการเดิม
+พอดี (replay ตรวจแบบนั้น) trace จึงอ้าง artifact ด้วย path สัมพัทธ์
+`../../<fingerprint>/render.png` ส่วน replay ที่ตรงกันไม่เขียนอะไรเพิ่ม และ
+output root ที่เป็น symlink จะไม่ถูกเขียน trace
+
+| ไฟล์ | เนื้อหา |
+|---|---|
+| `traces/<job_id>/trace.json` | hash ของ SceneIR และ GLB, ขั้นตอน (parse, GLB preflight, Blender build/version, build scene พร้อมค่าไฟ/world/พื้น, reopen+render, verify PNG, publish), sha256 ของ `scene.blend`/`render.png`/`qa-manifest.json` |
+| `traces/<job_id>/ir.json` | SceneIR ที่ engine ใช้จริง |
+| `traces/<job_id>/MANUAL-STEPS.md` | ขั้นตอนทำเองใน Blender 5.2.2 LTS: import glTF, Product Root, World/พื้น, กล้อง (เลนส์ 55 mm, ตำแหน่ง/มุม หรือสูตร fit), ไฟ Area แต่ละดวง (Power/Size/Color/ตำแหน่ง/มุม), EEVEE 64 samples, AgX, ความละเอียด, PNG และ checks; ทางเลือก KeyShot |
+
+```bash
+python -m book_production_platform.production_trace history --root .runtime/jobs
+python -m book_production_platform.production_trace manual  --root .runtime/jobs <job_id>
+python -m book_production_platform.production_trace verify  --root .runtime/jobs <job_id>
+```
+
+`scene3d.brief_cli brief` เขียน `<scene>.proposal.json` (adapter, mode,
+จำนวน model call, preset ที่เลือก — ไม่มีข้อความ brief) ข้างไฟล์ SceneIR และ
+`scene compose` บันทึกเป็น AI proposal ของ trace ค่าที่ขึ้นกับขนาดสินค้า
+(scale ของ Product Root และระยะกล้องของ composition แบบ `*-fit`) วัดใน Blender
+คู่มือจึงให้สูตรและบอกให้คัดลอกจาก `scene.blend`
+
+Preset ใหม่ (ใช้ได้ใน SceneIR แบบ structured แต่ V1B adapter ยังไม่เสนอ):
+lighting `high-key-white.v1`, `dramatic-rim.v1`; background `studio-white.v1`,
+`transparent.v1` (PNG RGBA ไม่มีพื้น); composition `orbit-fit-000.v1` …
+`orbit-fit-315.v1` ทุก 45° สร้างชุด turntable ได้ด้วย
+`python -m book_production_platform.scene3d.turntable --scene scene.json --output-dir turntable --steps 8`
+(ได้ `frame-NNN.json` แล้ว compose ทีละไฟล์) preset ใหม่ทดสอบระดับ IR/spec
+เท่านั้นเพราะยังไม่ได้ render ใน Blender จริง; ตาราง parity และ roadmap:
+[`docs/parity/scene3d.md`](docs/parity/scene3d.md)
+
 ## Pipeline: Scene-to-Graphics (3D Scene → PNG → Graphics Template Batch)
 
 `book-production pipeline scene-to-graphics` เชื่อมสอง product ที่มีอยู่เข้าด้วยกันแบบ
@@ -335,6 +371,37 @@ structured / 14 clear / 6 ambiguous / 6 adversarial (40 is not divisible by 6,
 so the ambiguous/adversarial minimum is floor(40/6) = 6), half Thai/half
 English per category.
 
+### Job history, trace & manual steps
+
+Every fresh `graphics batch` (accepted, partial, or rejected, including an
+unexpected error, which is still raised) writes into its batch folder and the
+output root:
+
+| File | What |
+|---|---|
+| `<batch_id>/trace.json` | batch input hash, asset hashes, per-item steps (compile template with node boxes/font sizes/line counts, render SVG, render PNG, QA with WCAG contrast, write), rejected items with their error code, artifact sha256 |
+| `<batch_id>/ir.json` | `graphics-batch-ir.v1`: the exact `GraphicIR` of every accepted item |
+| `<batch_id>/MANUAL-STEPS.md` | Figma steps per item: Frame W×H, every layer in paint order (rectangles with X/Y/W/H and fill hex, image slots, text boxes with font, size, line height = size × 1.2 px, colour, alignment, and the exact lines the engine wrapped, Thai included), PNG/SVG export; Canva and Photoshop equivalents; contrast checks |
+| `history.jsonl` | one metadata line per batch |
+
+`graphics export` traces the print export the same way in its output folder
+(Figma PNG at `scale`x, then Photoshop Image Size at the DPI without resample
+and Save a Copy as PDF); use one output folder per export. Exact replays write
+nothing. Traces hold hashes, ids, sizes, and counts only, never content text.
+
+```bash
+python -m book_production_platform.production_trace history --root .runtime/graphics/output
+python -m book_production_platform.production_trace manual  --root .runtime/graphics/output <batch_id>
+python -m book_production_platform.production_trace verify  --root .runtime/graphics/output <batch_id>
+```
+
+`graphics brief` adds a metadata-only `proposal` block (adapter, mode, model
+calls, chosen templates) to the proposed batch; `graphics batch` records it as
+the trace's AI proposal. New in this pass: one item with
+`"variants": ["square", "portrait", "story"]` expands to one item per size
+(`<request_id>-<variant>`), and an advisory WCAG AA contrast report per text
+layer. Feature parity and roadmap: [`docs/parity/graphics.md`](docs/parity/graphics.md).
+
 ## Spreadsheet V1A Workbook Builder
 
 Spreadsheet V1A converts explicit typed tables into editable XLSX workbooks
@@ -400,6 +467,37 @@ EVAL-XLS-brief40 is synthetic and split 14 structured / 14 clear / 6 ambiguous /
 6 adversarial, half Thai and half English. Forty cases cannot reach
 ⌈40/3⌉×2 + ⌈40/6⌉×2 = 42, so the composition test uses the floors.
 
+### Job history, trace & manual steps
+
+Every fresh `spreadsheet build` / `brief` job — accepted or rejected (invalid
+request, typed-value or formula error, reopen-QA failure) — writes into its
+`job-<key hash>/` folder and the output root. Replays write nothing.
+
+| File | What |
+|---|---|
+| `job-*/trace.json` | request hash + table/row/column/formula counts, steps (parse, build IR, evaluate formulas, render XLSX, one `write_sheet` step per sheet with ranges, number formats, dropdown and highlight ranges, QA, publish), `workbook.xlsx` sha256, AI proposal metadata for `brief` |
+| `job-*/ir.json` | the exact `workbook-ir.v1` the engine rendered (accepted jobs) |
+| `job-*/MANUAL-STEPS.md` | Microsoft Excel 365 steps: create and rename every sheet in order, title and header styling (bold, `#D9EAF7` fill, borders), each data row (text Excel would reinterpret is typed with a leading `'`), wrap text, the exact custom number format per column, column widths, Freeze Top Row, dropdown lists, conditional-format rules with hex fills, every named range (`='Detail'!$B$2:$B$3`), then every formula cell with its exact text (typed cell by cell, never drag-filled) and the engine's cached value to expect; Google Sheets / LibreOffice Calc menu equivalents |
+| `history.jsonl` | one metadata line per job |
+
+Traces and history hold hashes, counts, sheet names, and ranges only — never
+cell values, labels, the title, or the raw idempotency key. The manual guide
+holds the values a person types, like the workbook itself.
+
+```bash
+python -m book_production_platform.production_trace history --root .runtime/spreadsheet/output
+python -m book_production_platform.production_trace manual  --root .runtime/spreadsheet/output <job_id>
+python -m book_production_platform.production_trace verify  --root .runtime/spreadsheet/output <job_id>
+```
+
+New request fields in this pass (all optional; requests without them keep the
+same idempotency hash): `columns[].number_format` (allowlisted Excel format
+codes such as `#,##0.00`, `"฿"#,##0.00`, `0%`, `dd/mm/yyyy`),
+`columns[].allowed_values` (dropdown list on a text column), and
+`conditional_formats[]` (`table`, `column`, `operator`, `value`, `value2` for
+`between`, `fill_color`). Reopen QA checks every dropdown and highlight range.
+Feature parity and roadmap: [`docs/parity/spreadsheet.md`](docs/parity/spreadsheet.md).
+
 ## Data SQL/Pipeline Builder V1A
 
 Data Pipeline Builder converts a typed `pipeline-request.v1` operation graph
@@ -460,7 +558,8 @@ card; there is no deployment target.
 `data pipeline propose` turns a question about one table into a
 `pipeline-request.v1` and then builds it through the normal job. The model
 sees only the table schema and at most three truncated sample rows. It may
-only propose ordered steps: `source`, `select`, `filter`, `aggregate`, `sort`,
+only propose ordered steps: `source`, `select`, `filter` (equality, null, or
+`operator` `gt`/`gte`/`lt`/`lte`/`ne`), `distinct`, `aggregate`, `sort`,
 and `limit`. The spec also registers `join`, but it is rejected
 (`join_not_supported`) because the V1A engine has a single source. SQL text, a
 SQL-shaped field, or any write operation rejects the proposal. Tables and
@@ -492,6 +591,49 @@ book-production data pipeline brief-shadow `
 
 EVAL-DPL-question40 is synthetic and split 14 / 14 / 6 / 6 (structured /
 clear / ambiguous / adversarial), half Thai and half English.
+
+### Job history, trace & manual steps
+
+Every fresh `data pipeline build` / `propose` job writes a trace; exact replays
+write nothing. Accepted jobs keep their four plan artifacts plus three trace
+sidecars in `jobs/<fingerprint>/` (the receipt does not cover the sidecars, and
+replay ignores exactly those three names — any other extra file still fails
+closed). Rejected jobs are traced under `traces/<id>/` (not when the output
+root itself is unsafe).
+
+| File | What |
+|---|---|
+| `jobs/<fingerprint>/trace.json` | request hash, source column / node counts, one `node` step per operation in compile order (op, columns, operator, direction, limit, group-by, metric ops — never filter values), compile (SQL sha256, parameter types), `EXPLAIN` plan size, QA, artifact sha256, AI proposal metadata for `propose` |
+| `jobs/<fingerprint>/ir.json` | the exact `pipeline-ir.v1` (contains filter values; 0600) |
+| `jobs/<fingerprint>/MANUAL-STEPS.md` | Excel Power Query steps: Get Data, set each column type, then one Applied Step per node renamed to its `node_id` (Filter Rows with the exact operator and value, Choose Columns, Remove Duplicates, Group By ▸ Advanced, Sort with the compiler's tie-breakers, Keep Top Rows, Append Queries; branches become Reference queries), each with its M formula; then the same `SELECT` for DB Browser for SQLite (values inlined) and DBeaver (bind parameters in order); checks against the output columns and the `pipeline.sql` sha256. Contains filter values (0600) |
+| `history.jsonl` | one metadata line per job |
+
+New nodes in this pass: `filter_compare` (`column`, `operator` `gt`/`gte`/`lt`/
+`lte`/`ne`, `value`; ordered comparisons on integer/decimal/date) and
+`distinct`. Requests without `operator` keep their fingerprint.
+
+Opt-in execution with CSV export (production against real sources stays
+plan-only; this runs the same compiled `SELECT` read-only in memory over rows
+you already hold):
+
+```bash
+book-production data pipeline run --input pipeline-request.json --rows rows.json --output-root .runtime/data-pipeline
+```
+
+It publishes the plan job first, then writes `results/<run_id>/results.csv`,
+`execution-manifest.json` (row count, columns, CSV and values sha256), its own
+`trace.json`, `ir.json`, and a `MANUAL-STEPS.md` whose checks include the row
+count, numeric column totals, and the first row. CSV text starting with `=`,
+`+`, `-`, `@` is prefixed with `'`. Results contain data: keep the output root
+private. CLI output is metadata only.
+
+```bash
+python -m book_production_platform.production_trace history --root .runtime/data-pipeline
+python -m book_production_platform.production_trace manual  --root .runtime/data-pipeline <job_id>
+python -m book_production_platform.production_trace verify  --root .runtime/data-pipeline <job_id>
+```
+
+Feature parity and roadmap: [`docs/parity/data-pipeline.md`](docs/parity/data-pipeline.md).
 
 ## CAD Parametric Part Generator V1A
 
@@ -572,6 +714,38 @@ OS sandbox for untrusted files and its geometric checks are not engineering,
 structural, safety, manufacturing, or regulatory certification. Monetary cost
 is `unknown`; the standard build path makes zero model calls.
 
+### Job history, trace & manual steps
+
+Every `cad build` run with a valid PartIR and a safe output root records a
+`production-trace.v1` under `<output-root>/.trace/` - accepted, replayed, and
+rejected runs alike (invalid PartIR still writes nothing). The content-addressed
+`<fingerprint>/` directory keeps exactly its five artifacts; the trace lives
+beside it:
+
+| File | What |
+|---|---|
+| `.trace/history.jsonl` | one metadata line per run (`job_id`, status, artifacts, `ai_used`) |
+| `.trace/jobs/<job_id>/trace.json` | input hashes, steps (validate, runtime, fingerprint, worker build summary with sketch constraints / Pad length / Pocket Through all, QA volume+bounds+bores, publish, drawing), artifact sha256 |
+| `.trace/jobs/<job_id>/ir.json` | the canonical PartIR the worker executed |
+| `.trace/jobs/<job_id>/MANUAL-STEPS.md` | click-level FreeCAD 1.0 Part Design recipe (Body, PlateSketch with 12 constraints, Pad, HoleSketch at Z = thickness with 4 circles, Pocket Through all, STEP/STL export) with checks against the analytical volume, bounding box, hole centers, webs, and the measured QA values; Fusion 360 / Onshape / SolidWorks equivalents |
+| `.trace/jobs/<job_id>/drawing.svg`, `drawing.dxf` | dimensioned 1:1 shop drawing (top + side view, hole table, title block); DXF R12 in mm with layers OUTLINE/HOLES/CENTER/DIMENSIONS/TEXT |
+
+`trace_job_id` is part of the JSON result. Look back at any run:
+
+```bash
+python -m book_production_platform.production_trace history --root .runtime/cad/jobs/.trace
+python -m book_production_platform.production_trace manual  --root .runtime/cad/jobs/.trace <job_id>
+python -m book_production_platform.production_trace verify  --root .runtime/cad/jobs/.trace <job_id>
+```
+
+`cad brief` also writes `<output>.proposal.json` (adapter, mode, model-call
+count, provided dimensions, canonical PartIR hash - never the brief). `cad
+build` records that as the trace's AI proposal only when the hash matches the
+PartIR it builds; an edited PartIR is recorded as `proposal_edited_by_human`.
+Tracing never changes the build result. The FreeCAD GUI steps are derived from
+the worker macro and not runtime-verified in CI. Feature parity and the
+roadmap: [`docs/parity/cad.md`](docs/parity/cad.md).
+
 ### AI brief adapter (V1B)
 
 `cad_production/provider.py` turns a free-text brief into a `part-ir.v1`
@@ -633,8 +807,10 @@ cases (injection, a 5000 mm width, a six-hole request, and mixed units). Each
 
 Audio Master converts one local PCM WAV and a versioned `audio-ir.v1` request
 into an integrity-checked 24-bit/48 kHz WAV master plus `qa-manifest.json`.
-The request selects one of three fixed presets: `podcast-mono.v1`,
-`podcast-stereo.v1`, or `music-stereo.v1`. The adapter owns the FFmpeg filter
+The request selects one of seven fixed presets: `podcast-mono.v1`,
+`podcast-stereo.v1`, `music-stereo.v1`, `apple-music-stereo.v1`,
+`broadcast-r128-stereo.v1`, `audiobook-acx-mono.v1`, or `voice-clean-mono.v1`
+(see the preset table in [`docs/parity/audio.md`](docs/parity/audio.md)). The adapter owns the FFmpeg filter
 graph; arbitrary filter strings and direct numeric overrides are rejected. The
 normal path uses FFmpeg loudness analysis, double-pass `loudnorm`, and a second
 measurement of the output. Python validates the IR, paths, WAV format, channel
@@ -680,6 +856,34 @@ side that owns their contract. `python scripts/audio_boundary_check.py
 --sibling ..\book-audio-production` fails if either side starts handling the
 other's contract or importing the other's package, and prints the sibling's
 FFmpeg pin for comparison with the `ffmpeg_version` in Audio Master manifests.
+
+### Job history, trace & manual steps
+
+Every fresh `audio master` run writes a `production-trace.v1` and appends
+`<output-root>/history.jsonl`. Accepted masters keep their trace next to the
+artifacts; rejected runs (invalid AudioIR, unsafe source path, channel
+mismatch, silent input, QA failure, FFmpeg errors) are traced under
+`<output-root>/failed/<job_id>/`. An unsafe output root (symlink or not a
+directory) is never written, and exact replays write nothing.
+
+| File | What |
+|---|---|
+| `<fingerprint>/trace.json` | AudioIR hash, source WAV name/size/sha256, steps (parse, inspect source, FFmpeg version, measure with the exact filter graph and measured LUFS/TP/LRA, render graph with `measured_*` + `linear=true`, QA checks, publish), artifact sha256 of `master.wav` and `qa-manifest.json` |
+| `<fingerprint>/ir.json` | the AudioIR the engine executed |
+| `<fingerprint>/MANUAL-STEPS.md` | Audacity 3.7 steps in engine order: import, clean-up chain (High-Pass Filter, Noise Gate; de-esser via Audition/RX), Amplify by the exact linear gain (target − measured), Limiter at the true-peak ceiling, WAV Signed 24-bit / 48 kHz export with metadata cleared; checks against the measured LUFS and true peak of `master.wav` |
+
+```bash
+python -m book_production_platform.production_trace history --root .runtime/audio-master-demo/jobs
+python -m book_production_platform.production_trace manual  --root .runtime/audio-master-demo/jobs <job_id>
+python -m book_production_platform.production_trace verify  --root .runtime/audio-master-demo/jobs <job_id>
+```
+
+Where Audacity has no exact equivalent (FFmpeg `deesser`; `agate` is an
+expander while Audacity's Noise Gate is a gate; Audacity's Limiter is
+sample-peak), the guide says so. Presets without a clean-up chain keep their
+earlier fingerprints. The new presets are verified with a scripted FFmpeg in
+tests; real FFmpeg runs and listening review are still pending. Feature parity
+and roadmap: [`docs/parity/audio.md`](docs/parity/audio.md).
 
 ## Game Scene Prototype Builder V1A
 
@@ -784,6 +988,33 @@ collections, and victory. Review files are
 report now records `manual_scene_review.status=passed`. This visual review uses
 an Editor camera capture; gameplay is verified by the automated PlayMode trace,
 not manual keyboard input.
+
+### Job history, trace & manual steps
+
+`game build` and `game export` record a `production-trace.v1` for every run
+with valid input under `<output-root>/.trace/` (accepted, replayed, failed;
+errors re-raise unchanged). Published fingerprint directories keep exactly
+their verified entries.
+
+- `trace.json`: input hashes, steps (validate, assets, runtime/template hashes,
+  fingerprint, stage, Unity compile/EditMode/PlayMode/reopen with test totals,
+  gameplay-trace QA, publish, analyze) and sha256 of the scene, gameplay
+  trace, QA manifest, and receipt (export: manifest, receipt, entrypoint).
+- `ir.json`: canonical GameIR; `level-metrics.json`: shortest collect-all
+  route (exact Held-Karp up to 12 objectives, nearest-neighbour above),
+  grid steps, estimated seconds (`steps x tile / speed`), reachable cells,
+  dead ends, junctions, and a heuristic difficulty band;
+  `level-map.svg`: top-down map with the route.
+- `MANUAL-STEPS.md`: Unity 6 (6000.6.2f1) Editor recipe mirroring
+  `SceneCompiler.cs` - camera size, boundaries, optional Grid (cell size =
+  tile) as a snapping aid, and every entity's GameObject name, cell, and exact
+  Transform position, components and values, then the Play mode check in
+  route order. Export gets a Build Profiles guide.
+
+`game brief` writes a `<output>.proposal.json` sidecar that `game build`
+records as AI provenance only when its GameIR hash matches. Unity steps are
+not runtime-verified in CI. Parity and roadmap:
+[`docs/parity/game.md`](docs/parity/game.md).
 
 ### V1A limits and error codes
 
@@ -936,7 +1167,8 @@ SI และเผยแพร่ `takeoff.json`, `takeoff.csv`, `qa-manifest.js
   Python 3.11 / IfcOpenShell 0.8.4) ผ่าน Windows short path เท่านั้น
   ไม่มีการติดตั้งหรือคัดลอก runtime เพิ่ม
 - ไม่รองรับ IFCZIP, IFCXML, IFC4X3, geometry-derived quantity, type-level
-  quantity, pricing หรือ code compliance
+  quantity หรือ code compliance; ราคามีแค่การคูณตารางราคาที่เจ้าของให้มา
+  (`bim cost`) ไม่มีฐานข้อมูลราคา
 - ปริมาณที่ขาด คลุมเครือ หรือแปลงหน่วยไม่ได้ จะถูกรายงานเป็น coverage gap
   ไม่เติมค่าศูนย์หรือค่าประมาณ
 
@@ -948,6 +1180,47 @@ book-production bim takeoff   --ir examples/bim/bim-takeoff.json   --ifc path/to
 
 สถานะและ exit code: `complete`/`replayed` → 0, `partial` → 3,
 `needs_input` → 4, กรณีอื่น (rejected) → 2 พร้อม JSON error code ที่นิ่ง
+
+### Job history, trace & manual steps (ประวัติงาน, trace และขั้นตอนทำเอง)
+
+ทุกงาน `bim takeoff` ที่ IR ถูกต้องจะบันทึก `production-trace.v1` ไว้ที่
+`<output-root>/.trace/` (complete/partial → `accepted`, `replayed`,
+`needs_input`, และงานที่ล้มเหลวหรือ raise error ก็บันทึกแล้ว raise ต่อ
+โดยไม่เปลี่ยน error code) ส่วน `jobs/<fingerprint>/` ยังมีแค่ 3 ไฟล์เดิม
+
+- `trace.json`: hash ของ IR และ IFC (ไม่เก็บชื่อไฟล์/path), ขั้นตอน validate,
+  fingerprint, runtime, worker (class ที่ขอ, schema, bound), extract, report,
+  qa, publish และ sha256 ของ artifact ทุกไฟล์
+- `MANUAL-STEPS.md`: วิธีทำเองใน Bonsai (BlenderBIM) + LibreOffice Calc —
+  เลือกตาม IFC class (รวม subtype), อ่าน Qto ของ occurrence ทีละชิ้น,
+  ทุกแถวและทุกยอดรวมที่เครื่องมือเผยแพร่, Pivot Table ตามคีย์เดียวกัน,
+  บันทึก CSV และรายการ coverage gap; มีทางเลือก FreeCAD BIM / IfcOpenShell /
+  Revit / Solibri (ชื่อเมนูอ้างอิงเวอร์ชัน ไม่ได้ทดสอบกับโปรแกรมจริงใน CI)
+
+```bash
+python -m book_production_platform.production_trace verify --root .runtime/bim/jobs/.trace <job_id>
+```
+
+### ราคาจากตารางราคา (`bim cost`)
+
+`bim cost` คูณยอดรวมใน `takeoff.json` กับตารางราคา `bim-cost-rates.v1`
+(ดู `examples/bim/cost-rates.example.json` — ราคาตัวอย่าง ไม่ใช่ราคาจริง)
+โดยจับคู่คีย์ `ifc_class/qto_name/quantity_name/unit` (+ `method` ถ้าระบุ)
+แบบตรงตัว, ปัดเงินทีละบรรทัด 0.01 แบบ ROUND_HALF_UP, ยอดที่ไม่มีราคาอยู่ใน
+`unpriced` (ไม่คิดเป็นศูนย์), ราคาที่จับคู่ได้มากกว่าหนึ่งจะล้มเหลว
+`cost_rates_ambiguous` ผลลัพธ์ `cost-estimate.json/.csv` พร้อม trace และคู่มือ
+สูตร Calc (`=ROUND(G2*H2;2)`) exit 0 = complete, 3 = partial
+
+```bash
+book-production bim cost --report .runtime/bim/jobs/jobs/<fingerprint>/takeoff.json --rates rates.json --output-dir .runtime/bim/cost
+```
+
+รองรับ IFC class 18 ชนิด (มีทั้งใน IFC2X3 และ IFC4 และไม่มีตัวใดเป็น
+subtype ของอีกตัว): IfcWall, IfcSlab, IfcColumn, IfcBeam, IfcDoor, IfcWindow,
+IfcBuildingElementProxy, IfcCovering, IfcCurtainWall, IfcFooting, IfcMember,
+IfcPile, IfcPlate, IfcRailing, IfcRamp, IfcRoof, IfcSpace, IfcStair
+ระวัง IfcRoof/IfcStair อาจมีชิ้นย่อย (IfcSlab, IfcStairFlight) ที่มี Qto ของตัวเอง
+ถ้าเลือกทั้งคู่และตั้งราคาทั้งคู่จะนับซ้ำได้ ดู [`docs/parity/bim.md`](docs/parity/bim.md)
 
 ### Benchmark 20 กรณี
 

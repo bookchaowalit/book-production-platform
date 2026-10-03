@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 from PIL import Image, ImageDraw
 
+from book_production_platform.production_trace import read_history
 from book_production_platform.scene3d import runtime
 from book_production_platform.scene3d.errors import SceneInputError
 from tests.helpers.glb_factory import TRIANGLE_BINARY, triangle_document, write_glb
@@ -216,7 +217,9 @@ def test_timeout_removes_staging_and_never_publishes(tmp_path: Path, monkeypatch
 
     assert error.value.code == "deadline_exceeded"
     assert not any("staging" in child.name for child in output_root.iterdir())
-    assert not any(child.is_dir() and child.name != ".locks" for child in output_root.iterdir())
+    # Only the lock folder and the failure trace (traces/<job_id>/) remain.
+    assert not any(child.is_dir() and child.name not in {".locks", "traces"} for child in output_root.iterdir())
+    assert [entry["status"] for entry in read_history(output_root)] == ["failed"]
 
 
 @pytest.mark.parametrize("accessor_type", [[], {}], ids=["array-type", "object-type"])
@@ -238,7 +241,9 @@ def test_malformed_glb_accessor_is_rejected_before_blender(
         runtime.compose_scene(scene_path, input_root, output_root, blender_bin)
 
     assert error.value.code == "invalid_glb"
-    assert not output_root.exists()
+    # Nothing is published; only the failure trace and history line are written.
+    assert sorted(child.name for child in output_root.iterdir()) == ["history.jsonl", "traces"]
+    assert [entry["status"] for entry in read_history(output_root)] == ["failed"]
 
 
 def test_symlinked_asset_is_rejected_before_worker_invocation(

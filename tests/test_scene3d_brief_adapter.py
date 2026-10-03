@@ -28,6 +28,7 @@ from book_production_platform.scene3d.provider_config import parse_provider_conf
 from book_production_platform.scene3d.scene_builder import (
     BACKGROUND_ID,
     COMPOSITION_IDS,
+    ENGINE_ONLY_PRESETS,
     LIGHTING_ID,
     MATERIAL_ID,
     RECIPE_ID,
@@ -117,14 +118,18 @@ def test_adapter_requires_a_ledger_root() -> None:
 
 
 def test_preset_registry_matches_the_scene_ir_and_blender_builder() -> None:
-    assert set(PRESET_REGISTRY["composition"]) == COMPOSITION_IDS
+    assert set(PRESET_REGISTRY["composition"]) == COMPOSITION_IDS - ENGINE_ONLY_PRESETS["composition"]
     assert set(PRESET_REGISTRY["render_profile"]) == set(RENDER_PROFILES)
     assert PRESET_REGISTRY["recipe"] == (RECIPE_ID,)
     assert PRESET_REGISTRY["lighting"] == (LIGHTING_ID,)
     assert PRESET_REGISTRY["background"] == (BACKGROUND_ID,)
     assert PRESET_REGISTRY["material_preset"] == (MATERIAL_ID,)
     for name in PRESET_FIELDS:
-        assert PRESET_REGISTRY[name] == get_args(SceneIR.model_fields[name].annotation)
+        contract = get_args(SceneIR.model_fields[name].annotation)
+        # Engine-only presets (turntable orbits, extra lighting/backgrounds) are
+        # valid SceneIR but outside the V1B proposal registry until evaluated.
+        assert PRESET_REGISTRY[name] == tuple(value for value in contract if value not in ENGINE_ONLY_PRESETS.get(name, frozenset()))
+        assert set(contract) - set(PRESET_REGISTRY[name]) == set(ENGINE_ONLY_PRESETS.get(name, frozenset()))
     # SceneIR v1 has no free numeric field, so no numeric range is open to the model.
     assert FREE_NUMERIC_RANGES == {}
 

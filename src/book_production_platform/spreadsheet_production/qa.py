@@ -43,11 +43,20 @@ def qa_workbook(ir: WorkbookIR, output_path: str | Path) -> tuple[str, ...]:
             if not {sheet.name for sheet in ir.sheets}.issubset(parts):
                 issues.append("sheet_missing")
             formula_count = 0
+            sheets_by_name = {sheet.name: sheet for sheet in ir.sheets}
             for sheet_name, part in parts.items():
                 if part not in archive.namelist():
                     issues.append("worksheet_missing")
                     continue
                 root = ElementTree.fromstring(archive.read(part))
+                sheet_ir = sheets_by_name.get(sheet_name)
+                if sheet_ir is not None:
+                    validations = sorted(node.attrib.get("sqref", "") for node in root.findall("main:dataValidations/main:dataValidation", NS))
+                    if validations != sorted(item.range for item in sheet_ir.data_validations):
+                        issues.append(f"data_validation_mismatch:{sheet_name}")
+                    rules = sorted(node.attrib.get("sqref", "") for node in root.findall("main:conditionalFormatting", NS))
+                    if rules != sorted(item.range for item in sheet_ir.conditional_formats):
+                        issues.append(f"conditional_format_mismatch:{sheet_name}")
                 for cell in root.findall("main:sheetData/main:row/main:c", NS):
                     formula_node = cell.find("main:f", NS)
                     if formula_node is None:
@@ -61,13 +70,20 @@ def qa_workbook(ir: WorkbookIR, output_path: str | Path) -> tuple[str, ...]:
                     if cached is None or address not in expected.values:
                         issues.append(f"formula_cache_missing:{address}")
                     else:
-                        try:
-                            actual = Decimal(cached.text or "0")
-                            wanted = expected.values[address]
-                            if isinstance(wanted, bool) or wanted is None or Decimal(str(wanted)) != actual:
+                        wanted = expected.values[address]
+                        text = cached.text or ""
+                        if isinstance(wanted, bool):
+                            if text.upper() not in ({"1", "TRUE"} if wanted else {"0", "FALSE"}):
                                 issues.append(f"formula_value_mismatch:{address}")
-                        except (InvalidOperation, ValueError):
-                            issues.append(f"formula_cache_invalid:{address}")
+                        elif isinstance(wanted, str):
+                            if text != wanted:
+                                issues.append(f"formula_value_mismatch:{address}")
+                        else:
+                            try:
+                                if wanted is None or Decimal(str(wanted)) != Decimal(text or "0"):
+                                    issues.append(f"formula_value_mismatch:{address}")
+                            except (InvalidOperation, ValueError):
+                                issues.append(f"formula_cache_invalid:{address}")
             if formula_count != len(ir.formulas):
                 issues.append("formula_count_mismatch")
     except (BadZipFile, OSError, ElementTree.ParseError, KeyError):

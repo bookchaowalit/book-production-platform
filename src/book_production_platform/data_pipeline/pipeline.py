@@ -17,6 +17,8 @@ from book_production_platform.data_pipeline_ir.models import (
     PipelineNode,
 )
 
+COMPARE_SQL: dict[str, str] = {"gt": ">", "gte": ">=", "lt": "<", "lte": "<=", "ne": "<>"}
+
 
 @dataclass(frozen=True)
 class CompiledPipeline:
@@ -99,11 +101,25 @@ def _compile_nodes(
         elif node.op == "filter_equals":
             parent_columns = _parent_columns(pipeline, node)
             column = next(column for column in parent_columns if column.key == node.column)
-            body = f"SELECT * FROM {parent} WHERE {_quote_identifier(column.key)} = ?"
+            # Decimal parameters are bound as exact text; CAST keeps equality
+            # numeric on aggregate outputs, which carry no column affinity.
+            placeholder = "CAST(? AS NUMERIC)" if column.data_type == "decimal" else "?"
+            body = f"SELECT * FROM {parent} WHERE {_quote_identifier(column.key)} = {placeholder}"
+            parameters.append(node.value)
+            parameter_types.append(column.data_type)
+        elif node.op == "filter_compare":
+            parent_columns = _parent_columns(pipeline, node)
+            column = next(column for column in parent_columns if column.key == node.column)
+            # Decimal parameters are bound as exact text; CAST keeps the
+            # comparison numeric even on aggregate outputs without affinity.
+            placeholder = "CAST(? AS NUMERIC)" if column.data_type == "decimal" else "?"
+            body = f"SELECT * FROM {parent} WHERE {_quote_identifier(column.key)} {COMPARE_SQL[str(node.operator)]} {placeholder}"
             parameters.append(node.value)
             parameter_types.append(column.data_type)
         elif node.op == "filter_null":
             body = f"SELECT * FROM {parent} WHERE {_quote_identifier(node.column or '')} IS NULL"
+        elif node.op == "distinct":
+            body = f"SELECT DISTINCT * FROM {parent}"
         elif node.op == "sort_by":
             # A sort feeding a terminal limit is applied on that limit node so
             # its tie-breakers govern both row selection and final presentation.
@@ -249,6 +265,7 @@ def explain_pipeline_sql(pipeline: PipelineIR, compiled: CompiledPipeline) -> Ex
 
 
 __all__ = [
+    "COMPARE_SQL",
     "CompiledPipeline",
     "ExplainResult",
     "ExplainStep",

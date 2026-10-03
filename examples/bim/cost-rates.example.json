@@ -1,0 +1,14 @@
+{
+  "schema_version": "bim-cost-rates.v1",
+  "currency": "THB",
+  "rates": [
+    {"code": "EX-WALL-01", "description": "Example only - not a real price", "ifc_class": "IfcWall", "qto_name": "Qto_WallBaseQuantities", "quantity_name": "NetSideArea", "unit": "m2", "rate": "450.00"},
+    {"code": "EX-SLAB-01", "description": "Example only - not a real price", "ifc_class": "IfcSlab", "qto_name": "Qto_SlabBaseQuantities", "quantity_name": "NetVolume", "unit": "m3", "rate": "3200.00"},
+    {"code": "EX-COL-01", "description": "Example only - not a real price", "ifc_class": "IfcColumn", "qto_name": "Qto_ColumnBaseQuantities", "quantity_name": "NetVolume", "unit": "m3", "rate": "4100.00"},
+    {"code": "EX-BEAM-01", "description": "Example only - not a real price", "ifc_class": "IfcBeam", "qto_name": "Qto_BeamBaseQuantities", "quantity_name": "NetVolume", "unit": "m3", "rate": "4300.00"},
+    {"code": "EX-DOOR-01", "description": "Example only - not a real price", "ifc_class": "IfcDoor", "qto_name": "Qto_DoorBaseQuantities", "quantity_name": "Area", "unit": "m2", "rate": "2500.00"},
+    {"code": "EX-WIN-01", "description": "Example only - not a real price", "ifc_class": "IfcWindow", "qto_name": "Qto_WindowBaseQuantities", "quantity_name": "Area", "unit": "m2", "rate": "3800.00"},
+    {"code": "EX-SPACE-01", "description": "Example only - not a real price", "ifc_class": "IfcSpace", "qto_name": "Qto_SpaceBaseQuantities", "quantity_name": "NetFloorArea", "unit": "m2", "rate": "120.00"},
+    {"code": "EX-COV-01", "description": "Example only - not a real price", "ifc_class": "IfcCovering", "qto_name": "Qto_CoveringBaseQuantities", "quantity_name": "NetArea", "unit": "m2", "rate": "380.00"}
+  ]
+}

@@ -11,6 +11,10 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 BIM_TAKEOFF_SCHEMA_VERSION = "bim-takeoff.v1"
 MAX_BIM_TAKEOFF_IR_BYTES = 64 * 1024
 TAKEOFF_ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+#: IFC classes the takeoff may select. Every entry exists in both IFC2X3 and
+#: IFC4 and none is a subtype of another entry, so one occurrence is never
+#: selected twice. ``by_type`` includes subtypes (``IfcWall`` also selects
+#: ``IfcWallStandardCase``); rows keep the occurrence's own class.
 SUPPORTED_ELEMENT_CLASSES: tuple[str, ...] = (
     "IfcWall",
     "IfcSlab",
@@ -18,11 +22,40 @@ SUPPORTED_ELEMENT_CLASSES: tuple[str, ...] = (
     "IfcBeam",
     "IfcDoor",
     "IfcWindow",
+    "IfcBuildingElementProxy",
+    "IfcCovering",
+    "IfcCurtainWall",
+    "IfcFooting",
+    "IfcMember",
+    "IfcPile",
+    "IfcPlate",
+    "IfcRailing",
+    "IfcRamp",
+    "IfcRoof",
+    "IfcSpace",
+    "IfcStair",
 )
 
 TakeoffIdentifier = Annotated[str, Field(pattern=TAKEOFF_ID_PATTERN)]
 SupportedElementClass = Literal[
-    "IfcWall", "IfcSlab", "IfcColumn", "IfcBeam", "IfcDoor", "IfcWindow"
+    "IfcWall",
+    "IfcSlab",
+    "IfcColumn",
+    "IfcBeam",
+    "IfcDoor",
+    "IfcWindow",
+    "IfcBuildingElementProxy",
+    "IfcCovering",
+    "IfcCurtainWall",
+    "IfcFooting",
+    "IfcMember",
+    "IfcPile",
+    "IfcPlate",
+    "IfcRailing",
+    "IfcRamp",
+    "IfcRoof",
+    "IfcSpace",
+    "IfcStair",
 ]
 
 

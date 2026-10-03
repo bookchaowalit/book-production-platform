@@ -34,6 +34,18 @@ SUPPORTED_ELEMENT_CLASSES = (
     "IfcBeam",
     "IfcDoor",
     "IfcWindow",
+    "IfcBuildingElementProxy",
+    "IfcCovering",
+    "IfcCurtainWall",
+    "IfcFooting",
+    "IfcMember",
+    "IfcPile",
+    "IfcPlate",
+    "IfcRailing",
+    "IfcRamp",
+    "IfcRoof",
+    "IfcSpace",
+    "IfcStair",
 )
 GLOBAL_ID_PATTERN = re.compile(r"[0-9A-Za-z_$]{22}")
 TAKEOFF_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")

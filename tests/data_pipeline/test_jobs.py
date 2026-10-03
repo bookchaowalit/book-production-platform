@@ -42,7 +42,8 @@ def test_pipeline_job_writes_private_artifacts_and_replays_without_new_bytes(
     assert first.metadata == {"execution_mode": "plan_only", "query_plan_verified": True}
     assert set(first.artifact_hashes) == {"pipeline.sql", "parameters.json", "report.json", "qa-manifest.json"}
     assert first.artifact_dir is not None
-    assert {path.name for path in first.artifact_dir.iterdir()} == set(first.artifact_hashes)
+    # Plan artifacts plus the trace sidecars (trace.json, MANUAL-STEPS.md, ir.json), which the receipt does not cover.
+    assert {path.name for path in first.artifact_dir.iterdir()} == set(first.artifact_hashes) | jobs_module.SIDECAR_NAMES
 
     sql = (first.artifact_dir / "pipeline.sql").read_text(encoding="utf-8")
     parameters = json.loads((first.artifact_dir / "parameters.json").read_text(encoding="utf-8"))

@@ -11,6 +11,7 @@ from typing import Any, NoReturn
 
 from book_production_platform.bim_ir import BimTakeoffIRError
 from book_production_platform.bim_production.benchmark import run_benchmark
+from book_production_platform.bim_production.cost import build_cost_estimate_job
 from book_production_platform.bim_production.errors import BimProductionError
 from book_production_platform.bim_production.jobs import build_bim_takeoff_job
 from book_production_platform.bim_production.runtime import MAX_WORKER_TIMEOUT_SECONDS
@@ -52,6 +53,13 @@ def _parser() -> argparse.ArgumentParser:
     takeoff.add_argument("--freecadcmd", type=Path, required=True)
     takeoff.add_argument("--ifc-site-packages", type=Path, required=True)
     takeoff.add_argument("--timeout-s", type=int, default=MAX_WORKER_TIMEOUT_SECONDS)
+
+    cost = commands.add_parser(
+        "cost", help="คูณยอด takeoff กับตารางราคา bim-cost-rates.v1 เป็น cost-estimate.json/.csv"
+    )
+    cost.add_argument("--report", type=Path, required=True, help="takeoff.json ของงานที่เผยแพร่แล้ว")
+    cost.add_argument("--rates", type=Path, required=True, help="ตารางราคา bim-cost-rates.v1 (JSON)")
+    cost.add_argument("--output-dir", type=Path, required=True)
 
     benchmark = commands.add_parser("benchmark", help="รันชุด acceptance 20 กรณี")
     benchmark.add_argument("--fixtures", type=Path, required=True)
@@ -108,9 +116,24 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "row_count": result.row_count,
                     "coverage_gap_count": result.coverage_gap_count,
                     "model_calls": result.model_calls,
+                    "trace_job_id": result.trace_job_id,
                 }
             )
             return _takeoff_exit(result.status)
+        if args.command == "cost":
+            estimate = build_cost_estimate_job(args.report, args.rates, args.output_dir)
+            _emit(
+                {
+                    "status": estimate.status,
+                    "total": estimate.total,
+                    "currency": estimate.currency,
+                    "line_count": estimate.line_count,
+                    "unpriced_count": estimate.unpriced_count,
+                    "model_calls": 0,
+                    "trace_job_id": estimate.trace_job_id,
+                }
+            )
+            return 0 if estimate.status == "complete" else 3
         if args.command == "benchmark":
             report = run_benchmark(
                 args.fixtures,

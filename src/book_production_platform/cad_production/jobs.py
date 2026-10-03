@@ -13,12 +13,22 @@ import tempfile
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import NoReturn
 
-from book_production_platform.cad_ir import PartIRError, canonical_part_ir, load_part_ir
+from book_production_platform.cad_ir import (
+    PartIR,
+    PartIRError,
+    canonical_part_ir,
+    load_part_ir,
+)
+from book_production_platform.cad_production.drawing import (
+    DRAWING_PROFILE,
+    write_drawings,
+)
 from book_production_platform.cad_production.errors import CadProductionError
+from book_production_platform.cad_production.manual import build_freecad_guide
 from book_production_platform.cad_production.preview import PREVIEW_PROFILE
 from book_production_platform.cad_production.qa import CadQAResult, verify_cad_outputs
 from book_production_platform.cad_production.runtime import (
@@ -30,6 +40,14 @@ from book_production_platform.cad_production.runtime import (
     inspect_freecad_runtime,
     run_freecad_worker,
 )
+from book_production_platform.cad_production.tracing import (
+    record_artifact,
+    record_source_file,
+    trace_job_dir,
+    trace_root,
+    write_ir_file,
+)
+from book_production_platform.production_trace import TraceRecorder
 
 RECIPE_VERSION = "cad-parametric-mounting-plate-v1a"
 MANIFEST_SCHEMA = "cad-qa-manifest.v1"
@@ -71,9 +89,11 @@ class CadJobResult:
     model_calls: int
     error_code: str | None
     receipt_recovered: bool = False
+    trace_job_id: str | None = field(default=None, compare=False)
 
     def to_dict(self) -> dict[str, object]:
         return {
+            "trace_job_id": self.trace_job_id,
             "fingerprint": self.fingerprint,
             "status": self.status,
             "artifact_dir": str(self.artifact_dir) if self.artifact_dir is not None else None,
@@ -674,14 +694,210 @@ def _recover_missing_receipt(
     )
 
 
+_MEDIA_TYPES = {
+    "part.FCStd": "application/vnd.freecad",
+    "part.step": "model/step",
+    "part.stl": "model/stl",
+    "preview.png": "image/png",
+    "qa-manifest.json": "application/json",
+    "drawing.svg": "image/svg+xml",
+    "drawing.dxf": "image/vnd.dxf",
+}
+_TRACE_STATUS = {"accepted": "accepted", "replayed": "replayed"}
+
+
+def _worker_summary(part: PartIR, timeout_s: int) -> dict[str, object]:
+    """Structural description of the FreeCAD build invocation (no local paths)."""
+
+    parameters = part.parameters
+    return {
+        "worker_protocol": WORKER_PROTOCOL,
+        "mode": "build",
+        "macro": "freecad_worker.FCMacro",
+        "timeout_s": timeout_s,
+        "features": ["Body", "PlateSketch", "Pad", "HoleSketch", "Pocket"],
+        "plate_sketch": {
+            "plane": "XY_Plane",
+            "geometry": "rectangle (4 LineSegment)",
+            "constraints": 12,
+            "width_mm": parameters.width_mm,
+            "height_mm": parameters.height_mm,
+        },
+        "pad": {"type": "Dimension", "length_mm": parameters.thickness_mm},
+        "hole_sketch": {
+            "placement_z_mm": parameters.thickness_mm,
+            "geometry": "4 Circle",
+            "constraints": 12,
+            "diameter_mm": parameters.hole_diameter_mm,
+            "offset_x_mm": parameters.hole_offset_x_mm,
+            "offset_y_mm": parameters.hole_offset_y_mm,
+        },
+        "pocket": {"type": "ThroughAll"},
+        "exports": ["part.FCStd", "part.step", "part.stl", "tessellation.json"],
+    }
+
+
+def _qa_summary(qa: CadQAResult) -> dict[str, object]:
+    return {
+        "volume_mm3": round(qa.volume_mm3, 6),
+        "bounds_mm": [round(value, 6) for value in qa.bounds_mm],
+        "solid_count": qa.solid_count,
+        "bore_count": qa.bore_count,
+        "step_relative_volume_error": qa.step_relative_volume_error,
+        "stl_triangle_count": qa.stl_triangle_count,
+        "preview_profile": qa.preview_profile,
+    }
+
+
+class _TraceSession:
+    """Collect one run's trace in memory; persist it only under a safe output root."""
+
+    def __init__(self, *, input_path: Path, timeout_s: int) -> None:
+        self.trace = TraceRecorder(
+            tool_id="cad-v1a",
+            engine_version="freecad-worker.v1",
+            recipe_version=RECIPE_VERSION,
+            schema_version="part-ir.v1",
+        )
+        self.input_path = input_path
+        self.timeout_s = timeout_s
+        self.part: PartIR | None = None
+        self.canonical_ir: bytes | None = None
+        self.output_root: Path | None = None
+        self.root: Path | None = None
+
+    def _safe_root(self) -> Path | None:
+        if self.root is not None:
+            return self.root
+        if self.output_root is None or not isinstance(self.output_root, Path):
+            return None
+        try:
+            root = _normalized_root(self.output_root)
+            _ensure_directory(root)
+        except (CadProductionError, OSError):
+            return None
+        return root
+
+    def finalize(self, result: CadJobResult) -> CadJobResult:
+        """Write trace.json, MANUAL-STEPS.md, ir.json, drawings; never alter the outcome."""
+
+        if self.part is None or self.canonical_ir is None:
+            return result
+        root = self._safe_root()
+        if root is None:
+            return result
+        trace = self.trace
+        try:
+            job_dir = trace_job_dir(root, trace.job_id)
+            _ensure_directory(job_dir)
+            ir_value = json.loads(self.canonical_ir.decode("utf-8"))
+            trace.input_json("part_ir", ir_value, role="request")
+            if self.input_path.is_file():
+                record_source_file(trace, "part_ir_file", self.input_path)
+            _attach_proposal(trace, self.input_path, ir_value)
+            ir_path = write_ir_file(job_dir, ir_value)
+            trace.ir_document(ir_value, schema=self.part.schema_version, path=ir_path)
+            record_artifact(trace, ir_path, job_dir=job_dir, media_type="application/json", role="ir")
+            status = _TRACE_STATUS.get(result.status, "failed")
+            if status == "failed":
+                trace.record_step("outcome", "rejected", note=result.error_code or "cad_job_failed")
+            else:
+                artifact_dir = result.artifact_dir
+                if artifact_dir is not None:
+                    for name in sorted(ARTIFACT_NAMES):
+                        record_artifact(
+                            trace, artifact_dir / name, job_dir=job_dir,
+                            media_type=_MEDIA_TYPES.get(name, ""),
+                        )
+            with trace.step("drawing", "render_2d_drawing", profile=DRAWING_PROFILE, formats=["svg", "dxf-r12"]) as step:
+                drawings = write_drawings(self.part, job_dir)
+                step.outputs = [path.name for path in drawings]
+            for path in drawings:
+                record_artifact(trace, path, job_dir=job_dir, media_type=_MEDIA_TYPES[path.name], role="drawing")
+            qa_doc = None
+            if result.qa is not None:
+                qa_doc = {"status": "passed", "checks": list(_qa_summary(result.qa))}
+            elif status == "failed":
+                qa_doc = {"status": "failed", "checks": [result.error_code or "cad_job_failed"]}
+            trace.finish(
+                status=status,
+                job_dir=job_dir,
+                output_root=trace_root(root),
+                guide=build_freecad_guide(self.part, qa=result.qa),
+                qa=qa_doc,
+            )
+        except (CadProductionError, OSError, ValueError, TypeError, KeyError):
+            return result
+        return replace(result, trace_job_id=trace.job_id)
+
+
+PROPOSAL_SIDECAR_SUFFIX = ".proposal.json"
+PROPOSAL_SCHEMA = "production-proposal.v1"
+MAX_PROPOSAL_BYTES = 16 * 1024
+
+
+def _attach_proposal(trace: TraceRecorder, input_path: Path, ir_value: object) -> None:
+    """Record AI proposal metadata when a matching ``<input>.proposal.json`` sits beside the input.
+
+    ``cad brief`` writes that sidecar. It is honoured only when its recorded
+    PartIR hash equals the canonical PartIR being built; an edited PartIR is
+    recorded as a human edit of an AI proposal instead.
+    """
+
+    from book_production_platform.production_trace import sha256_json
+
+    sidecar = input_path.with_name(input_path.name + PROPOSAL_SIDECAR_SUFFIX)
+    try:
+        if _is_link(sidecar) or not sidecar.is_file() or sidecar.stat().st_size > MAX_PROPOSAL_BYTES:
+            return
+        value = json.loads(sidecar.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError):
+        return
+    if not isinstance(value, dict) or value.get("schema_version") != PROPOSAL_SCHEMA:
+        return
+    calls = value.get("model_calls")
+    if isinstance(calls, bool) or not isinstance(calls, int) or calls < 0:
+        return
+    if value.get("ir_sha256") != sha256_json(ir_value):
+        trace.record_step("provenance", "proposal_edited_by_human", note="proposal_hash_mismatch")
+        return
+    provided = value.get("provided")
+    inferred = value.get("inferred")
+    trace.ai_proposal(
+        model_calls=calls,
+        adapter=str(value.get("adapter", "unknown"))[:80],
+        mode=str(value.get("mode", "unknown"))[:20],
+        provided=[str(item)[:64] for item in provided] if isinstance(provided, list) else [],
+        inferred=[str(item)[:64] for item in inferred] if isinstance(inferred, list) else [],
+    )
+
+
 def build_cad_job(
     input_path: Path,
     output_root: Path,
     freecadcmd: Path,
     timeout_s: int = 120,
 ) -> CadJobResult:
-    """Validate one PartIR, build and QA it, then atomically publish a replayable job."""
+    """Validate one PartIR, build and QA it, then atomically publish a replayable job.
 
+    Every run whose PartIR is valid and whose output root is safe also records a
+    production trace under ``<output_root>/.trace/`` (see :mod:`.tracing`):
+    accepted, replayed, and rejected runs alike. Tracing never changes the
+    returned status or masks the engine's error code.
+    """
+
+    session = _TraceSession(input_path=input_path, timeout_s=timeout_s)
+    result = _run_cad_job(input_path, output_root, freecadcmd, timeout_s, session)
+    return session.finalize(result)
+
+
+def _run_cad_job(
+    input_path: Path,
+    output_root: Path,
+    freecadcmd: Path,
+    timeout_s: int,
+    session: _TraceSession,
+) -> CadJobResult:
     if (
         not isinstance(input_path, Path)
         or not isinstance(output_root, Path)
@@ -704,13 +920,26 @@ def build_cad_job(
         return _rejected(error.code)
     except OSError:
         return _rejected("invalid_part_ir")
+    session.part = part
+    session.canonical_ir = canonical_ir
+    session.output_root = output_root
+    trace = session.trace
+    trace.record_step(
+        "validate", "parse_part_ir", schema=part.schema_version, template=part.template,
+        hole_pattern=part.hole_pattern, units=part.units, parameters=part.parameters.model_dump(mode="json"),
+    )
 
     try:
-        identity_model = inspect_freecad_runtime(freecadcmd)
-        identity = _identity_document(identity_model)
-        fingerprint, part_ir_hash = _canonical_fingerprint(canonical_ir, identity_model)
+        with trace.step("runtime", "inspect_freecad_runtime") as runtime_step:
+            identity_model = inspect_freecad_runtime(freecadcmd)
+            identity = _identity_document(identity_model)
+            runtime_step.params = {"freecad": identity}
+        with trace.step("fingerprint", "content_address", recipe=RECIPE_VERSION, worker_protocol=WORKER_PROTOCOL) as step:
+            fingerprint, part_ir_hash = _canonical_fingerprint(canonical_ir, identity_model)
+            step.outputs = [fingerprint]
         root = _normalized_root(output_root)
         _ensure_directory(root)
+        session.root = root
         artifact_dir = root / fingerprint
         receipt_path = root / ".receipts" / f"{fingerprint}.json"
         lock_path = root / ".locks" / f"{fingerprint}.lock"
@@ -719,11 +948,13 @@ def build_cad_job(
             _remove_stale_staging(staging_root, fingerprint)
             receipt_present = receipt_path.exists() or _is_link(receipt_path)
             if receipt_present:
-                return _verify_replay(fingerprint, artifact_dir, receipt_path, identity)
+                with trace.step("replay", "verify_receipt_and_artifacts", artifacts=sorted(ARTIFACT_NAMES)):
+                    return _verify_replay(fingerprint, artifact_dir, receipt_path, identity)
             if artifact_dir.exists() or _is_link(artifact_dir):
                 # Published without a receipt: a crash hit between the publish
                 # rename and the receipt write.
-                return _recover_missing_receipt(fingerprint, artifact_dir, receipt_path, identity)
+                with trace.step("replay", "recover_missing_receipt", artifacts=sorted(ARTIFACT_NAMES)):
+                    return _recover_missing_receipt(fingerprint, artifact_dir, receipt_path, identity)
 
             _ensure_directory(staging_root)
             try:
@@ -743,22 +974,30 @@ def build_cad_job(
                     work = Path(work_name)
                     request_path = work / ".part-ir.json"
                     _write_request(request_path, canonical_ir)
-                    worker: WorkerResult = run_freecad_worker(
-                        freecadcmd,
-                        "build",
-                        request_path,
-                        work,
-                        timeout_s,
-                    )
-                    if worker.error_code is not None:
-                        _fail(worker.error_code)
-                    if worker.result_json is None:
-                        _fail("worker_failed")
+                    with trace.step("worker", "freecad_build", **_worker_summary(part, timeout_s)) as worker_step:
+                        worker: WorkerResult = run_freecad_worker(
+                            freecadcmd,
+                            "build",
+                            request_path,
+                            work,
+                            timeout_s,
+                        )
+                        worker_step.params["exit_code"] = worker.exit_code
+                        worker_step.params["elapsed_seconds"] = round(worker.elapsed_seconds, 6)
+                        if worker.error_code is not None:
+                            worker_step.note = worker.error_code
+                            _fail(worker.error_code)
+                        if worker.result_json is None:
+                            _fail("worker_failed")
+                        worker_step.outputs = sorted(PRE_MANIFEST_NAMES - {"preview.png"})
                     build_seconds = max(0.0, worker.elapsed_seconds)
                     qa_started = time.monotonic()
-                    qa = _validate_qa_result(
-                        verify_cad_outputs(part, work, freecadcmd, timeout_s)
-                    )
+                    with trace.step("qa", "verify_cad_outputs", modes=["verify-native", "verify-step", "stl", "preview"]) as qa_step:
+                        qa = _validate_qa_result(
+                            verify_cad_outputs(part, work, freecadcmd, timeout_s)
+                        )
+                        qa_step.params.update(_qa_summary(qa))
+                        qa_step.outputs = ["preview.png"]
                     qa_seconds = max(0.0, time.monotonic() - qa_started)
                     _remove_transient_outputs(work)
                     artifact_metadata = _artifact_metadata(work, PRE_MANIFEST_NAMES)
@@ -799,10 +1038,12 @@ def build_cad_job(
                 receipt_data = _receipt_bytes(fingerprint, identity, all_metadata)
                 if len(receipt_data) > MAX_RECEIPT_BYTES:
                     _fail("publication_failed")
-                _publish(staging, artifact_dir)
-                # A crash here leaves a published job without a receipt; the
-                # next run recovers it through _recover_missing_receipt.
-                receipt_bytes = _write_receipt_exclusive(receipt_path, receipt_data)
+                with trace.step("publish", "atomic_publish_and_receipt") as publish_step:
+                    _publish(staging, artifact_dir)
+                    # A crash here leaves a published job without a receipt; the
+                    # next run recovers it through _recover_missing_receipt.
+                    receipt_bytes = _write_receipt_exclusive(receipt_path, receipt_data)
+                    publish_step.outputs = sorted(ARTIFACT_NAMES)
                 hashes = {
                     name: str(metadata["sha256"])
                     for name, metadata in all_metadata.items()

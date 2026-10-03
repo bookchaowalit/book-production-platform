@@ -13,12 +13,13 @@ import time
 from collections import Counter
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path, PurePosixPath
 from typing import Any
 
 from book_production_platform.game_ir import (
     MAX_GAME_IR_BYTES,
+    GameInputError,
     GameIR,
     canonical_game_ir_bytes,
     game_ir_sha256,
@@ -34,12 +35,23 @@ from book_production_platform.game_production.assets import (
     verify_published_assets,
 )
 from book_production_platform.game_production.errors import GameJobError
+from book_production_platform.game_production.level_map import render_level_svg
+from book_production_platform.game_production.manual import build_unity_guide
+from book_production_platform.game_production.metrics import level_metrics
 from book_production_platform.game_production.qa import (
     UnityQaEvidence,
     summarize_test_xml,
     verify_gameplay_trace,
     verify_worker_report,
 )
+from book_production_platform.game_production.tracing import (
+    record_artifact,
+    record_source_file,
+    trace_job_dir,
+    trace_root,
+    write_ir_file,
+)
+from book_production_platform.production_trace import TraceRecorder
 
 if os.name == "nt":
     import msvcrt
@@ -74,6 +86,7 @@ class GameJobResult:
     artifact_hashes: dict[str, str]
     replay: bool
     model_calls: int = 0
+    trace_job_id: str | None = field(default=None, compare=False)
 
 
 def canonical_json_bytes(value: Any) -> bytes:
@@ -715,6 +728,118 @@ def atomic_publish(staging: Path, destination: Path) -> None:
         raise GameJobError("publication_failed", "Verified job cannot be published") from error
 
 
+class _ComposeTrace:
+    """One compose run's trace, persisted under ``<output_root>/.trace/`` once GameIR is valid."""
+
+    def __init__(self, *, game_path: Path, output_root: Path) -> None:
+        self.trace = TraceRecorder(
+            tool_id="game-v1a",
+            engine_version=COMPOSER_VERSION,
+            recipe_version=COMPOSER_VERSION,
+            schema_version="game-ir",
+        )
+        self.game_path = game_path
+        self.output_root = output_root
+        self.ir: GameIR | None = None
+        self.root: Path | None = None
+
+    def _persist(self, status: str, result: GameJobResult | None, error_code: str | None) -> str | None:
+        if self.ir is None:
+            return None
+        trace = self.trace
+        try:
+            root = self.root or _prepare_output_root(self.output_root)
+            directory = trace_job_dir(root, trace.job_id)
+            if directory.exists() or directory.is_symlink():
+                return None
+            directory.mkdir(parents=True)
+            ir_value = json.loads(canonical_game_ir_bytes(self.ir).decode("utf-8"))
+            trace.schema_version = self.ir.schema_version
+            trace.input_json("game_ir", ir_value)
+            source = Path(self.game_path).expanduser()
+            if source.is_file() and not source.is_symlink():
+                record_source_file(trace, "game_ir_file", source)
+            _attach_game_proposal(trace, source, ir_value)
+            ir_file = write_ir_file(directory, ir_value)
+            trace.ir_document(ir_value, schema=self.ir.schema_version, path=ir_file)
+            record_artifact(trace, ir_file, job_dir=directory, media_type="application/json", role="ir")
+            if result is not None:
+                artifact_dir = result.artifact_dir
+                for relative, media in (
+                    (f"project/Assets/Scenes/{self.ir.scene_id}.unity", "application/x-unity-scene"),
+                    ("gameplay-trace.json", "application/json"),
+                    ("qa-manifest.json", "application/json"),
+                    (".receipt.json", "application/json"),
+                ):
+                    record_artifact(trace, artifact_dir / relative, job_dir=directory, media_type=media)
+            if error_code is not None:
+                trace.record_step("outcome", "failed", note=error_code)
+            with trace.step("analyze", "level_metrics_and_map") as step:
+                metrics = level_metrics(self.ir)
+                metrics_path = directory / "level-metrics.json"
+                metrics_path.write_text(json.dumps(metrics.to_dict(), ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+                map_path = directory / "level-map.svg"
+                map_path.write_bytes(render_level_svg(self.ir, metrics))
+                step.params = {
+                    "route_steps": metrics.route_steps,
+                    "route_method": metrics.route_method,
+                    "difficulty_band": metrics.difficulty_band,
+                }
+                step.outputs = [metrics_path.name, map_path.name]
+            record_artifact(trace, metrics_path, job_dir=directory, media_type="application/json", role="analysis")
+            record_artifact(trace, map_path, job_dir=directory, media_type="image/svg+xml", role="analysis")
+            qa = {"status": "passed", "checks": ["scene_hierarchy", "editmode", "playmode", "gameplay_trace", "reopen"]} if result else None
+            trace.finish(
+                status=status, job_dir=directory, output_root=trace_root(root),
+                guide=build_unity_guide(self.ir, metrics), qa=qa,
+            )
+        except (GameJobError, OSError, ValueError, TypeError, KeyError):
+            return None
+        return trace.job_id
+
+    def finalize(self, result: GameJobResult) -> GameJobResult:
+        job_id = self._persist("replayed" if result.replay else "accepted", result, None)
+        return replace(result, trace_job_id=job_id) if job_id else result
+
+    def fail(self, code: str) -> None:
+        self._persist("failed", None, code)
+
+
+PROPOSAL_SIDECAR_SUFFIX = ".proposal.json"
+PROPOSAL_SCHEMA = "production-proposal.v1"
+_MAX_PROPOSAL_BYTES = 16 * 1024
+
+
+def _attach_game_proposal(trace: TraceRecorder, source: Path, ir_value: object) -> None:
+    """Record AI proposal metadata from a matching ``<game-ir>.proposal.json`` sidecar."""
+
+    from book_production_platform.production_trace import sha256_json
+
+    sidecar = source.with_name(source.name + PROPOSAL_SIDECAR_SUFFIX)
+    try:
+        if sidecar.is_symlink() or not sidecar.is_file() or sidecar.stat().st_size > _MAX_PROPOSAL_BYTES:
+            return
+        value = json.loads(sidecar.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError):
+        return
+    if not isinstance(value, dict) or value.get("schema_version") != PROPOSAL_SCHEMA:
+        return
+    calls = value.get("model_calls")
+    if isinstance(calls, bool) or not isinstance(calls, int) or calls < 0:
+        return
+    if value.get("ir_sha256") != sha256_json(ir_value):
+        trace.record_step("provenance", "proposal_edited_by_human", note="proposal_hash_mismatch")
+        return
+    provided = value.get("provided")
+    trace.ai_proposal(
+        model_calls=calls,
+        adapter=str(value.get("adapter", "unknown"))[:80],
+        mode=str(value.get("mode", "unknown"))[:20],
+        provided=[str(item)[:64] for item in provided] if isinstance(provided, list) else [],
+        inferred=[],
+    )
+
+
 def compose_game_scene(
     game_path: Path,
     output_root: Path,
@@ -722,67 +847,125 @@ def compose_game_scene(
     timeout_s: int = MAX_UNITY_TIMEOUT_SECONDS,
     asset_root: Path | None = None,
 ) -> GameJobResult:
-    """Validate, build, QA, and atomically publish one editable Unity project."""
+    """Validate, build, QA, and atomically publish one editable Unity project.
+
+    Every run with a valid GameIR also records a production trace under
+    ``<output_root>/.trace/`` (accepted, replayed, and failed runs; errors are
+    re-raised unchanged). The trace holds the Unity 6 manual guide, the level
+    metrics, and a top-down level map.
+    """
+    session = _ComposeTrace(game_path=game_path, output_root=output_root)
+    try:
+        result = _compose_game_scene(game_path, output_root, unity_bin, timeout_s, asset_root, session)
+    except (GameJobError, GameInputError) as error:
+        session.fail(error.code)
+        raise
+    except Exception as error:
+        session.fail(type(error).__name__)
+        raise
+    return session.finalize(result)
+
+
+def _compose_game_scene(
+    game_path: Path,
+    output_root: Path,
+    unity_bin: Path,
+    timeout_s: int,
+    asset_root: Path | None,
+    session: _ComposeTrace,
+) -> GameJobResult:
     if isinstance(timeout_s, bool) or not isinstance(timeout_s, int) or not 0 < timeout_s <= MAX_UNITY_TIMEOUT_SECONDS:
         raise GameJobError("invalid_timeout", "Unity job timeout must be between 1 and 120 seconds")
+    trace = session.trace
     job_started = time.monotonic()
     deadline = job_started + timeout_s
     game_ir, source_bytes = _read_game_ir(game_path)
-    resolved_assets = resolve_assets(game_ir, asset_root)
+    session.ir = game_ir
+    trace.record_step(
+        "validate", "parse_and_validate_game_ir", schema=game_ir.schema_version, template=game_ir.template,
+        world={"width": game_ir.world.width, "height": game_ir.world.height, "tile_size": game_ir.world.tile_size},
+        player_speed=game_ir.player.speed, wall_cells=sum(len(wall.cells) for wall in game_ir.walls),
+        objectives=len(game_ir.objectives), assets=len(game_ir.assets),
+    )
+    with trace.step("assets", "resolve_local_assets", count=len(game_ir.assets)):
+        resolved_assets = resolve_assets(game_ir, asset_root)
     normalized_bytes = canonical_game_ir_bytes(game_ir)
     source_hash = sha256_bytes(source_bytes)
     normalized_hash = sha256_bytes(normalized_bytes)
-    executable = _resolve_unity_executable(unity_bin)
-    executable_hash = sha256_file(executable)
-    if not TEMPLATE_PROJECT.is_dir() or TEMPLATE_PROJECT.is_symlink():
-        raise GameJobError("template_unavailable", "Pinned Unity project template is unavailable")
-    template_hash = project_tree_sha256(TEMPLATE_PROJECT)
+    with trace.step("runtime", "resolve_unity_and_template", unity_version=runtime.EXPECTED_UNITY_VERSION) as step:
+        executable = _resolve_unity_executable(unity_bin)
+        executable_hash = sha256_file(executable)
+        if not TEMPLATE_PROJECT.is_dir() or TEMPLATE_PROJECT.is_symlink():
+            raise GameJobError("template_unavailable", "Pinned Unity project template is unavailable")
+        template_hash = project_tree_sha256(TEMPLATE_PROJECT)
+        step.params.update({"unity_executable_sha256": executable_hash, "template_sha256": template_hash})
     fingerprint = game_fingerprint(game_ir, executable_hash, template_hash)
+    trace.record_step("fingerprint", "content_address", outputs=[fingerprint], composer=COMPOSER_VERSION)
     root = _prepare_output_root(output_root)
+    session.root = root
     destination = root / fingerprint
 
     with fingerprint_lock(root, fingerprint, deadline):
         if destination.exists() or destination.is_symlink():
-            return verify_replay_and_load_result(destination)
+            with trace.step("replay", "verify_receipt_and_tree"):
+                return verify_replay_and_load_result(destination)
 
         staging = create_job_staging(root, fingerprint)
         try:
             project = staging / "project"
-            shutil.copytree(TEMPLATE_PROJECT, project)
-            if project_tree_sha256(project) != template_hash:
-                raise GameJobError("template_unavailable", "Unity project template changed during staging")
-            stage_assets(project, resolved_assets)
-            if _tree_size(staging) > MAX_STAGING_BYTES:
-                raise GameJobError("resource_cap_exceeded", "Job staging exceeds its size limit")
+            with trace.step("stage", "copy_template_and_assets", assets=len(resolved_assets)):
+                shutil.copytree(TEMPLATE_PROJECT, project)
+                if project_tree_sha256(project) != template_hash:
+                    raise GameJobError("template_unavailable", "Unity project template changed during staging")
+                stage_assets(project, resolved_assets)
+                if _tree_size(staging) > MAX_STAGING_BYTES:
+                    raise GameJobError("resource_cap_exceeded", "Job staging exceeds its size limit")
 
-            evidence = run_compile_tests_and_reopen(project, game_ir, executable, deadline)
+            with trace.step(
+                "unity", "compile_editmode_playmode_reopen",
+                stages=["compile", "editmode", "playmode", "reopen"], method="BookProduction.Editor.SceneCompiler.BuildFromGameIR",
+                worker_input=".book-production/worker-input.json",
+            ) as unity_step:
+                evidence = run_compile_tests_and_reopen(project, game_ir, executable, deadline)
+                unity_step.params.update(
+                    {
+                        "unity_version": evidence.unity_version,
+                        "editmode": {"total": evidence.editmode.total, "passed": evidence.editmode.passed},
+                        "playmode": {"total": evidence.playmode.total, "passed": evidence.playmode.passed},
+                        "elapsed_seconds": round(evidence.elapsed_seconds, 6),
+                    }
+                )
             if evidence.unity_executable_sha256 != executable_hash:
                 raise GameJobError("unsupported_unity_version", "Unity executable changed during the job")
             if project_tree_sha256(TEMPLATE_PROJECT) != template_hash:
                 raise GameJobError("template_unavailable", "Unity project template changed during the job")
-            trace_path = project / ".book-production" / "gameplay-trace.json"
-            _, trace_bytes = verify_gameplay_trace(trace_path, game_ir)
+            with trace.step("qa", "verify_gameplay_trace") as qa_step:
+                trace_path = project / ".book-production" / "gameplay-trace.json"
+                events, trace_bytes = verify_gameplay_trace(trace_path, game_ir)
+                qa_step.params = {"events": len(events), "event_counts": dict(sorted(Counter(event.split(":")[0] for event in events).items()))}
             _durable_write(staging / "gameplay-trace.json", trace_bytes)
             _sanitize_project(project)
             if _tree_size(project) > MAX_PROJECT_BYTES:
                 raise GameJobError("resource_cap_exceeded", "Published Unity project exceeds its size limit")
 
-            result = write_manifest_and_receipt(
-                staging,
-                game_ir,
-                fingerprint,
-                evidence,
-                template_sha256=template_hash,
-                source_game_ir_sha256=source_hash,
-                normalized_game_ir_sha256=normalized_hash,
-                source_bytes=len(source_bytes),
-                job_elapsed_seconds=time.monotonic() - job_started,
-                timeout_s=timeout_s,
-                assets=resolved_assets,
-            )
-            if _tree_size(staging) > MAX_STAGING_BYTES:
-                raise GameJobError("resource_cap_exceeded", "Job staging exceeds its size limit")
-            atomic_publish(staging, destination)
+            with trace.step("publish", "manifest_receipt_atomic_publish") as publish_step:
+                result = write_manifest_and_receipt(
+                    staging,
+                    game_ir,
+                    fingerprint,
+                    evidence,
+                    template_sha256=template_hash,
+                    source_game_ir_sha256=source_hash,
+                    normalized_game_ir_sha256=normalized_hash,
+                    source_bytes=len(source_bytes),
+                    job_elapsed_seconds=time.monotonic() - job_started,
+                    timeout_s=timeout_s,
+                    assets=resolved_assets,
+                )
+                if _tree_size(staging) > MAX_STAGING_BYTES:
+                    raise GameJobError("resource_cap_exceeded", "Job staging exceeds its size limit")
+                atomic_publish(staging, destination)
+                publish_step.outputs = sorted(ARTIFACT_ROOT_ENTRIES)
             return replace(result, artifact_dir=destination.resolve(strict=True))
         except Exception:
             remove_only_job_staging(staging)

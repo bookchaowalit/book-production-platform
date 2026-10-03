@@ -10,6 +10,21 @@ from pydantic import BaseModel, ConfigDict, Field
 
 ColumnType = Literal["text", "integer", "decimal", "date", "boolean"]
 CellType = Literal["text", "integer", "decimal", "date", "boolean", "null", "formula"]
+ConditionalOperator = Literal[
+    "greater_than", "greater_than_or_equal", "less_than", "less_than_or_equal", "equal_to", "not_equal_to", "between",
+]
+_HEX_COLOR = r"^#[0-9A-Fa-f]{6}$"
+_LOCAL_RANGE = r"^[A-Z]{1,3}[1-9][0-9]*:[A-Z]{1,3}[1-9][0-9]*$"
+
+# Allowlisted Excel number formats, exactly as they are typed into
+# Format Cells > Number > Custom > Type. Numeric formats apply to integer and
+# decimal columns; date formats to date columns.
+NUMERIC_NUMBER_FORMATS = frozenset({
+    "0", "0.00", "#,##0", "#,##0.00", "0%", "0.00%",
+    '"฿"#,##0.00', '"$"#,##0.00', '"€"#,##0.00', '"£"#,##0.00', '"¥"#,##0',
+})
+DATE_NUMBER_FORMATS = frozenset({"yyyy-mm-dd", "dd/mm/yyyy", "mm/dd/yyyy", "d mmm yyyy", "mmm yyyy"})
+DEFAULT_NUMBER_FORMATS: dict[str, str] = {"integer": "0", "decimal": "0.00", "date": "yyyy-mm-dd"}
 
 
 class ContractModel(BaseModel):
@@ -21,6 +36,8 @@ class ColumnSpec(ContractModel):
     label: str
     data_type: ColumnType
     required: bool = False
+    number_format: str | None = None
+    allowed_values: list[str] | None = Field(default=None, min_length=1, max_length=50)
 
 
 class TableRequest(ContractModel):
@@ -37,6 +54,17 @@ class FormulaSpec(ContractModel):
     source_ref: str = "recipe"
 
 
+class ConditionalFormatSpec(ContractModel):
+    """Highlight cells of one numeric column whose value meets a fixed rule."""
+
+    table: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
+    column: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
+    operator: ConditionalOperator
+    value: Decimal
+    value2: Decimal | None = None
+    fill_color: str = Field(default="#FFC7CE", pattern=_HEX_COLOR)
+
+
 class WorkbookRequest(ContractModel):
     schema_version: Literal["workbook-request.v1"] = "workbook-request.v1"
     workbook_id: str
@@ -44,6 +72,7 @@ class WorkbookRequest(ContractModel):
     locale: str = "en-US"
     tables: list[TableRequest] = Field(min_length=1, max_length=20)
     formulas: list[FormulaSpec] = Field(default_factory=list, max_length=100)
+    conditional_formats: list[ConditionalFormatSpec] = Field(default_factory=list, max_length=50)
     template_parameters: dict[str, str | int | float | Decimal | date | None] = Field(default_factory=dict)
 
 
@@ -58,10 +87,35 @@ class CellIR(ContractModel):
     source_ref: str = "input"
 
 
+class ColumnFormatIR(ContractModel):
+    """Number format applied to one column's data cells (sheet-local range)."""
+
+    range: str = Field(pattern=_LOCAL_RANGE)
+    number_format: str
+
+
+class DataValidationIR(ContractModel):
+    """List (dropdown) validation on one column's data cells."""
+
+    range: str = Field(pattern=_LOCAL_RANGE)
+    allowed_values: list[str] = Field(min_length=1, max_length=50)
+
+
+class ConditionalFormatIR(ContractModel):
+    range: str = Field(pattern=_LOCAL_RANGE)
+    operator: ConditionalOperator
+    value: Decimal
+    value2: Decimal | None = None
+    fill_color: str = Field(default="#FFC7CE", pattern=_HEX_COLOR)
+
+
 class SheetIR(ContractModel):
     name: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
     cells: list[CellIR] = Field(default_factory=list)
     column_labels: list[str] = Field(default_factory=list)
+    column_formats: list[ColumnFormatIR] = Field(default_factory=list)
+    data_validations: list[DataValidationIR] = Field(default_factory=list)
+    conditional_formats: list[ConditionalFormatIR] = Field(default_factory=list)
 
 
 class WorkbookIR(ContractModel):

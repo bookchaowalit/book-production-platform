@@ -9,6 +9,6 @@
     "schema_version": {"const": "audio-ir.v1"},
     "audio_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"},
     "source_path": {"type": "string", "minLength": 5, "maxLength": 240, "pattern": "\\.[wW][aA][vV]([eE])?$"},
-    "preset": {"enum": ["podcast-mono.v1", "podcast-stereo.v1", "music-stereo.v1"]}
+    "preset": {"enum": ["podcast-mono.v1", "podcast-stereo.v1", "music-stereo.v1", "apple-music-stereo.v1", "broadcast-r128-stereo.v1", "audiobook-acx-mono.v1", "voice-clean-mono.v1"]}
   }
 }

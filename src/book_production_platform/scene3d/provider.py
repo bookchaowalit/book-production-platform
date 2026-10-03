@@ -48,6 +48,7 @@ from book_production_platform.scene3d.provider_config import (
     ProviderConfigError,
     parse_provider_config,
 )
+from book_production_platform.scene3d.scene_builder import ENGINE_ONLY_PRESETS
 
 BRIEF_ADAPTER_VERSION = "scene3d-brief-adapter.v1"
 SHADOW_MODE_ONLY = "shadow_mode_only"
@@ -55,9 +56,15 @@ SCENE_SCHEMA_VERSION = "scene-ir.v1"
 
 PRESET_FIELDS = ("recipe", "composition", "lighting", "background", "material_preset", "render_profile")
 # The preset registry is the SceneIR contract itself, so the adapter can never
-# drift from the validator.
+# drift from the validator, minus the engine-only presets the V1B eval set does
+# not cover yet (orbit turntable angles, extra lighting and backgrounds).
 PRESET_REGISTRY: dict[str, tuple[str, ...]] = {
-    name: tuple(str(value) for value in get_args(SceneIR.model_fields[name].annotation)) for name in PRESET_FIELDS
+    name: tuple(
+        str(value)
+        for value in get_args(SceneIR.model_fields[name].annotation)
+        if value not in ENGINE_ONLY_PRESETS.get(name, frozenset())
+    )
+    for name in PRESET_FIELDS
 }
 # Fields the brief must decide; the others have one registered value today.
 CRITICAL_FIELDS = ("asset_path", "composition", "render_profile")

@@ -81,7 +81,10 @@ def test_cli_malformed_scene_json_returns_stable_error(
         "error": "invalid_scene_ir",
         "status": "rejected",
     }
-    assert not (tmp_path / "output").exists()
+    # Nothing is published; the failed job is only recorded in the trace history.
+    output = tmp_path / "output"
+    assert sorted(child.name for child in output.iterdir()) == ["history.jsonl", "traces"]
+    assert "nested" not in (output / "history.jsonl").read_text(encoding="utf-8")
 
 
 def test_cli_accepted_job_returns_json_result(

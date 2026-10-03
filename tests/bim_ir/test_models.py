@@ -69,7 +69,7 @@ def test_parse_accepts_all_element_classes_together() -> None:
         (("takeoff_id",), ""),
         (("element_classes",), ["IfcWall", "IfcWall"]),
         (("element_classes",), []),
-        (("element_classes",), ["IfcWall", "IfcRoof"]),
+        (("element_classes",), ["IfcWall", "IfcFlowTerminal"]),
         (("element_classes",), ["ifcwall"]),
         (("element_classes",), [120]),
         (("element_classes",), [True]),

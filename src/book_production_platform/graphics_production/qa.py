@@ -9,7 +9,14 @@ from xml.sax.saxutils import escape
 
 from PIL import Image
 
-from book_production_platform.graphics_ir import GraphicIR, TextNode
+from book_production_platform.graphics_ir import GraphicIR, ShapeNode, TextNode
+
+# WCAG 2.x minimum contrast: 4.5:1 for normal text, 3:1 for large text
+# (24 px regular or larger). Advisory: recorded in the trace and the manual
+# guide, never used to reject an artifact.
+WCAG_AA_NORMAL = 4.5
+WCAG_AA_LARGE = 3.0
+WCAG_LARGE_TEXT_PX = 24.0
 
 
 def run_graphic_qa(svg: str, png: bytes, ir: GraphicIR) -> tuple[str, ...]:
@@ -40,4 +47,56 @@ def run_graphic_qa(svg: str, png: bytes, ir: GraphicIR) -> tuple[str, ...]:
     return tuple(dict.fromkeys(issues))
 
 
-__all__ = ["run_graphic_qa"]
+def _luminance(color: str) -> float:
+    def channel(value: int) -> float:
+        srgb = value / 255
+        return srgb / 12.92 if srgb <= 0.04045 else ((srgb + 0.055) / 1.055) ** 2.4
+
+    red, green, blue = (int(color[index:index + 2], 16) for index in (1, 3, 5))
+    return 0.2126 * channel(red) + 0.7152 * channel(green) + 0.0722 * channel(blue)
+
+
+def contrast_ratio(foreground: str, background: str) -> float:
+    """WCAG 2.x contrast ratio of two ``#RRGGBB`` colors, rounded to 2 decimals."""
+
+    first, second = sorted((_luminance(foreground), _luminance(background)), reverse=True)
+    return round((first + 0.05) / (second + 0.05), 2)
+
+
+def contrast_report(ir: GraphicIR) -> list[dict[str, object]]:
+    """Advisory WCAG AA check of every text layer against the shape directly behind it.
+
+    The backdrop is the last rectangle drawn before the text whose bounds contain
+    the text box centre (the renderer paints in IR order), falling back to the
+    canvas background.
+    """
+
+    report: list[dict[str, object]] = []
+    for index, node in enumerate(ir.nodes):
+        if not isinstance(node, TextNode):
+            continue
+        centre_x, centre_y = node.x + node.width / 2, node.y + node.height / 2
+        backdrop, backdrop_id = ir.canvas.background, "canvas"
+        for shape in ir.nodes[:index]:
+            if (
+                isinstance(shape, ShapeNode)
+                and shape.kind == "rect"
+                and shape.x <= centre_x <= shape.x + shape.width
+                and shape.y <= centre_y <= shape.y + shape.height
+            ):
+                backdrop, backdrop_id = shape.fill, shape.node_id
+        ratio = contrast_ratio(node.color, backdrop)
+        required = WCAG_AA_LARGE if node.font_size >= WCAG_LARGE_TEXT_PX else WCAG_AA_NORMAL
+        report.append({
+            "node_id": node.node_id,
+            "color": node.color,
+            "backdrop": backdrop,
+            "backdrop_node": backdrop_id,
+            "ratio": ratio,
+            "required": required,
+            "passes_aa": ratio >= required,
+        })
+    return report
+
+
+__all__ = ["WCAG_AA_LARGE", "WCAG_AA_NORMAL", "contrast_ratio", "contrast_report", "run_graphic_qa"]

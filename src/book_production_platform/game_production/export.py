@@ -6,11 +6,15 @@ import json
 import shutil
 import subprocess
 import time
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from book_production_platform.game_ir import parse_game_ir, validate_game_ir
+from book_production_platform.game_ir import (
+    GameInputError,
+    parse_game_ir,
+    validate_game_ir,
+)
 from book_production_platform.game_production import runtime
 from book_production_platform.game_production.errors import GameJobError
 from book_production_platform.game_production.jobs import (
@@ -30,6 +34,14 @@ from book_production_platform.game_production.jobs import (
     sha256_file,
     verify_replay_and_load_result,
 )
+from book_production_platform.game_production.manual import build_export_guide
+from book_production_platform.game_production.tracing import (
+    record_artifact,
+    trace_job_dir,
+    trace_root,
+    write_ir_file,
+)
+from book_production_platform.production_trace import TraceRecorder
 
 EXPORTER_VERSION = "game-player-exporter.v1"
 EXPORT_MANIFEST_SCHEMA = "game-production.export.v1"
@@ -61,6 +73,7 @@ class GameExportResult:
     artifact_hashes: dict[str, str]
     replay: bool
     model_calls: int = 0
+    trace_job_id: str | None = field(default=None, compare=False)
 
 
 def export_fingerprint(
@@ -242,6 +255,46 @@ def verify_export_replay(artifact_dir: Path) -> GameExportResult:
         raise GameJobError("replay_integrity_error", "Published export failed integrity checks") from error
 
 
+class _ExportTrace:
+    """One export run's trace under ``<output_root>/.trace/`` once the request is valid."""
+
+    def __init__(self, output_root: Path) -> None:
+        self.trace = TraceRecorder(
+            tool_id="game-v1a-export", engine_version=EXPORTER_VERSION, recipe_version=EXPORTER_VERSION,
+            schema_version=EXPORT_MANIFEST_SCHEMA,
+        )
+        self.output_root = output_root
+        self.request: dict[str, Any] | None = None
+        self.product_name: str | None = None
+
+    def persist(self, status: str, result: GameExportResult | None, error_code: str | None) -> str | None:
+        if self.request is None:
+            return None
+        trace = self.trace
+        try:
+            root = _prepare_output_root(self.output_root)
+            directory = trace_job_dir(root, trace.job_id)
+            directory.mkdir(parents=True)
+            trace.input_json("export_request", self.request)
+            ir_file = write_ir_file(directory, self.request)
+            trace.ir_document(self.request, schema="game-export-request.v1", path=ir_file)
+            record_artifact(trace, ir_file, job_dir=directory, media_type="application/json", role="ir")
+            if result is not None:
+                record_artifact(trace, result.artifact_dir / "export-manifest.json", job_dir=directory, media_type="application/json")
+                record_artifact(trace, result.artifact_dir / ".receipt.json", job_dir=directory, media_type="application/json")
+                entry = result.artifact_dir / "player" / result.entrypoint
+                if entry.is_file():
+                    record_artifact(trace, entry, job_dir=directory, role="entrypoint")
+            if error_code is not None:
+                trace.record_step("outcome", "failed", note=error_code)
+            target = str(self.request["target"])
+            guide = build_export_guide(target, self.product_name or "game", EXPORT_TARGETS[target])
+            trace.finish(status=status, job_dir=directory, output_root=trace_root(root), guide=guide)
+        except (GameJobError, OSError, ValueError, TypeError, KeyError):
+            return None
+        return trace.job_id
+
+
 def export_game_player(
     artifact_dir: Path,
     target: str,
@@ -249,13 +302,46 @@ def export_game_player(
     unity_bin: Path,
     timeout_s: int = DEFAULT_EXPORT_TIMEOUT_SECONDS,
 ) -> GameExportResult:
-    """Build, check, and atomically publish one playable build of an accepted project."""
+    """Build, check, and atomically publish one playable build of an accepted project.
+
+    Valid requests are traced under ``<output_root>/.trace/`` (accepted,
+    replayed, and failed runs; errors re-raise unchanged).
+    """
+    session = _ExportTrace(output_root)
+    try:
+        result = _export_game_player(artifact_dir, target, output_root, unity_bin, timeout_s, session)
+    except (GameJobError, GameInputError) as error:
+        session.persist("failed", None, error.code)
+        raise
+    except Exception as error:
+        session.persist("failed", None, type(error).__name__)
+        raise
+    job_id = session.persist("replayed" if result.replay else "accepted", result, None)
+    return replace(result, trace_job_id=job_id) if job_id else result
+
+
+def _export_game_player(
+    artifact_dir: Path,
+    target: str,
+    output_root: Path,
+    unity_bin: Path,
+    timeout_s: int,
+    session: _ExportTrace,
+) -> GameExportResult:
     _validate_request(target, timeout_s)
+    trace = session.trace
     job_started = time.monotonic()
     deadline = job_started + timeout_s
-    source = verify_replay_and_load_result(artifact_dir)
+    with trace.step("validate", "verify_source_project") as source_step:
+        source = verify_replay_and_load_result(artifact_dir)
+        source_step.params = {"source_fingerprint": source.fingerprint, "hashes": dict(source.artifact_hashes)}
     source_project = source.artifact_dir / "project"
     product_name = _scene_id(source_project)
+    session.request = {
+        "target": target, "unity_target": EXPORT_TARGETS[target], "source_fingerprint": source.fingerprint,
+        "product_name": product_name, "timeout_s": timeout_s,
+    }
+    session.product_name = product_name
     executable = _resolve_unity_executable(unity_bin)
     executable_hash = sha256_file(executable)
     if not EXPORTER_SOURCE.is_file() or EXPORTER_SOURCE.is_symlink():
@@ -273,7 +359,8 @@ def export_game_player(
 
     with fingerprint_lock(root, fingerprint, deadline):
         if destination.exists() or destination.is_symlink():
-            return verify_export_replay(destination)
+            with trace.step("replay", "verify_export_receipt"):
+                return verify_export_replay(destination)
 
         staging = create_job_staging(root, fingerprint)
         try:
@@ -293,7 +380,9 @@ def export_game_player(
                 ).encode("utf-8"),
             )
 
-            version, unity_seconds = _run_unity_export(executable, work, target, deadline)
+            with trace.step("unity", "build_player", target=target, unity_target=EXPORT_TARGETS[target], method=EXPORTER_METHOD) as build_step:
+                version, unity_seconds = _run_unity_export(executable, work, target, deadline)
+                build_step.params.update({"unity_version": version, "unity_seconds": round(unity_seconds, 3)})
             report: dict[str, Any] = _load_limited_json(
                 private_root / "export-report.json", MAX_EXPORT_REPORT_BYTES, "unity_export_failed"
             )
@@ -344,7 +433,9 @@ def export_game_player(
                     {"schema_version": EXPORT_RECEIPT_SCHEMA, "fingerprint": fingerprint, "hashes": hashes}
                 ),
             )
-            atomic_publish(staging, destination)
+            with trace.step("publish", "atomic_publish", files=len(files), bytes=total) as publish_step:
+                atomic_publish(staging, destination)
+                publish_step.outputs = sorted(EXPORT_ROOT_ENTRIES)
             result = GameExportResult(
                 "accepted",
                 fingerprint,

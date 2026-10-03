@@ -12,7 +12,26 @@ BASE_BIM_TAKEOFF_IR: dict[str, Any] = {
     "output_units": "SI",
 }
 
-ALL_ELEMENT_CLASSES = ["IfcWall", "IfcSlab", "IfcColumn", "IfcBeam", "IfcDoor", "IfcWindow"]
+ALL_ELEMENT_CLASSES = [
+    "IfcWall",
+    "IfcSlab",
+    "IfcColumn",
+    "IfcBeam",
+    "IfcDoor",
+    "IfcWindow",
+    "IfcBuildingElementProxy",
+    "IfcCovering",
+    "IfcCurtainWall",
+    "IfcFooting",
+    "IfcMember",
+    "IfcPile",
+    "IfcPlate",
+    "IfcRailing",
+    "IfcRamp",
+    "IfcRoof",
+    "IfcSpace",
+    "IfcStair",
+]
 
 
 @pytest.fixture

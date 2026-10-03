@@ -118,10 +118,38 @@ def _run_brief(args: argparse.Namespace) -> int:
     if result.status == "complete" and result.part_ir is not None:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(result.part_ir, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+        _write_proposal_sidecar(args.output, result, mode=adapter.mode)
     _emit(summary)
     if result.status == "needs_input":
         return 4
     return 0 if result.status == "complete" else 2
+
+
+def _write_proposal_sidecar(output: Path, result: Any, *, mode: str) -> None:
+    """Write ``<output>.proposal.json``: metadata-only provenance that ``cad build`` traces.
+
+    It holds the adapter name/version, mode, model-call count, which dimensions
+    the brief provided, and the canonical PartIR hash - never the brief text.
+    """
+
+    from book_production_platform.cad_ir import canonical_part_ir, parse_part_ir
+    from book_production_platform.production_trace import sha256_json
+
+    from .jobs import PROPOSAL_SCHEMA, PROPOSAL_SIDECAR_SUFFIX
+
+    canonical = json.loads(canonical_part_ir(parse_part_ir(result.part_ir)).decode("utf-8"))
+    sidecar = {
+        "schema_version": PROPOSAL_SCHEMA,
+        "tool_id": "cad-v1b",
+        "adapter": f"{result.adapter}/{result.adapter_version}",
+        "mode": mode,
+        "model_calls": int(result.model_calls),
+        "provided": sorted(str(item) for item in result.provided),
+        "inferred": [],
+        "ir_sha256": sha256_json(canonical),
+    }
+    path = output.with_name(output.name + PROPOSAL_SIDECAR_SUFFIX)
+    path.write_text(json.dumps(sidecar, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
 
 
 def _run_shadow(args: argparse.Namespace) -> int:

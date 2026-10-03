@@ -93,6 +93,7 @@ def game_main(argv: list[str]) -> int:
                 "artifact_hashes": result.artifact_hashes,
                 "replay": result.replay,
                 "model_calls": result.model_calls,
+                "trace_job_id": result.trace_job_id,
             }
         )
         return 0
@@ -123,6 +124,7 @@ def game_main(argv: list[str]) -> int:
                 "artifact_hashes": exported.artifact_hashes,
                 "replay": exported.replay,
                 "model_calls": exported.model_calls,
+                "trace_job_id": exported.trace_job_id,
             }
         )
         return 0

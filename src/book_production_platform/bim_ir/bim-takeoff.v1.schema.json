@@ -22,7 +22,7 @@
     "element_classes": {
       "type": "array",
       "minItems": 1,
-      "maxItems": 6,
+      "maxItems": 18,
       "uniqueItems": true,
       "items": {
         "enum": [
@@ -31,7 +31,19 @@
           "IfcColumn",
           "IfcBeam",
           "IfcDoor",
-          "IfcWindow"
+          "IfcWindow",
+          "IfcBuildingElementProxy",
+          "IfcCovering",
+          "IfcCurtainWall",
+          "IfcFooting",
+          "IfcMember",
+          "IfcPile",
+          "IfcPlate",
+          "IfcRailing",
+          "IfcRamp",
+          "IfcRoof",
+          "IfcSpace",
+          "IfcStair"
         ]
       }
     },

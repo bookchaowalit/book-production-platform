@@ -46,6 +46,10 @@ def _parser() -> argparse.ArgumentParser:
     build = pipeline_commands.add_parser("build", help="compile and locally plan a typed pipeline")
     build.add_argument("--input", required=True, type=Path)
     build.add_argument("--output-root", required=True, type=Path)
+    run = pipeline_commands.add_parser("run", help="build the plan, then execute it read-only over local rows and export results.csv")
+    run.add_argument("--input", required=True, type=Path, help="pipeline-request.v1 JSON")
+    run.add_argument("--rows", required=True, type=Path, help="JSON array of source rows (or {\"rows\": [...]}) keyed by column key")
+    run.add_argument("--output-root", required=True, type=Path)
     propose = pipeline_commands.add_parser("propose", help="propose a pipeline from a question via the AI gateway (mode=live only), then build it")
     propose.add_argument("--input", required=True, type=Path, help="JSON envelope: pipeline_id, question, locale, dataset{table_name, source_ref, columns}")
     propose.add_argument("--output-root", required=True, type=Path)
@@ -121,12 +125,30 @@ def _run_propose(args: argparse.Namespace) -> int:
         _emit(summary)
         return 4 if result.status == "needs_input" else 2
     try:
-        job = run_pipeline_job(result.request, args.output_root)
+        job = run_pipeline_job(result.request, args.output_root, ai_proposal={**result.metadata(), "mode": adapter.mode})
     except PipelineJobError as error:
         _emit({**summary, "status": "rejected", "error": error.code})
         return 2
     _emit({**summary, "job": job.to_dict()})
     return 0 if job.status == "accepted" else 2
+
+
+def _run_execution(args: argparse.Namespace) -> int:
+    from .execute import load_rows, run_pipeline_execution_job
+
+    try:
+        request = PipelineRequest.model_validate_json(args.input.read_bytes()[: MAX_PIPELINE_REQUEST_BYTES + 1])
+        rows = load_rows(args.rows)
+    except (OSError, ValueError, ValidationError):
+        _emit({"status": "rejected", "error": "cli_io_error"})
+        return 2
+    try:
+        result = run_pipeline_execution_job(request, rows, args.output_root)
+    except PipelineJobError as error:
+        _emit({"status": "rejected", "error": error.code})
+        return 2
+    _emit(result.to_dict())
+    return 0 if result.status == "accepted" else 2
 
 
 def _emit(value: dict[str, object]) -> None:
@@ -139,6 +161,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_shadow(args)
     if args.pipeline_command == "propose":
         return _run_propose(args)
+    if args.pipeline_command == "run":
+        return _run_execution(args)
     try:
         if args.input.is_symlink():
             raise PipelineInputError("cli_io_error")

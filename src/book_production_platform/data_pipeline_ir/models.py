@@ -9,7 +9,10 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 ColumnType = Literal["text", "integer", "decimal", "date", "boolean"]
-PipelineOp = Literal["select", "filter_equals", "filter_null", "sort_by", "limit", "aggregate", "union_all"]
+PipelineOp = Literal[
+    "select", "filter_equals", "filter_compare", "filter_null", "distinct", "sort_by", "limit", "aggregate", "union_all",
+]
+CompareOp = Literal["gt", "gte", "lt", "lte", "ne"]
 SortDirection = Literal["asc", "desc"]
 MetricOp = Literal["count", "sum", "avg"]
 CellValue = str | int | Decimal | date | bool | None
@@ -45,6 +48,7 @@ class PipelineNode(ContractModel):
     columns: list[str] | None = Field(default=None, max_length=100)
     column: str | None = None
     value: CellValue = None
+    operator: CompareOp | None = None
     direction: SortDirection | None = None
     group_by: list[str] | None = Field(default=None, max_length=100)
     metrics: list[PipelineMetric] | None = Field(default=None, max_length=100)
@@ -88,6 +92,7 @@ __all__ = [
     "CellValue",
     "ColumnSpec",
     "ColumnType",
+    "CompareOp",
     "MetricOp",
     "PipelineIR",
     "PipelineLineageRef",

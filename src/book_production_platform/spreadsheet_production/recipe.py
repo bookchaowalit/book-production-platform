@@ -7,9 +7,14 @@ from decimal import Decimal
 from typing import Any, Literal
 
 from book_production_platform.spreadsheet_ir import (
+    DEFAULT_NUMBER_FORMATS,
     CellIR,
+    ColumnFormatIR,
+    ConditionalFormatIR,
+    DataValidationIR,
     FormulaSpec,
     SheetIR,
+    TableRequest,
     ValidationIssue,
     WorkbookIR,
     WorkbookRequest,
@@ -92,6 +97,32 @@ def _intent_assumptions(parsed: WorkbookRequest) -> dict[str, str]:
     return {"formula_language": INTENT_FORMULA_LANGUAGE, **({"template_id": str(template_id)} if template_id else {})}
 
 
+def _column_features(parsed: WorkbookRequest, table: TableRequest, data_start: int, data_end: int) -> dict[str, Any]:
+    """Number formats, dropdown validations and conditional formats for one data sheet."""
+
+    formats: list[ColumnFormatIR] = []
+    validations: list[DataValidationIR] = []
+    rules: list[ConditionalFormatIR] = []
+    letters = {column.key: _column_name(index) for index, column in enumerate(table.columns, start=1)}
+    for column in table.columns:
+        letter = letters[column.key]
+        if table.rows and column.data_type in DEFAULT_NUMBER_FORMATS:
+            number_format = column.number_format or DEFAULT_NUMBER_FORMATS[column.data_type]
+            formats.append(ColumnFormatIR(range=f"{letter}{data_start}:{letter}{data_end}", number_format=number_format))
+        if column.allowed_values is not None:
+            end = max(data_start, data_end)
+            validations.append(DataValidationIR(range=f"{letter}{data_start}:{letter}{end}", allowed_values=list(column.allowed_values)))
+    for rule in parsed.conditional_formats:
+        if rule.table != table.name or not table.rows:
+            continue
+        letter = letters[rule.column]
+        rules.append(ConditionalFormatIR(
+            range=f"{letter}{data_start}:{letter}{data_end}",
+            operator=rule.operator, value=rule.value, value2=rule.value2, fill_color=rule.fill_color.upper(),
+        ))
+    return {"column_formats": formats, "data_validations": validations, "conditional_formats": rules}
+
+
 def build_workbook_ir(request: WorkbookRequest | dict[str, Any]) -> WorkbookIR:
     """Build a Summary sheet plus one data sheet per table and validate all formulas before export."""
 
@@ -124,10 +155,15 @@ def build_workbook_ir(request: WorkbookRequest | dict[str, Any]) -> WorkbookIR:
                 value = parse_typed_value(row.get(column.key), column.data_type, path=address)
                 cells.append(CellIR(address=address, data_type=_cell_type(value), value=value, source_ref=table.source_ref))
                 source_lineage[address] = table.source_ref
-        data_sheets.append(SheetIR(name=sheet, cells=cells, column_labels=[column.label for column in table.columns]))
+        data_end = data_start + len(table.rows) - 1
+        data_sheets.append(SheetIR(
+            name=sheet,
+            cells=cells,
+            column_labels=[column.label for column in table.columns],
+            **_column_features(parsed, table, data_start, data_end),
+        ))
         if not table.rows:
             continue
-        data_end = data_start + len(table.rows) - 1
         for column_index, column in enumerate(table.columns, start=1):
             if column.data_type not in {"integer", "decimal"}:
                 continue

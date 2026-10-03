@@ -27,6 +27,7 @@ from .models import (
 MAX_PIPELINE_REQUEST_BYTES = 262_144
 MAX_FILTER_TEXT_LENGTH = 2_048
 MAX_LIMIT_ROWS = 10_000
+ORDERED_TYPES = frozenset({"integer", "decimal", "date"})
 _ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
@@ -176,7 +177,9 @@ def _validate_operation_fields(node: PipelineNode) -> None:
     allowed = {
         "select": {"columns"},
         "filter_equals": {"column", "value"},
+        "filter_compare": {"column", "operator", "value"},
         "filter_null": {"column"},
+        "distinct": set(),
         "sort_by": {"column", "direction"},
         "limit": {"limit"},
         "aggregate": {"group_by", "metrics"},
@@ -187,7 +190,9 @@ def _validate_operation_fields(node: PipelineNode) -> None:
     required = {
         "select": {"columns"},
         "filter_equals": {"column", "value"},
+        "filter_compare": {"column", "operator", "value"},
         "filter_null": {"column"},
+        "distinct": set(),
         "sort_by": {"column", "direction"},
         "limit": {"limit"},
         "aggregate": {"group_by", "metrics"},
@@ -201,8 +206,8 @@ def _validate_operation_fields(node: PipelineNode) -> None:
         )
     if node.op == "select" and (not node.columns or len(node.columns) > 100 or len(set(node.columns)) != len(node.columns)):
         raise _issue("invalid_pipeline_operation_fields", f"nodes.{node.node_id}.columns", "Select columns must be unique and non-empty")
-    if node.op == "filter_equals" and node.value is None:
-        raise _issue("invalid_pipeline_operation_fields", f"nodes.{node.node_id}.value", "filter_equals requires a non-null value")
+    if node.op in {"filter_equals", "filter_compare"} and node.value is None:
+        raise _issue("invalid_pipeline_operation_fields", f"nodes.{node.node_id}.value", f"{node.op} requires a non-null value")
     if node.op == "aggregate":
         if node.group_by is None or len(node.group_by) > 100 or len(set(node.group_by)) != len(node.group_by):
             raise _issue("invalid_pipeline_operation_fields", f"nodes.{node.node_id}.group_by", "group_by must contain unique columns")
@@ -260,10 +265,12 @@ def _propagate_schemas(
         parent_columns = parents[0]
         if node.op == "select":
             output = _check_columns(parent_columns, node.columns or [], node)
-        elif node.op in {"filter_equals", "filter_null", "sort_by", "limit"}:
+        elif node.op in {"filter_equals", "filter_compare", "filter_null", "distinct", "sort_by", "limit"}:
             _find_column(parent_columns, node.column, node) if node.column is not None else None
-            if node.op == "filter_equals" and node.column is not None:
+            if node.op in {"filter_equals", "filter_compare"} and node.column is not None:
                 column = _find_column(parent_columns, node.column, node)
+                if node.op == "filter_compare" and node.operator != "ne" and column.data_type not in ORDERED_TYPES:
+                    raise _issue("pipeline_type_mismatch", f"nodes.{node.node_id}.operator", "Ordered comparisons need integer, decimal, or date columns")
                 node = node.model_copy(update={"value": _typed_filter_value(node.value, column.data_type, node)})
                 ordered_nodes[index] = node
             output = list(parent_columns)
@@ -313,7 +320,7 @@ def _propagate_lineage(
         parent_lineage = parents[0]
         if node.op == "select":
             current = {key: list(parent_lineage[key]) for key in node.columns or []}
-        elif node.op in {"filter_equals", "filter_null", "sort_by", "limit"}:
+        elif node.op in {"filter_equals", "filter_compare", "filter_null", "distinct", "sort_by", "limit"}:
             current = {key: list(refs) for key, refs in parent_lineage.items()}
         elif node.op == "aggregate":
             current = {key: list(parent_lineage[key]) for key in node.group_by or []}

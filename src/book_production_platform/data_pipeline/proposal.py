@@ -1,7 +1,8 @@
 """Deterministic PipelineIR proposal checks for Data Pipeline V1B.
 
 An AI brief adapter (or a structured caller) may only propose an ordered list
-of registered steps (source, select, filter, aggregate, sort, limit; join is
+of registered steps (source, select, filter with eq/gt/gte/lt/lte/ne, distinct,
+aggregate, sort, limit; join is
 registered in the spec but not supported by the V1A single-source engine)
 over one existing table. It never sends SQL and never proposes a write. This
 module rejects SQL/write text, keeps references only to existing tables and
@@ -37,7 +38,8 @@ from .pipeline import (
 )
 
 ProposalStatus = Literal["complete", "needs_input", "rejected"]
-STEP_TYPES = ("source", "select", "filter", "aggregate", "sort", "limit", "join")
+STEP_TYPES = ("source", "select", "filter", "distinct", "aggregate", "sort", "limit", "join")
+FILTER_OPERATORS = ("eq", "gt", "gte", "lt", "lte", "ne")
 MAX_STEPS = 12
 WRITE_STEP_TYPES = frozenset(
     ("insert", "update", "delete", "drop", "write", "create", "alter", "merge", "upsert", "truncate", "replace", "save", "export")
@@ -58,7 +60,8 @@ SQL_KEYS = frozenset(("sql", "query", "statement", "raw_sql", "where", "expressi
 _STEP_FIELDS: dict[str, tuple[frozenset[str], frozenset[str]]] = {
     "source": (frozenset({"table"}), frozenset()),
     "select": (frozenset({"columns"}), frozenset()),
-    "filter": (frozenset({"column"}), frozenset({"value", "is_null"})),
+    "filter": (frozenset({"column"}), frozenset({"value", "is_null", "operator"})),
+    "distinct": (frozenset(), frozenset()),
     "aggregate": (frozenset({"group_by", "metrics"}), frozenset()),
     "sort": (frozenset({"column", "direction"}), frozenset()),
     "limit": (frozenset({"count"}), frozenset()),
@@ -230,6 +233,9 @@ def check_proposal(
             if not isinstance(column, str) or column not in types:
                 issues.append(ProposalIssue("unknown_column", path))
                 break
+            operator = step.get("operator", "eq")
+            if "operator" in step and (operator not in FILTER_OPERATORS or "value" not in step or "is_null" in step):
+                return PipelineProposalCheck("rejected", issues=[ProposalIssue("step_invalid", path)])
             if step.get("is_null") is True and "value" not in step:
                 node.update(op="filter_null", column=column)
             elif "value" in step and "is_null" not in step:
@@ -242,9 +248,14 @@ def check_proposal(
                     issues.append(ProposalIssue("filter_value_ungrounded", path))
                     missing.append(f"filter:{column}")
                     break
-                node.update(op="filter_equals", column=column, value=value)
+                if operator == "eq":
+                    node.update(op="filter_equals", column=column, value=value)
+                else:
+                    node.update(op="filter_compare", column=column, operator=operator, value=value)
             else:
                 return PipelineProposalCheck("rejected", issues=[ProposalIssue("step_invalid", path)])
+        elif kind == "distinct":
+            node.update(op="distinct")
         elif kind == "aggregate":
             group_by, metrics = step["group_by"], step["metrics"]
             if not isinstance(group_by, list) or not all(isinstance(item, str) for item in group_by) or not isinstance(metrics, list) or not metrics:
@@ -315,6 +326,7 @@ def compile_request(request: Mapping[str, Any]) -> tuple[PipelineIR, CompiledPip
 
 
 __all__ = [
+    "FILTER_OPERATORS",
     "SQL_TEXT",
     "STEP_TYPES",
     "WRITE_TEXT",

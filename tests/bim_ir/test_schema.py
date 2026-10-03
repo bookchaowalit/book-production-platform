@@ -139,7 +139,7 @@ INVALID_EXAMPLES = (
     {**BASE_BIM_TAKEOFF_IR, "takeoff_id": "x" * 65},
     {**BASE_BIM_TAKEOFF_IR, "element_classes": []},
     {**BASE_BIM_TAKEOFF_IR, "element_classes": ["IfcWall", "IfcWall"]},
-    {**BASE_BIM_TAKEOFF_IR, "element_classes": ["IfcRoof"]},
+    {**BASE_BIM_TAKEOFF_IR, "element_classes": ["IfcFlowTerminal"]},
     {**BASE_BIM_TAKEOFF_IR, "element_classes": [42]},
     {**BASE_BIM_TAKEOFF_IR, "element_classes": [None]},
     {**BASE_BIM_TAKEOFF_IR, "unexpected": True},

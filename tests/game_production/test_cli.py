@@ -52,6 +52,7 @@ def test_build_reports_json_and_model_calls_zero(tmp_path: Path, monkeypatch, ca
         "artifact_hashes": {"scene_sha256": "b" * 64},
         "replay": False,
         "model_calls": 0,
+        "trace_job_id": None,
     }
     assert calls == [(game_path, tmp_path / "jobs", Path("Unity.exe"), 120)]
 

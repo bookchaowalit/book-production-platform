@@ -81,7 +81,9 @@ def _run_brief(args: argparse.Namespace) -> int:
         print(json.dumps(summary, ensure_ascii=False, indent=2))
         return 4 if result.status == "needs_input" else 2
     try:
-        job = run_workbook_job(result.request, args.output, args.idempotency_key)
+        job = run_workbook_job(
+            result.request, args.output, args.idempotency_key, ai_proposal={**result.metadata(), "mode": adapter.mode},
+        )
     except IdempotencyConflict as exc:
         print(f"idempotency error: {exc}", file=sys.stderr)
         return 2

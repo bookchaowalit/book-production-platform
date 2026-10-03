@@ -21,15 +21,86 @@ FIT_DIRECTIONS = {
     "side-fit.v1": (1.0, 0.0, 0.18),
     "top-fit.v1": (0.0, -0.3, 1.0),
 }
+# Turntable stills: product-fitted orbit at the three-quarter-fit elevation,
+# every 45 degrees starting from the front (0 = camera on -Y, 90 = camera on +X).
+ORBIT_STEP_DEGREES = 45
+ORBIT_ELEVATION = 0.33
+ORBIT_COMPOSITIONS = {
+    f"orbit-fit-{angle:03d}.v1": (
+        round(math.sin(math.radians(angle)), 6) + 0.0,  # + 0.0 turns -0.0 into 0.0
+        round(-math.cos(math.radians(angle)), 6) + 0.0,
+        ORBIT_ELEVATION,
+    )
+    for angle in range(0, 360, ORBIT_STEP_DEGREES)
+}
+FIT_DIRECTIONS.update(ORBIT_COMPOSITIONS)
 COMPOSITION_IDS = {COMPOSITION_ID, *FIT_DIRECTIONS}
 _CAMERA_OFFSET = (3.7, -6.0, 3.1)
 _LEGACY_TARGET = (0.0, 0.0, 0.8)
 _FIT_MARGIN = 1.15
+CAMERA_LENS_MM = 55.0
+# Blender's default camera sensor (Sensor Fit = Auto); _fit_camera reads it.
+CAMERA_SENSOR_WIDTH_MM = 36.0
+LIGHT_TARGET = (0.0, 0.0, 0.8)
 LIGHTING_ID = "softbox-three-point.v1"
+# Every light is an AREA light with a DISK shape aimed at LIGHT_TARGET:
+# (name, location, energy W, size m, color RGB).
+LightSpec = tuple[str, tuple[float, float, float], float, float, tuple[float, float, float]]
+LIGHTING_PRESETS: dict[str, tuple[LightSpec, ...]] = {
+    LIGHTING_ID: (
+        ("Key Softbox", (-3.5, -4.0, 5.0), 720.0, 4.0, (1.0, 0.86, 0.72)),
+        ("Fill Softbox", (4.0, -2.0, 3.2), 430.0, 4.5, (0.72, 0.84, 1.0)),
+        ("Rim Softbox", (1.0, 3.6, 4.4), 850.0, 3.0, (1.0, 0.94, 0.82)),
+    ),
+    # Bright, low-contrast catalogue light: large neutral key and fill.
+    "high-key-white.v1": (
+        ("Key Softbox", (-3.0, -4.5, 5.0), 900.0, 6.0, (1.0, 1.0, 1.0)),
+        ("Fill Softbox", (4.0, -3.0, 3.5), 700.0, 6.0, (1.0, 1.0, 1.0)),
+        ("Top Softbox", (0.0, 0.0, 6.0), 500.0, 5.0, (1.0, 1.0, 1.0)),
+        ("Rim Softbox", (0.5, 4.0, 4.0), 400.0, 3.0, (1.0, 1.0, 1.0)),
+    ),
+    # Low-key hero light: small warm key, strong cool rim, almost no fill.
+    "dramatic-rim.v1": (
+        ("Key Softbox", (-4.0, -2.5, 3.5), 500.0, 1.5, (1.0, 0.82, 0.64)),
+        ("Rim Left", (-2.5, 3.5, 3.0), 1400.0, 1.0, (0.70, 0.82, 1.0)),
+        ("Rim Right", (2.5, 3.5, 3.0), 1400.0, 1.0, (0.70, 0.82, 1.0)),
+    ),
+}
 BACKGROUND_ID = "studio-neutral.v1"
+# World colour/strength, ground plane (or None), and film transparency.
+BACKGROUND_PRESETS: dict[str, dict[str, Any]] = {
+    BACKGROUND_ID: {
+        "world_color": (0.52, 0.56, 0.62, 1.0),
+        "world_strength": 0.45,
+        "ground": {"size": 200.0, "location": (0.0, 0.0, -0.04), "base_color": (0.68, 0.71, 0.76, 1.0), "roughness": 0.72},
+        "film_transparent": False,
+    },
+    "studio-white.v1": {
+        "world_color": (0.95, 0.95, 0.95, 1.0),
+        "world_strength": 0.6,
+        "ground": {"size": 200.0, "location": (0.0, 0.0, -0.04), "base_color": (0.92, 0.92, 0.92, 1.0), "roughness": 0.6},
+        "film_transparent": False,
+    },
+    # Cut-out PNG (RGBA): no ground plane, world still lights the product.
+    "transparent.v1": {
+        "world_color": (0.52, 0.56, 0.62, 1.0),
+        "world_strength": 0.45,
+        "ground": None,
+        "film_transparent": True,
+    },
+}
+# Presets the deterministic engine accepts but the V1B brief adapter may not
+# propose yet (its eval set does not cover them).
+ENGINE_ONLY_PRESETS: dict[str, frozenset[str]] = {
+    "composition": frozenset(ORBIT_COMPOSITIONS),
+    "lighting": frozenset(set(LIGHTING_PRESETS) - {LIGHTING_ID}),
+    "background": frozenset(set(BACKGROUND_PRESETS) - {BACKGROUND_ID}),
+}
 MATERIAL_ID = "preserve-source.v1"
 RENDER_ENGINE = "BLENDER_EEVEE"
 EEVEE_SAMPLES = 64
+PNG_COMPRESSION = 15
+VIEW_TRANSFORM = "AgX"
 MAX_IMPORTED_OBJECTS = 100
 MAX_TRIANGLES = 1_000_000
 MAX_TEXTURE_DIMENSION = 4096
@@ -58,8 +129,8 @@ def _load_validated_scene_ir(path: Path) -> dict[str, Any]:
     allowlists = {
         "recipe": {RECIPE_ID},
         "composition": COMPOSITION_IDS,
-        "lighting": {LIGHTING_ID},
-        "background": {BACKGROUND_ID},
+        "lighting": set(LIGHTING_PRESETS),
+        "background": set(BACKGROUND_PRESETS),
         "material_preset": {MATERIAL_ID},
         "render_profile": set(RENDER_PROFILES),
     }
@@ -75,26 +146,30 @@ def _point_at(obj: Any, target: Any) -> None:
     obj.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
 
 
-def _make_world(bpy: Any) -> None:
+def _make_world(bpy: Any, background: str = BACKGROUND_ID) -> None:
+    preset = BACKGROUND_PRESETS[background]
     world = bpy.data.worlds.new("Studio Neutral World")
     world.use_nodes = True
-    background = world.node_tree.nodes.get("Background")
-    if background is not None:
-        background.inputs["Color"].default_value = (0.52, 0.56, 0.62, 1.0)
-        background.inputs["Strength"].default_value = 0.45
+    node = world.node_tree.nodes.get("Background")
+    if node is not None:
+        node.inputs["Color"].default_value = preset["world_color"]
+        node.inputs["Strength"].default_value = preset["world_strength"]
     bpy.context.scene.world = world
 
 
-def _make_ground(bpy: Any) -> None:
-    bpy.ops.mesh.primitive_plane_add(size=200, location=(0.0, 0.0, -0.04))
+def _make_ground(bpy: Any, background: str = BACKGROUND_ID) -> None:
+    spec = BACKGROUND_PRESETS[background]["ground"]
+    if spec is None:
+        return
+    bpy.ops.mesh.primitive_plane_add(size=spec["size"], location=spec["location"])
     ground = bpy.context.object
     ground.name = "Studio Ground"
     material = bpy.data.materials.new("Studio Neutral Ground")
     material.use_nodes = True
     shader = material.node_tree.nodes.get("Principled BSDF")
     if shader is not None:
-        shader.inputs["Base Color"].default_value = (0.68, 0.71, 0.76, 1.0)
-        shader.inputs["Roughness"].default_value = 0.72
+        shader.inputs["Base Color"].default_value = spec["base_color"]
+        shader.inputs["Roughness"].default_value = spec["roughness"]
     ground.data.materials.append(material)
 
 
@@ -107,7 +182,7 @@ def _make_light(bpy: Any, name: str, location: tuple[float, float, float], energ
     light_object = bpy.data.objects.new(name, light_data)
     bpy.context.scene.collection.objects.link(light_object)
     light_object.location = location
-    _point_at(light_object, (0.0, 0.0, 0.8))
+    _point_at(light_object, LIGHT_TARGET)
 
 
 def _fit_camera(
@@ -144,29 +219,32 @@ def _configure_studio(
     render_profile: str,
     composition: str = COMPOSITION_ID,
     product_size: tuple[float, float, float] = (2.0, 2.0, 2.0),
+    lighting: str = LIGHTING_ID,
+    background: str = BACKGROUND_ID,
 ) -> None:
     scene = bpy.context.scene
     width, height = RENDER_PROFILES[render_profile]
+    transparent = bool(BACKGROUND_PRESETS[background]["film_transparent"])
     scene.render.engine = RENDER_ENGINE
     scene.eevee.taa_render_samples = EEVEE_SAMPLES
     scene.render.resolution_x = width
     scene.render.resolution_y = height
     scene.render.resolution_percentage = 100
     scene.render.image_settings.file_format = "PNG"
-    scene.render.image_settings.color_mode = "RGB"
+    scene.render.image_settings.color_mode = "RGBA" if transparent else "RGB"
     scene.render.image_settings.color_depth = "8"
-    scene.render.image_settings.compression = 15
-    scene.render.film_transparent = False
-    scene.view_settings.view_transform = "AgX"
+    scene.render.image_settings.compression = PNG_COMPRESSION
+    scene.render.film_transparent = transparent
+    scene.view_settings.view_transform = VIEW_TRANSFORM
     scene.camera = None
 
-    _make_world(bpy)
-    _make_ground(bpy)
+    _make_world(bpy, background)
+    _make_ground(bpy, background)
 
     camera_data = bpy.data.cameras.new("Product Hero Camera")
     camera = bpy.data.objects.new("Product Hero Camera", camera_data)
     scene.collection.objects.link(camera)
-    camera_data.lens = 55
+    camera_data.lens = CAMERA_LENS_MM
     camera_data.dof.use_dof = False
     if composition in FIT_DIRECTIONS:
         target = _fit_camera(camera, product_size, (width, height), FIT_DIRECTIONS[composition])
@@ -176,15 +254,14 @@ def _configure_studio(
     _point_at(camera, target)
     scene.camera = camera
 
-    _make_light(bpy, "Key Softbox", (-3.5, -4.0, 5.0), 720.0, 4.0, (1.0, 0.86, 0.72))
-    _make_light(bpy, "Fill Softbox", (4.0, -2.0, 3.2), 430.0, 4.5, (0.72, 0.84, 1.0))
-    _make_light(bpy, "Rim Softbox", (1.0, 3.6, 4.4), 850.0, 3.0, (1.0, 0.94, 0.82))
+    for name, location, energy, size, color in LIGHTING_PRESETS[lighting]:
+        _make_light(bpy, name, location, energy, size, color)
 
     scene["book_production_scene_ir_version"] = "scene-ir.v1"
     scene["book_production_recipe"] = RECIPE_ID
     scene["book_production_composition"] = composition
-    scene["book_production_lighting"] = LIGHTING_ID
-    scene["book_production_background"] = BACKGROUND_ID
+    scene["book_production_lighting"] = lighting
+    scene["book_production_background"] = background
     scene["book_production_material_preset"] = MATERIAL_ID
     scene["book_production_render_profile"] = render_profile
     scene["book_production_render_engine"] = RENDER_ENGINE
@@ -239,7 +316,14 @@ def build_scene(scene_ir_path: Path, asset_path: Path, blend_path: Path) -> None
         obj["book_production_imported_asset"] = True
 
     fitted = dimensions * fit_scale
-    _configure_studio(bpy, scene_ir["render_profile"], scene_ir["composition"], (fitted.x, fitted.y, fitted.z))
+    _configure_studio(
+        bpy,
+        scene_ir["render_profile"],
+        scene_ir["composition"],
+        (fitted.x, fitted.y, fitted.z),
+        scene_ir["lighting"],
+        scene_ir["background"],
+    )
     bpy.ops.file.pack_all()
     for image in bpy.data.images:
         if image.source == "FILE" and image.packed_file is None:
@@ -277,5 +361,5 @@ def render_saved_scene(blend_path: Path, png_path: Path) -> None:
     png_path.parent.mkdir(parents=True, exist_ok=True)
     scene.render.filepath = str(png_path.resolve())
     scene.render.image_settings.file_format = "PNG"
-    scene.render.image_settings.color_mode = "RGB"
+    scene.render.image_settings.color_mode = "RGBA" if scene.render.film_transparent else "RGB"
     bpy.ops.render.render(write_still=True)

@@ -40,9 +40,23 @@ class SceneIR(_StrictModel):
     schema_version: Literal["scene-ir.v1"]
     asset: AssetIR
     recipe: Literal["product-hero.studio.v1"]
-    composition: Literal["three-quarter.v1", "three-quarter-fit.v1", "front-fit.v1", "side-fit.v1", "top-fit.v1"]
-    lighting: Literal["softbox-three-point.v1"]
-    background: Literal["studio-neutral.v1"]
+    composition: Literal[
+        "three-quarter.v1",
+        "three-quarter-fit.v1",
+        "front-fit.v1",
+        "side-fit.v1",
+        "top-fit.v1",
+        "orbit-fit-000.v1",
+        "orbit-fit-045.v1",
+        "orbit-fit-090.v1",
+        "orbit-fit-135.v1",
+        "orbit-fit-180.v1",
+        "orbit-fit-225.v1",
+        "orbit-fit-270.v1",
+        "orbit-fit-315.v1",
+    ]
+    lighting: Literal["softbox-three-point.v1", "high-key-white.v1", "dramatic-rim.v1"]
+    background: Literal["studio-neutral.v1", "studio-white.v1", "transparent.v1"]
     material_preset: Literal["preserve-source.v1"]
     render_profile: Literal["square-1024.v1", "landscape-1920x1080.v1"]
 

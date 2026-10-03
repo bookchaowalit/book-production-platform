@@ -37,6 +37,9 @@ def _operation_document(node: PipelineNode) -> dict[str, Any]:
         operation["columns"] = list(node.columns or [])
     elif node.op in {"filter_equals", "filter_null"}:
         operation["column"] = node.column
+    elif node.op == "filter_compare":
+        operation["column"] = node.column
+        operation["operator"] = node.operator
     elif node.op == "sort_by":
         operation["column"] = node.column
         operation["direction"] = node.direction

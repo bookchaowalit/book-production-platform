@@ -30,6 +30,7 @@ from book_production_platform.scene3d.provider_config import (
     ProviderConfigError,
     load_provider_config,
 )
+from book_production_platform.scene3d.runtime import proposal_path
 
 DEFAULT_BUDGET_ROOT = ".runtime/scene3d-ai-budget"
 
@@ -68,6 +69,17 @@ def _run_brief(args: argparse.Namespace) -> int:
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(json.dumps(result.scene, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         summary["scene_path"] = str(output)
+        # Metadata-only sidecar: ``scene compose`` reads it so the job trace
+        # records that the SceneIR was AI-proposed (never the brief text).
+        sidecar = proposal_path(output)
+        sidecar.write_text(json.dumps({
+            "adapter": result.adapter,
+            "adapter_version": result.adapter_version,
+            "mode": adapter.mode,
+            "model_calls": result.model_calls,
+            "presets": dict(result.presets),
+        }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        summary["proposal_path"] = str(sidecar)
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     if result.status == "needs_input":
         print(f"needs_input: provide {', '.join(result.missing) or 'a clearer brief'}", file=sys.stderr)
