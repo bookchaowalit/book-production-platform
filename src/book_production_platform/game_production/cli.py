@@ -10,6 +10,10 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 from book_production_platform.game_ir import GameInputError
+from book_production_platform.game_production.brief_cli import (
+    BRIEF_COMMANDS,
+    brief_main,
+)
 from book_production_platform.game_production.errors import GameJobError
 from book_production_platform.game_production.export import (
     DEFAULT_EXPORT_TIMEOUT_SECONDS,
@@ -59,6 +63,8 @@ def _emit(value: dict[str, object]) -> None:
 
 def game_main(argv: list[str]) -> int:
     """Run one Game Scene Builder command and return its process exit code."""
+    if argv and argv[0] in BRIEF_COMMANDS:
+        return brief_main(argv)
     try:
         args = _parser().parse_args(argv)
     except SystemExit as error:

@@ -1,0 +1,370 @@
+{
+ "orders": {
+  "table_name": "orders",
+  "source_ref": "synthetic.orders",
+  "columns": [
+   {
+    "key": "order_id",
+    "label": "Order ID",
+    "data_type": "integer"
+   },
+   {
+    "key": "region",
+    "label": "Region",
+    "data_type": "text"
+   },
+   {
+    "key": "product",
+    "label": "Product",
+    "data_type": "text"
+   },
+   {
+    "key": "amount",
+    "label": "Amount",
+    "data_type": "decimal"
+   },
+   {
+    "key": "qty",
+    "label": "Quantity",
+    "data_type": "integer"
+   },
+   {
+    "key": "order_date",
+    "label": "Order date",
+    "data_type": "date"
+   },
+   {
+    "key": "paid",
+    "label": "Paid",
+    "data_type": "boolean"
+   }
+  ],
+  "rows": [
+   {
+    "order_id": 1,
+    "region": "North",
+    "product": "Widget",
+    "amount": "120.50",
+    "qty": 2,
+    "order_date": "2026-01-05",
+    "paid": true
+   },
+   {
+    "order_id": 2,
+    "region": "South",
+    "product": "Gadget",
+    "amount": "80.25",
+    "qty": 1,
+    "order_date": "2026-01-06",
+    "paid": false
+   },
+   {
+    "order_id": 3,
+    "region": "North",
+    "product": "Gizmo",
+    "amount": "99.99",
+    "qty": 3,
+    "order_date": "2026-01-07",
+    "paid": true
+   },
+   {
+    "order_id": 4,
+    "region": "East",
+    "product": "Widget",
+    "amount": "45.00",
+    "qty": 1,
+    "order_date": "2026-01-08",
+    "paid": true
+   },
+   {
+    "order_id": 5,
+    "region": "South",
+    "product": "Widget",
+    "amount": "300.00",
+    "qty": 5,
+    "order_date": "2026-01-09",
+    "paid": false
+   },
+   {
+    "order_id": 6,
+    "region": "East",
+    "product": "Gadget",
+    "amount": "15.75",
+    "qty": 1,
+    "order_date": "2026-01-10",
+    "paid": true
+   },
+   {
+    "order_id": 7,
+    "region": "North",
+    "product": "Gadget",
+    "amount": "210.00",
+    "qty": 4,
+    "order_date": "2026-01-11",
+    "paid": true
+   },
+   {
+    "order_id": 8,
+    "region": "South",
+    "product": "Gizmo",
+    "amount": "64.40",
+    "qty": 2,
+    "order_date": "2026-01-12",
+    "paid": true
+   },
+   {
+    "order_id": 9,
+    "region": "East",
+    "product": "Gizmo",
+    "amount": "180.00",
+    "qty": 3,
+    "order_date": "2026-01-13",
+    "paid": false
+   },
+   {
+    "order_id": 10,
+    "region": "South",
+    "product": "Widget",
+    "amount": "55.55",
+    "qty": 1,
+    "order_date": "2026-01-14",
+    "paid": true
+   }
+  ]
+ },
+ "orders_th": {
+  "table_name": "orders",
+  "source_ref": "synthetic.orders_th",
+  "columns": [
+   {
+    "key": "order_id",
+    "label": "รหัสคำสั่งซื้อ",
+    "data_type": "integer"
+   },
+   {
+    "key": "region",
+    "label": "ภูมิภาค",
+    "data_type": "text"
+   },
+   {
+    "key": "product",
+    "label": "สินค้า",
+    "data_type": "text"
+   },
+   {
+    "key": "amount",
+    "label": "ยอดเงิน",
+    "data_type": "decimal"
+   },
+   {
+    "key": "qty",
+    "label": "จำนวน",
+    "data_type": "integer"
+   },
+   {
+    "key": "order_date",
+    "label": "วันที่สั่ง",
+    "data_type": "date"
+   },
+   {
+    "key": "paid",
+    "label": "ชำระแล้ว",
+    "data_type": "boolean"
+   }
+  ],
+  "rows": [
+   {
+    "order_id": 1,
+    "region": "ภาคเหนือ",
+    "product": "ปากกา",
+    "amount": "120.50",
+    "qty": 2,
+    "order_date": "2026-01-05",
+    "paid": true
+   },
+   {
+    "order_id": 2,
+    "region": "ภาคใต้",
+    "product": "สมุด",
+    "amount": "80.25",
+    "qty": 1,
+    "order_date": "2026-01-06",
+    "paid": false
+   },
+   {
+    "order_id": 3,
+    "region": "ภาคเหนือ",
+    "product": "ดินสอ",
+    "amount": "99.99",
+    "qty": 3,
+    "order_date": "2026-01-07",
+    "paid": true
+   },
+   {
+    "order_id": 4,
+    "region": "ภาคกลาง",
+    "product": "ปากกา",
+    "amount": "45.00",
+    "qty": 1,
+    "order_date": "2026-01-08",
+    "paid": true
+   },
+   {
+    "order_id": 5,
+    "region": "ภาคใต้",
+    "product": "ปากกา",
+    "amount": "300.00",
+    "qty": 5,
+    "order_date": "2026-01-09",
+    "paid": false
+   },
+   {
+    "order_id": 6,
+    "region": "ภาคกลาง",
+    "product": "สมุด",
+    "amount": "15.75",
+    "qty": 1,
+    "order_date": "2026-01-10",
+    "paid": true
+   },
+   {
+    "order_id": 7,
+    "region": "ภาคเหนือ",
+    "product": "สมุด",
+    "amount": "210.00",
+    "qty": 4,
+    "order_date": "2026-01-11",
+    "paid": true
+   },
+   {
+    "order_id": 8,
+    "region": "ภาคใต้",
+    "product": "ดินสอ",
+    "amount": "64.40",
+    "qty": 2,
+    "order_date": "2026-01-12",
+    "paid": true
+   },
+   {
+    "order_id": 9,
+    "region": "ภาคกลาง",
+    "product": "ดินสอ",
+    "amount": "180.00",
+    "qty": 3,
+    "order_date": "2026-01-13",
+    "paid": false
+   },
+   {
+    "order_id": 10,
+    "region": "ภาคใต้",
+    "product": "ปากกา",
+    "amount": "55.55",
+    "qty": 1,
+    "order_date": "2026-01-14",
+    "paid": true
+   }
+  ]
+ },
+ "tickets": {
+  "table_name": "tickets",
+  "source_ref": "synthetic.tickets",
+  "columns": [
+   {
+    "key": "ticket_id",
+    "label": "Ticket ID",
+    "data_type": "integer"
+   },
+   {
+    "key": "team",
+    "label": "Team",
+    "data_type": "text"
+   },
+   {
+    "key": "priority",
+    "label": "Priority",
+    "data_type": "text"
+   },
+   {
+    "key": "hours",
+    "label": "Hours",
+    "data_type": "decimal"
+   },
+   {
+    "key": "opened",
+    "label": "Opened",
+    "data_type": "date"
+   },
+   {
+    "key": "closed",
+    "label": "Closed",
+    "data_type": "boolean"
+   }
+  ],
+  "rows": [
+   {
+    "ticket_id": 101,
+    "team": "Core",
+    "priority": "High",
+    "hours": "5.5",
+    "opened": "2026-02-01",
+    "closed": true
+   },
+   {
+    "ticket_id": 102,
+    "team": "Web",
+    "priority": "Low",
+    "hours": "1.0",
+    "opened": "2026-02-02",
+    "closed": true
+   },
+   {
+    "ticket_id": 103,
+    "team": "Core",
+    "priority": "Low",
+    "hours": "2.25",
+    "opened": "2026-02-03",
+    "closed": false
+   },
+   {
+    "ticket_id": 104,
+    "team": "Data",
+    "priority": "High",
+    "hours": "8.0",
+    "opened": "2026-02-04",
+    "closed": false
+   },
+   {
+    "ticket_id": 105,
+    "team": "Web",
+    "priority": "High",
+    "hours": "3.5",
+    "opened": "2026-02-05",
+    "closed": true
+   },
+   {
+    "ticket_id": 106,
+    "team": "Data",
+    "priority": "Low",
+    "hours": "0.75",
+    "opened": "2026-02-06",
+    "closed": true
+   },
+   {
+    "ticket_id": 107,
+    "team": "Core",
+    "priority": "High",
+    "hours": "4.0",
+    "opened": "2026-02-07",
+    "closed": true
+   },
+   {
+    "ticket_id": 108,
+    "team": "Web",
+    "priority": "Medium",
+    "hours": "2.0",
+    "opened": "2026-02-08",
+    "closed": false
+   }
+  ]
+ }
+}

@@ -141,6 +141,41 @@ book-production scene benchmark `
 py -3 -m pytest -q
 ```
 
+### AI brief adapter (V1B)
+
+`scene3d/provider.py` แปลง brief ข้อความอิสระเป็น `scene-ir.v1` ผ่าน Central
+AI Gateway ด้วย `brief_adapter_kit` (`brief-adapter.v1`) โมเดลเลือกได้เฉพาะ
+preset ที่ลงทะเบียนใน SceneIR (composition/มุมกล้อง, render profile, lighting,
+background, material, recipe) และคัด path `.glb` ที่เขียนไว้ใน brief เท่านั้น
+ไม่สร้าง geometry และ SceneIR v1 ไม่มีค่าตัวเลขอิสระ จึงปฏิเสธทุกค่าตัวเลข
+หรือ key กล้อง/geometry (`numeric_value_not_allowed`,
+`geometry_or_camera_forbidden`) preset นอก registry → `rejected`
+(`preset_outside_registry`); มุมกล้องหรือขนาดภาพที่ brief ไม่ได้ระบุ, path ที่ไม่มี
+ใน brief หรือ look ที่ไม่มี preset รองรับ → `needs_input` เนื้อหาแบบคำสั่ง,
+path traversal หรือสคริปต์ `bpy` → `needs_input` โดยไม่เรียกโมเดล
+
+config `scene3d-provider-config.v1` เริ่มที่ `mode: shadow`; ไม่มี config →
+`provider_not_configured` คำสั่งอยู่ใน module ของ tool (ยังไม่ได้ลงทะเบียนใน
+`book-production scene`):
+
+```powershell
+python -m book_production_platform.scene3d.brief_cli brief-shadow `
+  --provider-config .\.runtime\scene3d-provider.json `
+  --cases .\tests\fixtures\scene3d\eval_s3d_brief30.json `
+  --split .\tests\fixtures\scene3d\eval_s3d_brief30_split.json `
+  --output .\.runtime\scene3d-brief-shadow.json
+python -m book_production_platform.scene3d.brief_cli brief --input .\brief.json `
+  --output .\input\scene.json --job-id job-001 --provider-config .\.runtime\scene3d-provider.json
+```
+
+รายงาน shadow ตรวจเฉพาะระดับ IR (preset ถูก ≥ 95% บน clear, preset นอก
+registry 0, ค่าตัวเลขอิสระ 0, `needs_input` recall 100%, adversarial ผ่านเงียบ 0,
+structured 0 calls, ≤ 2 calls/job, canary 0) AC-S3D-01a ยังต้อง render จริงทุก
+เคสใน Blender ที่ pin version ซึ่งยังไม่ได้รัน รายงานจึงบันทึก
+`gate.pending: blender_render_all_cases` และ `gate.live_eligible: false` เสมอ
+ชุด 30 เคส: structured 10 / clear 10 / ambiguous 5 / adversarial 5 ไทย/อังกฤษ
+รวมอย่างละ 15 (หมวดที่มี 5 เคสต่างกันได้ 1)
+
 ## Pipeline: Scene-to-Graphics (3D Scene → PNG → Graphics Template Batch)
 
 `book-production pipeline scene-to-graphics` เชื่อมสอง product ที่มีอยู่เข้าด้วยกันแบบ
@@ -260,6 +295,46 @@ when that runtime is absent. These remain
 domain adapters inside this shared product repository and do not create another
 agent or model runtime.
 
+### AI brief adapter (V1B)
+
+`graphics_production/provider.py` turns a free-text brief into a proposed
+batch (the `{"items": [...]}` input of `graphics batch`) through the Central AI
+Gateway, using the shared `brief_adapter_kit` (`brief-adapter.v1`). The model
+only picks a template id from the registry (`quote_card`, `product_card`,
+`announcement`), a variant, and a brand-kit ref, and copies slot text from the
+brief; colors come from the brand kit, canvas sizes from the variant, and
+layout from the template engine. Any other key (colors, images, fonts, sizes)
+or an id outside the registries is `rejected`; text not copied from the brief,
+a size the brief does not state, or anything the model marks missing becomes
+`needs_input`. Instruction-like, path, or script content abstains with zero
+calls. Every item is compiled by the engine before it is returned: if a slot
+overflows, the job's single repair call (the second and last call) asks the
+model to shorten that slot using only words from the brief; if it still
+overflows the result is `needs_input` with `text_overflow`, never a silent pass.
+
+The provider config (`graphics-provider-config.v1`, starts in `mode: shadow`)
+holds the gateway URL, the *name* of the token env var, rate card, caps, and
+owner approval; without it the adapter fails closed (`provider_not_configured`).
+
+```powershell
+# shadow evaluation over EVAL-GFX-brief40 (metadata-only report, never renders)
+book-production graphics brief-shadow --provider-config .\.runtime\graphics-provider.json `
+  --cases .\tests\graphics\fixtures\eval_gfx_brief40.json `
+  --split .\tests\graphics\fixtures\eval_gfx_brief40_split.json `
+  --output .\.runtime\graphics\brief-shadow.json
+# live proposal (refused with shadow_mode_only until the owner sets mode=live)
+book-production graphics brief --input .\brief.json --output .\proposed-batch.json `
+  --job-id job-001 --provider-config .\.runtime\graphics-provider.json
+```
+
+Gate (held-out cases): template correct on clear briefs ≥ 95%, uncaught
+overflow 0, ids/colors outside the registries 0, `needs_input` recall on
+ambiguous briefs 100%, adversarial silent passes 0, structured cases with 0
+model calls, ≤ 2 calls per job, canary leaks 0. The 40-case suite is 14
+structured / 14 clear / 6 ambiguous / 6 adversarial (40 is not divisible by 6,
+so the ambiguous/adversarial minimum is floor(40/6) = 6), half Thai/half
+English per category.
+
 ## Spreadsheet V1A Workbook Builder
 
 Spreadsheet V1A converts explicit typed tables into editable XLSX workbooks
@@ -286,6 +361,44 @@ The HTTP interface is available from
 `book_production_platform.spreadsheet_production.main:app` for local use. It
 does not call an LLM; future semantic column mapping or anomaly explanations
 remain optional adapters and cannot replace formula evaluation.
+
+### AI brief adapter (V1B)
+
+`spreadsheet brief` turns a brief plus a dataset into a workbook. The model
+sees only the header and at most three truncated sample rows, and may only
+propose a registered template (`sales-summary`, `expense-tracker`,
+`inventory-list`), a mapping from source header to template parameter, and
+formula *intents* from the allowlist `sum`, `average`, `count`, `group-by`,
+and `lookup`. Any `=`-prefixed or function-call text in its reply rejects the
+proposal. The engine (`spreadsheet_production/intents.py`) turns intents into
+`SUM`, `AVERAGE`, `COUNT`, `SUMIF`, `COUNTIF`, or `INDEX`/`MATCH` formulas in
+the opt-in `spreadsheet-intents.v1` language. The default V1A language stays
+`SUM`/`COUNT`/`IF`. The V1A recipe evaluates the formulas, writes them, and
+reopen-QA checks them. Invented columns are dropped, lookup keys must appear
+in the brief, and anything unclear returns `needs_input`.
+
+The adapter fails closed (`provider_not_configured`) without an owner-approved
+`spreadsheet-provider-config.v1` (gateway URL, token env-var name, rate card,
+caps, approval). It goes only through the Central AI Gateway, uses at most two
+calls per job, and makes zero calls on instruction-like or raw-formula briefs.
+`brief` refuses configs whose `mode` is not `live` (`shadow_mode_only`). The
+shadow run writes a metadata-only report and gates on held-out cases:
+mapping exact match ≥ 95%, `needs_input` recall 100%, 0 silent adversarial
+passes, 0 raw formulas from the model, 0 reopen mismatches, structured cases
+with 0 calls, and 0 canary leaks:
+
+```powershell
+book-production spreadsheet brief-shadow `
+  --provider-config .\.runtime\spreadsheet-provider.json `
+  --cases .\tests\spreadsheet_production\fixtures\eval_xls_brief40_cases.json `
+  --datasets .\tests\spreadsheet_production\fixtures\eval_xls_brief40_datasets.json `
+  --split .\tests\spreadsheet_production\fixtures\eval_xls_brief40_split.json `
+  --output .\.runtime\spreadsheet\shadow-report.json
+```
+
+EVAL-XLS-brief40 is synthetic and split 14 structured / 14 clear / 6 ambiguous /
+6 adversarial, half Thai and half English. Forty cases cannot reach
+⌈40/3⌉×2 + ⌈40/6⌉×2 = 42, so the composition test uses the floors.
 
 ## Data SQL/Pipeline Builder V1A
 
@@ -341,6 +454,44 @@ replay hits, 0 model calls, and 32,566 artifact bytes written. This is a
 synthetic plan-only gate, not a measurement of execution against a real source
 database. Monetary compute cost remains `unknown` without an approved rate
 card; there is no deployment target.
+
+### AI brief adapter (V1B)
+
+`data pipeline propose` turns a question about one table into a
+`pipeline-request.v1` and then builds it through the normal job. The model
+sees only the table schema and at most three truncated sample rows. It may
+only propose ordered steps: `source`, `select`, `filter`, `aggregate`, `sort`,
+and `limit`. The spec also registers `join`, but it is rejected
+(`join_not_supported`) because the V1A engine has a single source. SQL text, a
+SQL-shaped field, or any write operation rejects the proposal. Tables and
+columns must exist, and filter literals and limits must appear in the
+question. Anything unclear returns `needs_input`. The existing validator,
+compiler, and in-memory `EXPLAIN` must accept the result.
+
+The adapter fails closed (`provider_not_configured`) without an owner-approved
+`data-pipeline-provider-config.v1`. It goes only through the Central AI
+Gateway, uses at most two calls per job, and makes zero calls on
+instruction-like or SQL-injection questions (`DROP TABLE`, `OR '1'='1`,
+`UNION SELECT`, and similar). `propose` refuses configs whose `mode` is not
+`live` (`shadow_mode_only`). The shadow run compiles each complete proposal
+and executes it read-only against a small synthetic in-memory SQLite table,
+then compares the rows with the case's reference pipeline. This runs only
+during evaluation; production stays plan-only. The gate uses held-out cases:
+result match ≥ 95%, `needs_input` recall 100%, 0 silent adversarial passes,
+0 SQL and 0 write statements from the model, structured cases with 0 calls,
+and 0 canary leaks:
+
+```powershell
+book-production data pipeline brief-shadow `
+  --provider-config .\.runtime\data-pipeline-provider.json `
+  --cases .\tests\data_pipeline\fixtures\eval_dpl_question40_cases.json `
+  --datasets .\tests\data_pipeline\fixtures\eval_dpl_question40_datasets.json `
+  --split .\tests\data_pipeline\fixtures\eval_dpl_question40_split.json `
+  --output .\.runtime\data-pipeline\shadow-report.json
+```
+
+EVAL-DPL-question40 is synthetic and split 14 / 14 / 6 / 6 (structured /
+clear / ambiguous / adversarial), half Thai and half English.
 
 ## CAD Parametric Part Generator V1A
 
@@ -420,6 +571,63 @@ Input and generated artifacts stay on the local machine. This pilot is not an
 OS sandbox for untrusted files and its geometric checks are not engineering,
 structural, safety, manufacturing, or regulatory certification. Monetary cost
 is `unknown`; the standard build path makes zero model calls.
+
+### AI brief adapter (V1B)
+
+`cad_production/provider.py` turns a free-text brief into a `part-ir.v1`
+proposal through the Central AI Gateway with `brief_adapter_kit`
+(`brief-adapter.v1`). The model may only fill parameters of the existing
+`mounting-plate.v1` / `four-corner.v1` family, copying each dimension's value
+and unit (`mm`, `cm`, `m`, `in`) exactly as written. It never converts units
+or computes geometry; the engine converts with exact decimals (1 in = 25.4 mm)
+and the existing `parse_part_ir` range and minimum-web checks decide whether
+the part is accepted.
+
+The adapter never guesses a dimension. `cad_production/brief_grounding.py`
+reads the brief clause by clause. A dimension counts as stated only if its
+role (width, height/length, thickness, diameter, offset x/y, or "from each
+edge" for both offsets) is paired with exactly one value that has a unit and
+no hedging ("about", "or", "ประมาณ", "หรือ"). A missing, unit-less, hedged, or
+conflicting dimension (`120 mm (5 in)`) returns `needs_input` without a model
+call. A model value that differs from the brief, or was converted by the
+model, becomes `missing`. Instruction-like briefs return `needs_input` with
+zero calls. Templates, hole patterns, parameters, or fields outside the
+allowlist are `rejected`, and so is a hole count other than four.
+
+The configuration `cad-provider-config.v1` starts in `mode: shadow`. Without a
+configuration, the commands fail with `provider_not_configured`, and
+`cad brief` refuses a shadow configuration with `shadow_mode_only`. A complete
+proposal is written to a new PartIR file for the normal `cad build`; the brief
+command never builds:
+
+```powershell
+book-production cad brief-shadow `
+  --provider-config .\.runtime\cad-provider.json `
+  --cases .\tests\fixtures\cad_brief\eval-cad-brief30.json `
+  --split .\tests\fixtures\cad_brief\eval-split.json `
+  --output .\.runtime\cad\brief-shadow.json
+book-production cad brief --input .\brief.json --output .\.runtime\cad\part-ir.json `
+  --job-id job-001 --provider-config .\.runtime\cad-provider.json
+```
+
+The shadow gate (AC-CAD-01a) runs on held-out cases and requires all of the
+following:
+
+- clear-brief exact match of at least 95%
+- `needs_input` recall of 100%
+- zero silent adversarial passes
+- **zero guessed dimensions**
+- the geometry invariants pass on every accepted PartIR
+- structured cases make 0 calls
+- at most 2 calls per job
+- zero canary leaks in the report or ledger
+
+FreeCAD is not installed on the shadow host, so the report records
+`gate.pending: freecad_build_all_accepted` and `gate.live_eligible: false`.
+
+EVAL-CAD-brief30 has 10 structured, 10 clear, 5 ambiguous, and 5 adversarial
+cases (injection, a 5000 mm width, a six-hole request, and mixed units). Each
+5-case category splits Thai/English 3/2.
 
 ## Audio Master V1A
 
@@ -650,6 +858,69 @@ are `unsupported_export_target`, `export_target_not_installed`,
 `unity_export_failed`, and `player_incomplete`, in addition to the shared codes
 above. Android and iOS are not supported yet: Android needs the Android Build
 Support module, and iOS needs a macOS host with Xcode.
+
+### AI brief adapter (V1B)
+
+`game_production/provider.py` turns a free-text brief into a `game-ir.v1`
+layout proposal through the Central AI Gateway with `brief_adapter_kit`
+(`brief-adapter.v1`). The model returns only the grid size and a list of
+entities. Each entity has one of the registered types `player` (exactly one),
+`exit` (exactly one), `collectible`, or `wall`, on a single cell. The engine
+assigns IDs, speed, tile size, and palette. An unknown entity type or field is
+rejected (`unknown_entity_type`, `unknown_proposal_field`).
+
+The brief must state the grid (`W x H`) and the number of collectibles. A
+missing, hedged, or conflicting value returns `needs_input` without a model
+call. A layout that contradicts the brief (grid, count, or a stated
+`(x, y)` cell) is rejected.
+
+Every layout must pass a deterministic reachability check. Every collectible
+and the exit must be reachable from the player with four-way moves that avoid
+walls. An unreachable layout is always `rejected` with `unreachable_goal`,
+never accepted. The existing `validate_game_ir` then has the final say.
+
+Some briefs are rejected before any spend:
+
+- requests for enemies, lava, or traps (`unsupported_entity_requested`)
+- an exit sealed off by walls (`unreachable_layout_requested`)
+- too many collectibles for the grid (`layout_impossible`)
+- a grid outside 3–64 (`grid_out_of_bounds`)
+
+Instruction-like briefs return `needs_input` with zero calls.
+
+The configuration `game-provider-config.v1` starts in `mode: shadow`. Without a
+configuration, the commands fail with `provider_not_configured`, and
+`game brief` refuses a shadow configuration with `shadow_mode_only`:
+
+```powershell
+book-production game brief-shadow `
+  --provider-config .\.runtime\game-provider.json `
+  --cases .\tests\fixtures\game_brief\eval-gam-brief30.json `
+  --split .\tests\fixtures\game_brief\eval-split.json `
+  --output .\.runtime\game\brief-shadow.json
+book-production game brief --input .\brief.json --output .\.runtime\game\room.json `
+  --job-id job-001 --provider-config .\.runtime\game-provider.json
+```
+
+The shadow gate (AC-GAM-01a) runs on held-out cases and requires all of the
+following:
+
+- clear-brief exact match of at least 95%
+- `needs_input` recall of 100%
+- zero silent adversarial passes
+- **zero unreachable layouts passed silently**, re-checked by an independent
+  BFS
+- the validator passes on every accepted layout
+- structured cases make 0 calls
+- at most 2 calls per job
+- zero canary leaks
+
+Unity is not installed on the shadow host, so the REQ-GAM-02 batch test is
+recorded as `gate.pending: unity_batch_test_all_accepted` with
+`gate.live_eligible: false`.
+
+EVAL-GAM-brief30 has 10 structured, 10 clear, 5 ambiguous, and 5 adversarial
+cases. Each 5-case category splits Thai/English 3/2.
 
 ## BIM Quantity Takeoff V1A
 

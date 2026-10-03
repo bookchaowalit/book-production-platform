@@ -1,0 +1,14 @@
+{
+ "schema_version": "brief-adapter-eval-split.v1",
+ "suite": "EVAL-XLS-brief40",
+ "dev": [
+  "xls-s-en-01",
+  "xls-s-th-01",
+  "xls-c-en-01",
+  "xls-c-th-01",
+  "xls-a-en-01",
+  "xls-a-th-01",
+  "xls-x-en-01",
+  "xls-x-th-01"
+ ]
+}

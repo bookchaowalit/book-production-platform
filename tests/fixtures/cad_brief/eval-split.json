@@ -1,0 +1,13 @@
+{
+  "schema_version": "brief-adapter-eval-split.v1",
+  "suite": "EVAL-CAD-brief30",
+  "note": "Prompts may be tuned on dev cases only; held-out cases decide the gate.",
+  "dev": [
+    "cad-s01",
+    "cad-s06",
+    "cad-c01",
+    "cad-c06",
+    "cad-a01",
+    "cad-x01"
+  ]
+}

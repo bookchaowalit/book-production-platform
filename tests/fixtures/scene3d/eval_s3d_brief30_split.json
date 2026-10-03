@@ -1,0 +1,13 @@
+{
+ "schema_version": "scene3d-eval-split.v1",
+ "suite": "EVAL-S3D-brief30",
+ "note": "Prompt changes may be tuned only against dev cases; held-out cases decide the gate.",
+ "dev": [
+  "s3d-structured-th-01",
+  "s3d-structured-en-01",
+  "s3d-clear-th-01",
+  "s3d-clear-en-01",
+  "s3d-ambiguous-th-01",
+  "s3d-adversarial-en-01"
+ ]
+}

@@ -1,0 +1,14 @@
+{
+ "schema_version": "brief-adapter-eval-split.v1",
+ "suite": "EVAL-DPL-question40",
+ "dev": [
+  "dpl-s-en-01",
+  "dpl-s-th-01",
+  "dpl-c-en-01",
+  "dpl-c-th-01",
+  "dpl-a-en-01",
+  "dpl-a-th-01",
+  "dpl-x-en-01",
+  "dpl-x-th-01"
+ ]
+}

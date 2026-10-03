@@ -1,0 +1,15 @@
+{
+ "schema_version": "graphics-eval-split.v1",
+ "suite": "EVAL-GFX-brief40",
+ "note": "Prompt changes may be tuned only against dev cases; held-out cases decide the gate.",
+ "dev": [
+  "gfx-structured-th-01",
+  "gfx-structured-en-01",
+  "gfx-clear-th-01",
+  "gfx-clear-en-01",
+  "gfx-ambiguous-th-01",
+  "gfx-ambiguous-en-01",
+  "gfx-adversarial-th-01",
+  "gfx-adversarial-en-01"
+ ]
+}

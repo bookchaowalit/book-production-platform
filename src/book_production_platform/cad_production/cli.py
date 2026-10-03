@@ -11,6 +11,7 @@ from typing import Any, NoReturn
 
 from book_production_platform.cad_ir import MAX_PART_IR_BYTES, PartIRError, load_part_ir
 from book_production_platform.cad_production.benchmark import run_benchmark
+from book_production_platform.cad_production.brief_cli import BRIEF_COMMANDS, brief_main
 from book_production_platform.cad_production.errors import CadProductionError
 from book_production_platform.cad_production.jobs import build_cad_job
 from book_production_platform.cad_production.runtime import MAX_WORKER_TIMEOUT_SECONDS
@@ -78,6 +79,9 @@ def _read_part_ir(path: Path) -> None:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if arguments and arguments[0] in BRIEF_COMMANDS:
+        return brief_main(arguments)
     try:
         args = _parser().parse_args(argv)
     except _HelpRequested:

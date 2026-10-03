@@ -17,7 +17,7 @@ from book_production_platform.spreadsheet_ir import (
     validate_request,
 )
 
-from .formulas import evaluate_workbook
+from .formulas import INTENT_FORMULA_LANGUAGE, evaluate_workbook
 
 
 class WorkbookBuildError(ValueError):
@@ -75,6 +75,21 @@ def _sheet_names(parsed: WorkbookRequest) -> list[str]:
     if issues:
         raise WorkbookBuildError(issues)
     return names
+
+
+def _intent_assumptions(parsed: WorkbookRequest) -> dict[str, str]:
+    """Opt into the intent formula language only when the V1B intent compiler asked for it."""
+
+    language = parsed.template_parameters.get("formula_language")
+    if language is None:
+        return {}
+    if language != INTENT_FORMULA_LANGUAGE:
+        raise WorkbookBuildError([ValidationIssue(
+            code="formula_language_unsupported", path="template_parameters.formula_language",
+            message="only the spreadsheet intent formula language may be selected",
+        )])
+    template_id = parsed.template_parameters.get("template_id")
+    return {"formula_language": INTENT_FORMULA_LANGUAGE, **({"template_id": str(template_id)} if template_id else {})}
 
 
 def build_workbook_ir(request: WorkbookRequest | dict[str, Any]) -> WorkbookIR:
@@ -152,6 +167,7 @@ def build_workbook_ir(request: WorkbookRequest | dict[str, Any]) -> WorkbookIR:
         assumptions={
             "model_calls": "0", "recipe": RECIPE_ID,
             "source_table": parsed.tables[0].name, "source_tables": ",".join(table.name for table in parsed.tables),
+            **_intent_assumptions(parsed),
         },
     )
     evaluate_workbook(workbook)

@@ -1,0 +1,13 @@
+{
+  "schema_version": "brief-adapter-eval-split.v1",
+  "suite": "EVAL-GAM-brief30",
+  "note": "Prompts may be tuned on dev cases only; held-out cases decide the gate.",
+  "dev": [
+    "gam-s01",
+    "gam-s06",
+    "gam-c01",
+    "gam-c06",
+    "gam-a01",
+    "gam-x01"
+  ]
+}
