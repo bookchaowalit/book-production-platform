@@ -34,7 +34,7 @@ class ScriptedTransport:
         self.output_tokens = output_tokens
 
     def generate(self, payload: dict[str, Any], *, timeout_seconds: float) -> GatewayReply:
-        assert timeout_seconds <= 30
+        assert timeout_seconds <= 120
         self.payloads.append(payload)
         if self.responder is not None:
             reply = self.responder(payload)

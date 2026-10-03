@@ -33,6 +33,15 @@ from .ledger import CostCaps
 KIT_CONFIG_SCHEMA = "brief-adapter-provider-config.v1"
 MAX_CALL_TIMEOUT_SECONDS = 30
 MAX_JOB_DEADLINE_SECONDS = 120
+# Reasoning models (e.g. effort "max") think before answering. Their reasoning
+# tokens are billed as output and count against the provider's completion cap,
+# so they get explicit headroom on top of the <= 2,000-token JSON answer. The
+# ceilings mirror the Central AI Gateway limits (16,384 output tokens, 120 s).
+GATEWAY_MAX_OUTPUT_TOKENS = 16_384
+MAX_REASONING_TOKENS = GATEWAY_MAX_OUTPUT_TOKENS - 2_000
+REASONING_CALL_TIMEOUT_SECONDS = 120
+REASONING_JOB_DEADLINE_SECONDS = 300
+ReasoningEffort = Literal["none", "low", "medium", "high", "xhigh", "max"]
 MAX_OUTPUT_TOKENS = 2_000
 MAX_INPUT_TOKENS = 8_000
 
@@ -91,13 +100,34 @@ class ProviderConfig(BaseModel):
     prompt_version: str = Field(pattern=r"^[A-Za-z0-9_.:/-]{1,64}$")
     profile: Literal["fast", "balanced", "quality"] = "fast"
     privacy_class: Literal["public", "internal"] = "internal"
-    max_token_budget: int = Field(default=4_096, ge=2_304, le=MAX_INPUT_TOKENS + MAX_OUTPUT_TOKENS + 48)
+    max_token_budget: int = Field(default=4_096, ge=2_304, le=MAX_INPUT_TOKENS + GATEWAY_MAX_OUTPUT_TOKENS + 48)
     max_output_tokens: int = Field(default=MAX_OUTPUT_TOKENS, ge=64, le=MAX_OUTPUT_TOKENS)
-    timeout_seconds: int = Field(default=MAX_CALL_TIMEOUT_SECONDS, ge=1, le=MAX_CALL_TIMEOUT_SECONDS)
-    job_deadline_seconds: int = Field(default=MAX_JOB_DEADLINE_SECONDS, ge=1, le=MAX_JOB_DEADLINE_SECONDS)
+    reasoning_effort: ReasoningEffort | None = None
+    reasoning_tokens: int = Field(default=0, ge=0, le=MAX_REASONING_TOKENS)
+    timeout_seconds: int = Field(default=MAX_CALL_TIMEOUT_SECONDS, ge=1, le=REASONING_CALL_TIMEOUT_SECONDS)
+    job_deadline_seconds: int = Field(default=MAX_JOB_DEADLINE_SECONDS, ge=1, le=REASONING_JOB_DEADLINE_SECONDS)
     rate_card: RateCard
     caps: SpendingCaps
     approval: OwnerApproval
+
+    @model_validator(mode="after")
+    def _reasoning_limits(self) -> ProviderConfig:
+        reasoning = self.reasoning_effort not in (None, "none")
+        if reasoning and self.reasoning_tokens < 1_000:
+            raise ValueError("a reasoning effort needs reasoning_tokens headroom (>= 1000) or the JSON answer is truncated")
+        if not reasoning and self.reasoning_tokens:
+            raise ValueError("reasoning_tokens requires a reasoning_effort other than none")
+        if not reasoning and (self.timeout_seconds > MAX_CALL_TIMEOUT_SECONDS or self.job_deadline_seconds > MAX_JOB_DEADLINE_SECONDS):
+            raise ValueError("timeouts above 30 s per call / 120 s per job are allowed only with a reasoning effort")
+        if self.max_token_budget < self.max_output_tokens + self.reasoning_tokens + 256:
+            raise ValueError("max_token_budget must cover the answer, the reasoning headroom, and the prompt")
+        return self
+
+    @property
+    def completion_tokens(self) -> int:
+        """Tokens the provider may generate per call: JSON answer + reasoning headroom."""
+
+        return self.max_output_tokens + self.reasoning_tokens
 
     @field_validator("gateway_url")
     @classmethod
@@ -145,11 +175,15 @@ def load_provider_config(path: str | Path, model: type[ConfigT] = ProviderConfig
 
 
 __all__ = [
+    "GATEWAY_MAX_OUTPUT_TOKENS",
     "KIT_CONFIG_SCHEMA",
     "MAX_CALL_TIMEOUT_SECONDS",
     "MAX_INPUT_TOKENS",
     "MAX_JOB_DEADLINE_SECONDS",
     "MAX_OUTPUT_TOKENS",
+    "MAX_REASONING_TOKENS",
+    "REASONING_CALL_TIMEOUT_SECONDS",
+    "REASONING_JOB_DEADLINE_SECONDS",
     "OwnerApproval",
     "ProviderConfig",
     "ProviderConfigError",

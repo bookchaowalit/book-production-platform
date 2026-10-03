@@ -112,8 +112,8 @@ class GatewayProposalRunner:
             "messages": messages,
             "profile": self.config.profile,
             "privacy_class": self.config.privacy_class,
-            "token_budget": min(self.config.max_token_budget, input_tokens + self.config.max_output_tokens),
-            "max_output_tokens": self.config.max_output_tokens,
+            "token_budget": min(self.config.max_token_budget, input_tokens + self.config.completion_tokens),
+            "max_output_tokens": self.config.completion_tokens,
             "temperature": 0,
             "response_format": {"type": "json_object"},
         }
@@ -125,7 +125,7 @@ class GatewayProposalRunner:
     def _dispatch(self, job_id: str, messages: list[dict[str, str]], input_tokens: int, timeout: float) -> GatewayReply:
         reservation: CostReservation = self.ledger.reserve_cost(
             job_id,
-            amount_usd=self._cost(input_tokens, self.config.max_output_tokens),
+            amount_usd=self._cost(input_tokens, self.config.completion_tokens),
             caps=self.config.caps.as_cost_caps(),
             rate_card_version=self.config.rate_card.version,
         )
@@ -163,7 +163,7 @@ class GatewayProposalRunner:
         started = self._clock()
         messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_content}]
         input_tokens = sum(estimate_tokens(message["content"]) for message in messages) + PROMPT_OVERHEAD_TOKENS
-        if input_tokens > MAX_INPUT_TOKENS or input_tokens + self.config.max_output_tokens > self.config.max_token_budget:
+        if input_tokens > MAX_INPUT_TOKENS or input_tokens + self.config.completion_tokens > self.config.max_token_budget:
             return RunOutcome("rejected", issue_code="input_token_limit_exceeded")
 
         outcome = RunOutcome("rejected", issue_code="invalid_model_output")
@@ -202,7 +202,7 @@ class GatewayProposalRunner:
                 return outcome
             messages = [*messages, {"role": "assistant", "content": reply.content[:4_000] or "{}"}, {"role": "user", "content": repair_prompt}]
             input_tokens = sum(estimate_tokens(message["content"]) for message in messages) + PROMPT_OVERHEAD_TOKENS
-            if input_tokens > MAX_INPUT_TOKENS or input_tokens + self.config.max_output_tokens > self.config.max_token_budget:
+            if input_tokens > MAX_INPUT_TOKENS or input_tokens + self.config.completion_tokens > self.config.max_token_budget:
                 return outcome
         return outcome
 
