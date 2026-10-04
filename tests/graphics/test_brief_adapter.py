@@ -614,3 +614,19 @@ def test_over_limit_second_reply_still_ends_as_text_overflow(tmp_path: Path) -> 
     assert result.status == "needs_input"
     assert result.batch is None and result.overflow_caught is True and result.model_calls == 2
     assert "text_overflow" in {issue["code"] for issue in result.issues}
+
+
+def test_overflow_is_returned_to_the_person_with_the_template_kept() -> None:
+    import tempfile
+
+    from book_production_platform.graphics_production.shadow import _template_match
+
+    case = next(c for c in json.loads((FIXTURES / "eval_gfx_brief40.json").read_text(encoding="utf-8")) if c["id"] == "gfx-clear-en-07")
+    reply = case["oracle_reply"]
+    adapter = ProviderBriefAdapter(provider_config=config(), ledger_root=tempfile.mkdtemp(), transport=ScriptedTransport(reply, reply))
+    result = adapter.propose(case["request"]["brief"], job_id="overflow-kept", locale="en-US")
+
+    assert result.status == "needs_input" and result.batch is None
+    assert [issue["code"] for issue in result.issues] == ["text_overflow"]
+    assert result.templates == ["announcement"] and result.variants == ["story"]
+    assert _template_match(result, case["expected"])

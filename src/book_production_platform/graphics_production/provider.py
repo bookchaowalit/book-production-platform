@@ -542,6 +542,9 @@ def ground_proposal(
             overflow_caught = True
             issues.append(_issue("text_overflow", f"{path}.content", "a slot text does not fit its template slot; shorten it"))
             missing.append(f"{path}.content")
+            # Record the (valid) template choice so the person only has to shorten the copy.
+            templates.append(template_id)
+            variants.append(variant)
             continue
         try:
             compile_template(GraphicRequest.model_validate(request))

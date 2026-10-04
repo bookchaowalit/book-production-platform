@@ -68,8 +68,21 @@ def _outside_registry(result: GraphicsBriefResult, brand_colors: set[tuple[str, 
 
 
 def _template_match(result: GraphicsBriefResult, expected: Mapping[str, Any]) -> bool:
+    """Template and variant chosen correctly.
+
+    Copy that does not fit is returned to the person (needs_input + text_overflow
+    naming the slot and its limit); the AI never rewrites client copy. Such a
+    result still chose the right template, so it counts here; the overflow itself
+    is gated separately (uncaught overflow must be 0).
+    """
+
+    blocked_only_by_overflow = (
+        result.status == "needs_input"
+        and result.overflow_caught
+        and {issue["code"] for issue in result.issues} == {"text_overflow"}
+    )
     return (
-        result.status == "complete"
+        (result.status == "complete" or blocked_only_by_overflow)
         and result.templates == list(expected.get("templates", []))
         and result.variants == list(expected.get("variants", []))
     )
