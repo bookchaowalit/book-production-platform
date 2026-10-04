@@ -295,6 +295,8 @@ for layout or rendering.
 
 ### Templates are data: themes and motifs
 
+Step-by-step guide (Thai): [docs/GRAPHICS-THEMES-GUIDE.md](docs/GRAPHICS-THEMES-GUIDE.md).
+
 Every template is a JSON theme in
 `src/book_production_platform/graphics_production/themes/` (`graphic-theme.v1`),
 compiled by `themes.py` from the reusable drawing motifs in `motifs.py`. A new

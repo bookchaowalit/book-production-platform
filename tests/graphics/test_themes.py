@@ -182,3 +182,5 @@ def test_cli_make_renders_every_size(tmp_path: Path, capsys: pytest.CaptureFixtu
     summary = json.loads(capsys.readouterr().out)
     assert code == 0, summary
     assert len(list(tmp_path.rglob("*.svg"))) == 4
+    saved = json.loads((tmp_path / "synthwave-portrait.request.json").read_text(encoding="utf-8"))
+    assert saved["content"]["headline"] == "SOLO" and saved["variant"] == "portrait"

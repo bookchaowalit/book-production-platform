@@ -281,6 +281,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         except IdempotencyConflict as exc:
             print(f"idempotency error: {exc}", file=sys.stderr)
             return 2
+        # One request file per size: the starting point for `controls` and `edit`.
+        output = Path(args.output)
+        output.mkdir(parents=True, exist_ok=True)
+        for item in make_items:
+            (output / f"{item['request_id']}.request.json").write_text(json.dumps(item, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print(json.dumps(made.to_dict(), ensure_ascii=False, default=str, indent=2))
         return 0 if made.status in {"accepted", "partial"} else 2
     if args.command == "brief":

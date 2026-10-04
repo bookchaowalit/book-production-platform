@@ -1,0 +1,45 @@
+{
+  "schema_version": "graphic-theme.v1",
+  "theme_id": "sale_burst",
+  "title": "Sale burst",
+  "description": "ป้ายลดราคา: พื้นสีสด แสงแฉก ตัวเลขส่วนลดใหญ่ และปุ่ม",
+  "ir_version": "graphic-ir.v2",
+  "template_version": "1",
+  "variants": ["square", "portrait", "story"],
+  "evidence": ["sale", "discount", "ลดราคา", "โปรโมชัน"],
+  "slots": {
+    "headline": {"required": true, "labels": ["headline", "title", "หัวข้อ"]},
+    "discount": {"required": true, "labels": ["discount", "ส่วนลด"]},
+    "cta": {"required": false, "labels": ["button", "cta", "ปุ่ม"]}
+  },
+  "styles": {
+    "mint": {"title": "Mint", "palette": {"bg": "#0F766E", "accent": "#FDE68A"}}
+  },
+  "palette": {"bg": "#E11D48", "accent": "#FACC15", "ink": "#FFFFFF"},
+  "vars": {
+    "S": "MIN / 1080",
+    "BIG": "MIN * 0.3"
+  },
+  "layers": [
+    {"id": "Background", "items": [
+      {"motif": "rect", "id": "bg", "fill": "palette.bg"},
+      {"motif": "rays", "id": "burst", "cx": "CX", "cy": "CY", "count": 28, "outer": "MAX", "color": "palette.accent", "opacity": 0.18}
+    ]},
+    {"id": "Text", "items": [
+      {"motif": "text_block", "id": "headline", "slot": "headline", "x": "W * 0.08", "y": "H * 0.12", "width": "W * 0.84",
+       "height": "MIN * 0.12", "font_size": "MIN * 0.08", "min_font_size": "MIN * 0.04", "max_lines": 1,
+       "font": "builtin:thai", "weight": "bold", "align": "center", "color": "palette.ink"},
+      {"motif": "display_text", "id": "discount", "slot": "discount", "x": "W * 0.05", "y": "CY - BIG * 0.6",
+       "width": "W * 0.9", "height": "BIG * 1.2", "font_size": "BIG", "min_font_size": "BIG * 0.5", "max_lines": 1,
+       "font": "builtin:display", "weight": "black", "align": "center", "color": "palette.accent",
+       "shadows": [{"dx": "8 * S", "dy": "10 * S", "color": "#000000", "opacity": 0.35}]}
+    ]},
+    {"id": "Button", "items": [
+      {"motif": "rect", "id": "cta-pill", "x": "CX - MIN * 0.2", "y": "H * 0.78", "width": "MIN * 0.4", "height": "MIN * 0.09",
+       "rx": "MIN * 0.045", "fill": "palette.ink", "when": {"slot": "cta"}},
+      {"motif": "text_block", "id": "cta", "slot": "cta", "x": "CX - MIN * 0.18", "y": "H * 0.78 + MIN * 0.02",
+       "width": "MIN * 0.36", "height": "MIN * 0.05", "font_size": "MIN * 0.035", "min_font_size": "MIN * 0.02",
+       "max_lines": 1, "font": "builtin:thai", "weight": "bold", "align": "center", "color": "palette.bg"}
+    ]}
+  ]
+}
