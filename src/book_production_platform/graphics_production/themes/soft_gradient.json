@@ -12,6 +12,7 @@
     "body": {"required": false, "labels": ["body", "details", "text", "เนื้อหา", "รายละเอียด"]},
     "cta": {"required": false, "labels": ["button", "cta", "call to action", "ปุ่ม"]}
   },
+  "styles": {"sunset": {"title": "Sunset", "palette": {"a": "#F97316", "b": "#DB2777"}}, "ocean": {"title": "Ocean", "palette": {"a": "#0EA5E9", "b": "#14B8A6"}}, "mono": {"title": "Monochrome", "palette": {"a": "#111827", "b": "#4B5563"}}},
   "palette": {"a": "brand.primary", "b": "brand.accent", "light": "#FFFFFF"},
   "paints": [
     {"paint_id": "bg", "type": "linear", "angle": 60, "stops": [{"offset": 0, "color": "palette.a"}, {"offset": 1, "color": "palette.b"}]}

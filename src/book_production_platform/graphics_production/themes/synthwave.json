@@ -14,34 +14,36 @@
     "tag": {"required": false, "labels": ["tag", "badge", "ป้าย"]},
     "footer": {"required": false, "labels": ["footer", "website", "ท้ายภาพ", "เว็บไซต์"]}
   },
-  "palette": {
+  "styles": {"sunrise": {"title": "Sunrise (warm)", "palette": {"night": "#1B0B2E", "dusk": "#4A1248", "plum": "#C2305E", "pink": "#FF8A3D", "gold": "#FFE66D", "sun_mid": "#FFB347", "horizon": "#FFD29D", "chrome_warm": "#FFB37A"}}, "ice": {"title": "Ice (cool blue)", "palette": {"night": "#020617", "dusk": "#0B1E4A", "plum": "#1D4E89", "pink": "#38BDF8", "magenta": "#818CF8", "gold": "#E0F2FE", "sun_mid": "#7DD3FC", "floor_top": "#0B1E4A", "floor_bottom": "#020617", "mount_top": "#1E3A8A", "mount_bottom": "#0B1229", "horizon": "#BAE6FD", "chrome_warm": "#93C5FD"}}, "matrix": {"title": "Matrix (green)", "palette": {"night": "#010B05", "dusk": "#03200F", "plum": "#065F2C", "pink": "#22C55E", "cyan": "#86EFAC", "magenta": "#4ADE80", "gold": "#DCFCE7", "sun_mid": "#4ADE80", "floor_top": "#03200F", "floor_bottom": "#010B05", "mount_top": "#065F2C", "mount_bottom": "#021A0B", "horizon": "#BBF7D0", "chrome_light": "#BBF7D0", "chrome_dark": "#052E16", "chrome_warm": "#4ADE80"}}},  "palette": {
     "night": "#05010F", "dusk": "#1A0638", "plum": "#5B0F6B", "pink": "#FF2E88", "cyan": "#22E4FF",
-    "magenta": "#FF4FD8", "gold": "#FFF35C", "ink": "#FFE7FB"
+    "magenta": "#FF4FD8", "gold": "#FFF35C", "ink": "#FFE7FB",
+    "sun_mid": "#FF9A3C", "floor_top": "#2A0640", "floor_bottom": "#07010F", "mount_top": "#3B0D5C",
+    "mount_bottom": "#12031F", "horizon": "#FF9BE3", "chrome_light": "#7FD8FF", "chrome_dark": "#1B1F5E", "chrome_warm": "#FF7AD9"
   },
   "paints": [
     {"paint_id": "sky", "type": "linear", "stops": [
       {"offset": 0, "color": "palette.night"}, {"offset": 0.45, "color": "palette.dusk"},
       {"offset": 0.78, "color": "palette.plum"}, {"offset": 1, "color": "palette.pink"}]},
     {"paint_id": "sun", "type": "linear", "stops": [
-      {"offset": 0, "color": "palette.gold"}, {"offset": 0.45, "color": "#FF9A3C"}, {"offset": 1, "color": "palette.pink"}]},
-    {"paint_id": "floor", "type": "linear", "stops": [{"offset": 0, "color": "#2A0640"}, {"offset": 1, "color": "#07010F"}]},
+      {"offset": 0, "color": "palette.gold"}, {"offset": 0.45, "color": "palette.sun_mid"}, {"offset": 1, "color": "palette.pink"}]},
+    {"paint_id": "floor", "type": "linear", "stops": [{"offset": 0, "color": "palette.floor_top"}, {"offset": 1, "color": "palette.floor_bottom"}]},
     {"paint_id": "grid", "type": "linear", "stops": [
       {"offset": 0, "color": "palette.magenta", "opacity": 0.35}, {"offset": 1, "color": "palette.cyan"}]},
     {"paint_id": "chrome", "type": "linear", "stops": [
-      {"offset": 0, "color": "#E9FBFF"}, {"offset": 0.46, "color": "#7FD8FF"}, {"offset": 0.5, "color": "#1B1F5E"},
-      {"offset": 0.56, "color": "#FF7AD9"}, {"offset": 1, "color": "#FFF2FB"}]},
-    {"paint_id": "mount", "type": "linear", "stops": [{"offset": 0, "color": "#3B0D5C"}, {"offset": 1, "color": "#12031F"}]},
+      {"offset": 0, "color": "#E9FBFF"}, {"offset": 0.46, "color": "palette.chrome_light"}, {"offset": 0.5, "color": "palette.chrome_dark"},
+      {"offset": 0.56, "color": "palette.chrome_warm"}, {"offset": 1, "color": "#FFF2FB"}]},
+    {"paint_id": "mount", "type": "linear", "stops": [{"offset": 0, "color": "palette.mount_top"}, {"offset": 1, "color": "palette.mount_bottom"}]},
     {"paint_id": "haze", "type": "linear", "stops": [
       {"offset": 0, "color": "palette.pink", "opacity": 0}, {"offset": 1, "color": "palette.pink", "opacity": 0.45}]}
   ],
   "vars": {
     "S": "MIN / 1080",
-    "HZ": {"by_variant": {"landscape": "H * 0.71", "story": "H * 0.66", "default": "H * 0.637"}},
-    "TOP": {"by_variant": {"landscape": "H * 0.05", "story": "H * 0.14", "default": "H * 0.06"}},
-    "SUN_R": {"by_variant": {"landscape": "MIN * 0.17", "default": "MIN * 0.2"}},
+    "HZ": {"by_variant": {"landscape": "H * 0.71", "square": "H * 0.71", "story": "H * 0.66", "default": "H * 0.637"}},
+    "TOP": {"by_variant": {"landscape": "H * 0.05", "square": "H * 0.05", "story": "H * 0.14", "default": "H * 0.06"}},
+    "SUN_R": {"by_variant": {"landscape": "MIN * 0.17", "square": "MIN * 0.17", "default": "MIN * 0.2"}},
     "SUN_Y": "HZ - 30 * S",
-    "T1": {"by_variant": {"landscape": "MIN * 0.15", "default": "MIN * 0.176"}},
-    "T2": {"by_variant": {"landscape": "MIN * 0.12", "default": "MIN * 0.139"}},
+    "T1": {"by_variant": {"landscape": "MIN * 0.15", "square": "MIN * 0.15", "default": "MIN * 0.176"}},
+    "T2": {"by_variant": {"landscape": "MIN * 0.12", "square": "MIN * 0.12", "default": "MIN * 0.139"}},
     "SUB_Y": {"if_slot": "headline2", "then": "TOP + T1 * 1.02 + T2 * 1.2", "else": "TOP + T1 * 1.15"}
   },
   "layers": [
@@ -64,7 +66,7 @@
       {"motif": "rect", "id": "haze", "y": "HZ - 140 * S", "height": "140 * S", "fill": "paint:haze"}]},
     {"id": "Grid", "items": [
       {"motif": "perspective_grid", "id": "grid", "horizon": "HZ", "floor": "paint:floor", "vertical_color": "paint:grid",
-       "horizontal_color": "palette.cyan", "horizon_color": "#FF9BE3", "spread": "W * 0.25", "near_spread": "W * 0.37",
+       "horizontal_color": "palette.cyan", "horizon_color": "palette.horizon", "spread": "W * 0.25", "near_spread": "W * 0.37",
        "verticals": 14, "horizontals": 17, "stroke_width": "2 * S"}]},
     {"id": "Title", "items": [
       {"motif": "display_text", "id": "headline", "slot": "headline", "x": "W * 0.04", "y": "TOP", "width": "W * 0.92",

@@ -211,6 +211,8 @@ def render_svg(ir: GraphicIR, *, asset_root: str | Path | None = None, embed_fon
                 attrs = f' id="{_attr(node.node_id)}"'
                 if node.opacity != 1:
                     attrs += f' opacity="{_attr(node.opacity)}"'
+                if node.offset_x or node.offset_y:
+                    attrs += f' transform="translate({_attr(node.offset_x)} {_attr(node.offset_y)})"'
                 if node.clip:
                     parts.append(f'<clipPath id="{_attr(node.node_id)}-clip">' + "".join(_shape(shape, clip=True) for shape in node.clip) + "</clipPath>")
                     attrs += f' clip-path="url(#{_attr(node.node_id)}-clip)"'

@@ -20,7 +20,14 @@ from book_production_platform.graphics_ir import (
 
 from .assets import AssetReferenceError, validate_local_reference
 from .layout import LayoutError
-from .themes import VARIANT_SIZES, ThemeError, compile_theme, get_theme, load_themes
+from .themes import (
+    VARIANT_SIZES,
+    ThemeError,
+    compile_theme,
+    design_controls,
+    get_theme,
+    load_themes,
+)
 
 # Version of the original V1A templates; data themes carry their own version.
 TEMPLATE_VERSION = "2"
@@ -102,8 +109,19 @@ def compile_template(request: GraphicRequest | dict[str, Any]) -> GraphicIR:
         raise TemplateError(str(exc)) from None
 
 
+def controls_for(request: GraphicRequest | dict[str, Any]) -> dict[str, Any]:
+    """The design controls (adjustable layers, items, palette, styles) of a request's theme."""
+
+    parsed = _request(request)
+    try:
+        theme = get_theme(parsed.template_id)
+        return design_controls(theme, parsed, product_image=_image_loader(parsed))
+    except ThemeError as exc:
+        raise TemplateError(str(exc)) from None
+
+
 def template_ids() -> tuple[str, ...]:
     return tuple(load_themes())
 
 
-__all__ = ["TEMPLATE_VERSION", "VARIANT_SIZES", "LayoutError", "TemplateError", "compile_template", "template_ids"]
+__all__ = ["TEMPLATE_VERSION", "VARIANT_SIZES", "LayoutError", "TemplateError", "compile_template", "controls_for", "template_ids"]

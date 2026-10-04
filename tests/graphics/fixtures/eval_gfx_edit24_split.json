@@ -1,0 +1,11 @@
+{
+ "suite": "EVAL-GFX-edit24",
+ "dev": [
+  "ed-s-en-01",
+  "ed-s-th-01",
+  "ed-c-en-01",
+  "ed-c-th-01",
+  "ed-a-en-01",
+  "ed-x-en-01"
+ ]
+}

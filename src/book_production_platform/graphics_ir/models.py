@@ -66,6 +66,44 @@ class BrandTokens(ContractModel):
     _validate_colors = field_validator("primary", "accent", "foreground", "background")(_hex_color)
 
 
+DesignValue = Union[float, int, str, bool]  # noqa: UP007
+
+
+class LayerOverride(ContractModel):
+    """Per-layer adjustment of a theme: visibility, opacity, and a move in canvas pixels."""
+
+    visible: bool = True
+    opacity: float | None = Field(default=None, ge=0, le=1)
+    dx: float = Field(default=0, ge=-4096, le=4096)
+    dy: float = Field(default=0, ge=-4096, le=4096)
+
+
+class ItemOverride(ContractModel):
+    """Per-item adjustment: visibility and parameter values (numbers, ``V``-relative expressions, colors)."""
+
+    visible: bool = True
+    params: dict[str, DesignValue] = Field(default_factory=dict, max_length=24)
+
+
+class DesignOverrides(ContractModel):
+    """Changes applied on top of a theme without editing the theme file.
+
+    ``style`` picks one of the theme's style presets; ``palette`` replaces
+    palette colors; ``layers`` and ``items`` (keyed ``"Layer/item"``) adjust
+    individual parts. Every key is checked against the theme when compiled.
+    """
+
+    style: str | None = Field(default=None, max_length=48)
+    palette: dict[str, str] = Field(default_factory=dict, max_length=32)
+    layers: dict[str, LayerOverride] = Field(default_factory=dict, max_length=32)
+    items: dict[str, ItemOverride] = Field(default_factory=dict, max_length=96)
+
+    @field_validator("palette")
+    @classmethod
+    def _palette_colors(cls, value: dict[str, str]) -> dict[str, str]:
+        return {name: _hex_color(color) for name, color in value.items()}
+
+
 class GraphicRequest(ContractModel):
     schema_version: Literal["graphic-request.v1"] = "graphic-request.v1"
     request_id: str
@@ -77,6 +115,7 @@ class GraphicRequest(ContractModel):
     assets: dict[str, str] = Field(default_factory=dict)
     asset_root: str | None = None
     font_ref: str = "builtin:sans"
+    design: DesignOverrides | None = None
 
 
 class NodeBase(ContractModel):
@@ -153,6 +192,9 @@ class GroupNode(ContractModel):
     label: str | None = Field(default=None, max_length=80)
     opacity: float = Field(default=1, ge=0, le=1)
     clip: list[ShapeNode] = Field(default_factory=list, max_length=200)
+    # A design override can move a whole layer; rendered as a translate.
+    offset_x: float = Field(default=0, ge=-4096, le=4096)
+    offset_y: float = Field(default=0, ge=-4096, le=4096)
     children: list[GraphicNode] = Field(default_factory=list, max_length=5000)
 
 

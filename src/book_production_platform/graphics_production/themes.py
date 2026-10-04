@@ -142,6 +142,7 @@ class Theme:
     variables: dict[str, Any]
     layers: tuple[dict[str, Any], ...]
     renderer: str
+    styles: dict[str, dict[str, Any]] = field(default_factory=dict)
     source: str = ""
 
     @property
@@ -157,12 +158,13 @@ class Theme:
             "slots": {name: dict(spec) for name, spec in self.slots.items()},
             "assets": {name: dict(spec) for name, spec in self.assets.items()},
             "evidence": list(self.evidence),
+            "styles": {name: str(spec.get("title", name)) for name, spec in self.styles.items()},
         }
 
 
 _THEME_KEYS = frozenset({
     "schema_version", "theme_id", "title", "description", "ir_version", "template_version", "variants", "slots",
-    "assets", "evidence", "palette", "paints", "vars", "layers", "renderer",
+    "assets", "evidence", "palette", "paints", "vars", "layers", "renderer", "styles",
 })
 
 
@@ -210,8 +212,23 @@ def parse_theme(raw: Mapping[str, Any], *, source: str = "") -> Theme:
         variables=dict(raw.get("vars") or {}),
         layers=tuple(dict(layer) for layer in layers),
         renderer=str(raw.get("renderer", "graphics-svg-v2")),
+        styles=_parse_styles(raw.get("styles") or {}, palette, theme_id),
         source=source,
     )
+
+
+def _parse_styles(raw: Any, palette: Mapping[str, str], theme_id: str) -> dict[str, dict[str, Any]]:
+    """Style presets: named palette swaps (``{"title": ..., "palette": {name: color}}``)."""
+
+    if not isinstance(raw, Mapping):
+        raise ThemeError(f"theme_styles_invalid:{theme_id}")
+    styles: dict[str, dict[str, Any]] = {}
+    for name, spec in raw.items():
+        colors = spec.get("palette") if isinstance(spec, Mapping) else None
+        if not isinstance(colors, Mapping) or not set(colors) <= set(palette):
+            raise ThemeError(f"theme_style_invalid:{theme_id}:{name}")
+        styles[str(name)] = {"title": str(spec.get("title", name)), "palette": dict(colors)}
+    return styles
 
 
 @lru_cache(maxsize=1)
@@ -244,6 +261,7 @@ class Context:
     request: GraphicRequest
     names: dict[str, float]
     product_image: Callable[[dict[str, Any]], ImageNode | None]
+    palette: dict[str, str] = field(default_factory=dict)
     paints: list[LinearGradient | RadialGradient] = field(default_factory=list)
     _paint_ids: set[str] = field(default_factory=set)
 
@@ -292,10 +310,10 @@ class Context:
         seen: set[str] = set()
         while resolved.startswith("palette."):
             key = resolved[len("palette."):]
-            if key in seen or key not in self.theme.palette:
+            if key in seen or key not in self.palette:
                 raise ThemeError(f"palette_unknown:{key}")
             seen.add(key)
-            resolved = self.theme.palette[key]
+            resolved = self.palette[key]
         if resolved.startswith("brand."):
             token = resolved[len("brand."):]
             if token not in ("primary", "accent", "foreground", "background"):
@@ -416,6 +434,91 @@ def _condition_holds(when: Any, ctx: Context) -> bool:
     return True
 
 
+# Parameters a design override (and the AI design editor) may change, by kind.
+EDITABLE_NUMBERS = frozenset({
+    "x", "y", "width", "height", "font_size", "min_font_size", "max_lines", "letter_spacing", "opacity", "stroke_width",
+    "stroke_opacity", "rx", "r", "ry", "cx", "cy", "x1", "y1", "x2", "y2", "count", "sparkles", "sparkle_size", "horizon",
+    "bottom", "vanish_x", "spread", "near_spread", "verticals", "horizontals", "power", "amplitude", "wavelength", "step",
+    "spacing", "max_radius", "min_radius", "direction", "angle", "band", "gap", "inset", "length", "base", "min_height",
+    "max_height", "peaks", "strength", "size", "rotation", "inner", "outer", "radius", "slat_start", "cut_y", "wobble",
+    "border_width", "border_opacity",
+})
+EDITABLE_COLORS = frozenset({"color", "fill", "stroke", "horizon_color", "horizontal_color", "vertical_color", "floor", "border"})
+EDITABLE_CHOICES: dict[str, frozenset[str]] = {
+    "weight": frozenset({"normal", "bold", "black"}),
+    "align": frozenset({"left", "center", "right"}),
+    "font": frozenset(BUILTIN_FONTS | {"request"}),
+}
+
+
+def _context(theme: Theme, request: GraphicRequest, product_image: Callable[[dict[str, Any]], ImageNode | None]) -> Context:
+    if request.variant not in theme.variants:
+        raise ThemeError("variant_unsupported")
+    width, height = float(request.canvas.width), float(request.canvas.height)
+    names: dict[str, float] = {
+        "W": width, "H": height, "CX": width / 2, "CY": height / 2, "MIN": min(width, height), "MAX": max(width, height),
+        "PI": math.pi,
+    }
+    palette = dict(theme.palette)
+    design = request.design
+    if design is not None:
+        if design.style is not None:
+            if design.style not in theme.styles:
+                raise ThemeError(f"design_style_unknown:{design.style}")
+            palette.update(theme.styles[design.style]["palette"])
+        for key, color in design.palette.items():
+            if key not in theme.palette:
+                raise ThemeError(f"design_palette_unknown:{key}")
+            palette[key] = color
+        layer_ids = {str(layer["id"]) for layer in theme.layers}
+        item_keys = {f"{layer['id']}/{item.get('id')}" for layer in theme.layers for item in layer["items"]}
+        for key in design.layers:
+            if key not in layer_ids:
+                raise ThemeError(f"design_layer_unknown:{key}")
+        for key in design.items:
+            if key not in item_keys:
+                raise ThemeError(f"design_item_unknown:{key}")
+    ctx = Context(theme=theme, request=request, names=names, product_image=product_image, palette=palette)
+    for name, value in theme.variables.items():
+        if name in names:
+            raise ThemeError(f"var_shadows_builtin:{name}")
+        names[name] = ctx.num(value, name=name)
+    for paint in theme.paints:
+        ctx.add_paint(paint)
+    return ctx
+
+
+def _apply_item_override(ctx: Context, item: Mapping[str, Any], params: Mapping[str, Any], target: str) -> dict[str, Any]:
+    """The item with overridden parameters; numbers may use ``V`` (the current value)."""
+
+    merged = dict(item)
+    for key, value in params.items():
+        if key in EDITABLE_NUMBERS:
+            if isinstance(value, bool):
+                raise ThemeError(f"design_value_invalid:{target}.{key}")
+            current = ctx.num(item[key], name=key) if key in item else 0.0
+            number = evaluate(value, {**ctx.names, "V": current}) if isinstance(value, str) else float(value)
+            if key in ("opacity", "stroke_opacity", "border_opacity", "strength") and not 0 <= number <= 1:
+                raise ThemeError(f"design_value_out_of_range:{target}.{key}")
+            if key in ("width", "height", "font_size", "min_font_size", "r", "rx", "ry", "size", "radius", "spacing") and number < 0:
+                raise ThemeError(f"design_value_out_of_range:{target}.{key}")
+            if abs(number) > 20_000:
+                raise ThemeError(f"design_value_out_of_range:{target}.{key}")
+            merged[key] = number
+        elif key in EDITABLE_COLORS:
+            if not isinstance(value, str):
+                raise ThemeError(f"design_value_invalid:{target}.{key}")
+            ctx.color(value, name=key)  # validates hex / palette / brand / paint
+            merged[key] = value
+        elif key in EDITABLE_CHOICES:
+            if value not in EDITABLE_CHOICES[key]:
+                raise ThemeError(f"design_value_invalid:{target}.{key}")
+            merged[key] = value
+        else:
+            raise ThemeError(f"design_param_not_editable:{target}.{key}")
+    return merged
+
+
 def compile_theme(
     theme: Theme,
     request: GraphicRequest,
@@ -424,64 +527,138 @@ def compile_theme(
 ) -> GraphicIR:
     from .motifs import MOTIFS  # local import: motifs import Context from here
 
-    if request.variant not in theme.variants:
-        raise ThemeError("variant_unsupported")
-    width, height = float(request.canvas.width), float(request.canvas.height)
-    names: dict[str, float] = {
-        "W": width, "H": height, "CX": width / 2, "CY": height / 2, "MIN": min(width, height), "MAX": max(width, height),
-        "PI": math.pi,
-    }
-    ctx = Context(theme=theme, request=request, names=names, product_image=product_image)
-    for name, value in theme.variables.items():
-        if name in names:
-            raise ThemeError(f"var_shadows_builtin:{name}")
-        names[name] = ctx.num(value, name=name)
-    for paint in theme.paints:
-        ctx.add_paint(paint)
+    ctx = _context(theme, request, product_image)
+    design = request.design
+    # A design override always produces layered output so moved or hidden layers stay editable.
+    ir_version = "graphic-ir.v2" if design is not None else theme.ir_version
 
     layers: list[GroupNode] = []
     flat: list[TextNode | ShapeNode | ImageNode] = []
     for layer in theme.layers:
         if not _condition_holds(layer.get("when"), ctx):
             continue
+        layer_id = str(layer["id"])
+        layer_override = design.layers.get(layer_id) if design else None
+        if layer_override is not None and not layer_override.visible:
+            continue
         children: list[Any] = []
         for item in layer["items"]:
             if not isinstance(item, Mapping) or not isinstance(item.get("motif"), str):
-                raise ThemeError(f"item_invalid:{layer['id']}")
+                raise ThemeError(f"item_invalid:{layer_id}")
             if not _condition_holds(item.get("when"), ctx):
                 continue
+            target = f"{layer_id}/{item.get('id')}"
+            item_override = design.items.get(target) if design else None
+            if item_override is not None:
+                if not item_override.visible:
+                    continue
+                item = _apply_item_override(ctx, item, item_override.params, target)
             motif = MOTIFS.get(item["motif"])
             if motif is None:
                 raise ThemeError(f"motif_unknown:{item['motif']}")
             children.extend(motif(ctx, item))
         if not children:
             continue
-        if theme.ir_version == "graphic-ir.v1":
+        if ir_version == "graphic-ir.v1":
             flat.extend(children)
         else:
             clip = [node for node in (MOTIFS[c["motif"]](ctx, c) for c in layer.get("clip", [])) for node in node]
+            opacity = ctx.num(layer.get("opacity", 1), name="opacity")
+            if layer_override is not None and layer_override.opacity is not None:
+                opacity = layer_override.opacity
             layers.append(GroupNode(
-                node_id=str(layer["id"]),
-                label=str(layer.get("label", layer["id"])),
-                opacity=ctx.num(layer.get("opacity", 1), name="opacity"),
+                node_id=layer_id,
+                label=str(layer.get("label", layer_id)),
+                opacity=opacity,
+                offset_x=layer_override.dx if layer_override else 0,
+                offset_y=layer_override.dy if layer_override else 0,
                 clip=[node for node in clip if isinstance(node, ShapeNode)],
                 children=children,
             ))
     return GraphicIR(
-        schema_version=theme.ir_version,  # type: ignore[arg-type]
+        schema_version=ir_version,  # type: ignore[arg-type]
         request_id=request.request_id,
         template_ref=f"{theme.theme_id}@{theme.template_version}",
         variant=request.variant,
         canvas=request.canvas,
-        nodes=flat if theme.ir_version == "graphic-ir.v1" else layers,  # type: ignore[arg-type]
+        nodes=flat if ir_version == "graphic-ir.v1" else layers,  # type: ignore[arg-type]
         paints=ctx.paints,
         source_refs=[f"request:{request.request_id}"],
         assumptions={"model_calls": "0", "renderer": theme.renderer},
     )
 
 
+def design_controls(
+    theme: Theme,
+    request: GraphicRequest,
+    *,
+    product_image: Callable[[dict[str, Any]], ImageNode | None],
+) -> dict[str, Any]:
+    """Everything a design override can change, with current values resolved for this request.
+
+    Used as the menu for people and as the only vocabulary the AI design editor may use.
+    """
+
+    ctx = _context(theme, request, product_image)
+    design = request.design
+    layers: list[dict[str, Any]] = []
+    for layer in theme.layers:
+        layer_id = str(layer["id"])
+        override = design.layers.get(layer_id) if design else None
+        items: list[dict[str, Any]] = []
+        for item in layer["items"]:
+            target = f"{layer_id}/{item.get('id')}"
+            item_override = design.items.get(target) if design else None
+            current = dict(item)
+            if item_override is not None:
+                current = _apply_item_override(ctx, item, item_override.params, target)
+            params: dict[str, Any] = {}
+            for key, value in current.items():
+                if key in EDITABLE_NUMBERS:
+                    try:
+                        params[key] = round(ctx.num(value, name=key), 2)
+                    except ThemeError:
+                        continue
+                elif key in EDITABLE_COLORS and not isinstance(value, Mapping):
+                    params[key] = ctx.color(value, name=key)
+                elif key in EDITABLE_CHOICES:
+                    params[key] = value
+            entry: dict[str, Any] = {"target": target, "motif": item["motif"], "params": params,
+                                     "visible": item_override.visible if item_override else True}
+            if "slot" in item:
+                entry["slot"] = item["slot"]
+            items.append(entry)
+        layers.append({
+            "id": layer_id,
+            "label": str(layer.get("label", layer_id)),
+            "visible": override.visible if override else True,
+            "opacity": override.opacity if override and override.opacity is not None else layer.get("opacity", 1),
+            "dx": override.dx if override else 0,
+            "dy": override.dy if override else 0,
+            "items": items,
+        })
+    return {
+        "schema_version": "graphic-design-controls.v1",
+        "theme_id": theme.theme_id,
+        "variant": request.variant,
+        "canvas": {"width": request.canvas.width, "height": request.canvas.height},
+        "palette": dict(ctx.palette),
+        "styles": {name: spec["title"] for name, spec in theme.styles.items()},
+        "style": design.style if design else None,
+        "fonts": sorted(BUILTIN_FONTS),
+        "slots": {
+            name: {"required": bool(spec.get("required", True)), "labels": list(spec.get("labels", [name]))}
+            for name, spec in theme.slots.items()
+        },
+        "layers": layers,
+    }
+
+
 __all__ = [
     "BUILTIN_FONTS",
+    "EDITABLE_CHOICES",
+    "EDITABLE_COLORS",
+    "EDITABLE_NUMBERS",
     "THEMES_DIR",
     "VARIANT_SIZES",
     "Context",
@@ -489,6 +666,7 @@ __all__ = [
     "ThemeError",
     "ThemeSlotMissing",
     "compile_theme",
+    "design_controls",
     "evaluate",
     "get_theme",
     "load_themes",

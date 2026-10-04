@@ -13,6 +13,7 @@
     "body": {"required": false, "labels": ["body", "intro", "dek", "เนื้อหา", "คำโปรย"]},
     "footer": {"required": false, "labels": ["footer", "byline", "website", "ท้ายภาพ", "ผู้เขียน"]}
   },
+  "styles": {"night": {"title": "Night edition", "palette": {"paper": "#141414", "ink": "#F3EDE2"}}, "newsprint": {"title": "Newsprint", "palette": {"paper": "#E9E4D8", "ink": "#2B2B2B", "accent": "#2B2B2B"}}},
   "palette": {"paper": "#F3EDE2", "ink": "#151515", "accent": "brand.accent", "accent2": "brand.primary"},
   "vars": {
     "S": "MIN / 1080",

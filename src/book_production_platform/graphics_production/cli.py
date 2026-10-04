@@ -130,6 +130,23 @@ def _parser() -> argparse.ArgumentParser:
     make.add_argument("--accent", default="#FCA311", help="brand accent color")
     make.add_argument("--output", required=True, help="local output directory")
     make.add_argument("--idempotency-key", required=True)
+    controls = commands.add_parser("controls", help="list a request's adjustable layers, items, palette, and styles")
+    controls.add_argument("--request", required=True, help="graphic request JSON (for example design-request.json from edit)")
+    edit = commands.add_parser("edit", help="change a design from a plain-language instruction via the AI gateway (mode=live only)")
+    edit.add_argument("--request", required=True, help="graphic request JSON to edit (edits accumulate in design-request.json)")
+    edit.add_argument("--instruction", default=None, help="what to change, in plain language")
+    edit.add_argument("--patch", default=None, help="structured change-set JSON instead of an instruction (no AI)")
+    edit.add_argument("--output", required=True, help="local output directory (design-request.json, SVG, PNG)")
+    edit.add_argument("--job-id", required=True, help="unique job id; the ledger allows at most two calls per job")
+    edit.add_argument("--locale", default="th-TH")
+    edit.add_argument("--provider-config", default=None, help="graphics design-edit provider config JSON (no secrets)")
+    edit.add_argument("--budget-root", default=".runtime/graphics-design-edit-ai-budget", help="persistent AI cost ledger directory")
+    edit_shadow = commands.add_parser("edit-shadow", help="shadow-evaluate the AI design editor; never renders or uses results")
+    edit_shadow.add_argument("--provider-config", required=True)
+    edit_shadow.add_argument("--cases", action="append", required=True)
+    edit_shadow.add_argument("--split", default=None)
+    edit_shadow.add_argument("--budget-root", default=".runtime/graphics-design-edit-ai-budget")
+    edit_shadow.add_argument("--output", required=True)
     shadow = commands.add_parser("brief-shadow", help="shadow-evaluate the brief adapter; never renders or uses results")
     shadow.add_argument("--provider-config", required=True, help="graphics-provider-config.v1 JSON (no secrets)")
     shadow.add_argument("--cases", action="append", required=True, help="eval case JSON file; repeatable")
@@ -164,8 +181,88 @@ def _make_items(args: argparse.Namespace) -> list[dict[str, Any]]:
     return items
 
 
+def _read_json(path: str) -> Any:
+    return json.loads(Path(path).read_text(encoding="utf-8"))
+
+
+def _run_edit(args: argparse.Namespace) -> int:
+    from .design_edit import DesignEditor, EditorNotConfigured, apply_change
+
+    try:
+        request = _read_json(args.request)
+        patch = _read_json(args.patch) if args.patch else None
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"input error: {type(exc).__name__}", file=sys.stderr)
+        return 2
+    if (patch is None) == (args.instruction is None):
+        print("input error: give exactly one of --instruction or --patch", file=sys.stderr)
+        return 2
+    if patch is not None:
+        result = apply_change(request, patch)
+    else:
+        try:
+            config = load_provider_config(args.provider_config) if args.provider_config else None
+            editor = DesignEditor(provider_config=config, ledger_root=args.budget_root)
+        except (EditorNotConfigured, ProviderConfigError) as exc:
+            print(f"provider_not_configured: {exc}", file=sys.stderr)
+            return 2
+        if editor.mode != "live":
+            print("shadow_mode_only: the design-edit config is in shadow mode; run edit-shadow and get owner approval before mode=live", file=sys.stderr)
+            return 2
+        result = editor.edit(request, args.instruction, job_id=args.job_id, locale=args.locale)
+    summary: dict[str, Any] = {key: value for key, value in result.to_dict().items() if key != "request"}
+    if result.status != "complete" or result.request is None:
+        print(json.dumps(summary, ensure_ascii=False, indent=2))
+        return 4 if result.status == "needs_input" else 2
+    output = Path(args.output)
+    output.mkdir(parents=True, exist_ok=True)
+    (output / "design-request.json").write_text(json.dumps(result.request, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    batch = run_batch([result.request], output, f"edit-{args.job_id}")
+    summary["batch"] = {"status": batch.status, "manifest": str(batch.manifest_path) if batch.manifest_path else None}
+    summary["design_request"] = str(output / "design-request.json")
+    print(json.dumps(summary, ensure_ascii=False, default=str, indent=2))
+    return 0 if batch.status == "accepted" else 2
+
+
+def _run_edit_shadow(args: argparse.Namespace) -> int:
+    from book_production_platform.brief_adapter_kit.shadow import load_cases
+
+    from .design_edit import DesignEditor, EditorNotConfigured
+    from .design_edit_shadow import run_edit_shadow
+
+    try:
+        editor = DesignEditor(provider_config=load_provider_config(args.provider_config), ledger_root=args.budget_root)
+        cases = load_cases(args.cases)
+        dev_ids = _read_json(args.split)["dev"] if args.split else []
+    except (EditorNotConfigured, ProviderConfigError, OSError, KeyError, json.JSONDecodeError) as exc:
+        print(f"input error: {exc}", file=sys.stderr)
+        return 2
+    report = run_edit_shadow(editor, cases, dev_ids=dev_ids)
+    output = Path(args.output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps({"gate": report["gate"], "metrics": report["metrics"]}, ensure_ascii=False, indent=2))
+    if not report["gate"]["passed"]:
+        print("shadow gate failed: keep mode=shadow and review the report", file=sys.stderr)
+        return 6
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
+    if args.command == "controls":
+        from .templates import TemplateError, controls_for
+
+        try:
+            print(json.dumps(controls_for(_read_json(args.request)), ensure_ascii=False, indent=2))
+        except (OSError, json.JSONDecodeError, TemplateError, ValueError) as exc:
+            print(f"input error: {exc}", file=sys.stderr)
+            return 2
+        return 0
+    if args.command == "edit":
+        return _run_edit(args)
+    if args.command == "edit-shadow":
+        return _run_edit_shadow(args)
     if args.command == "themes":
         from .themes import load_themes
 

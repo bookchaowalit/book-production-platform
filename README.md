@@ -332,6 +332,49 @@ book-production graphics make --theme synthwave --variant all `
   --output .\.runtime\graphics\themes --idempotency-key synthwave-1
 ```
 
+### Adjusting a design: overrides, style presets, and the AI design editor
+
+A request may carry a `design` block that changes a theme without editing the
+theme file. Edits are checked against the theme, so only real layers, items,
+and editable parameters can change:
+
+- `style`: one of the theme's style presets (for example synthwave `sunrise`,
+  `ice`, `matrix`; bold_editorial `night`, `newsprint`; soft_gradient
+  `sunset`, `ocean`, `mono`), which swaps palette colors.
+- `palette`: `{name: "#RRGGBB"}` for the theme's palette names.
+- `layers`: `{"Stars": {"visible": false, "opacity": 0.6, "dx": 0, "dy": 40}}`
+  hides, fades, or moves a whole layer.
+- `items`: `{"Title/headline": {"params": {"y": "V + 40", "font_size": "V * 1.2",
+  "color": "#FFFFFF", "weight": "bold"}}}`; `V` is the current value. Editable
+  parameters are positions, sizes, colors, opacity, stroke, type settings, and
+  each motif's own numbers (counts, radii, spacing, angles, ...).
+
+`graphics controls --request <file>` lists every adjustable layer, item, and
+parameter with its current value, plus the palette, style presets, and text
+slots. A design override always produces layered `graphic-ir.v2`.
+
+`graphics edit` turns a plain-language instruction into such a change through
+the Central AI Gateway (`graphics_production/design_edit.py`, route `graphics.design_edit`,
+prompt `graphics-edit.v2`). The model sees only the controls (never slot text)
+and proposes a change set; the engine then checks targets and parameters,
+requires new text to be copied verbatim from the instruction, re-compiles,
+keeps every text inside the canvas, and answers `needs_input` for an unclear
+target, a request the controls cannot express (for example adding a new
+picture), or no change. Each run writes `design-request.json`; pass it to the
+next `edit` to keep editing, then open the SVG in Affinity or send the PNG.
+`--patch <change.json>` applies a change set with no AI. Like the brief
+adapter, the editor runs only with an owner-approved config in `mode: live`;
+`graphics edit-shadow` runs EVAL-GFX-edit24 (8 structured, 8 clear, 4
+ambiguous, 4 adversarial; half Thai) and gates clear edits ≥ 95% exact,
+ambiguous recall 100%, zero adversarial passes.
+
+```powershell
+book-production graphics controls --request .\design-request.json
+book-production graphics edit --request .\design-request.json `
+  --instruction "เปลี่ยนเป็นสไตล์ ice และซ่อนดาวทั้งหมด" `
+  --output .\.runtime\graphics\edit --job-id edit-1 --provider-config .\.runtime\graphics-edit.json
+```
+
 Python 3.12 or newer and a local PNG rasterizer are required: a Microsoft Edge
 or Google Chrome installation, or the optional `resvg-py` package
 (`pip install .[preview]`), used automatically when no browser is found or
