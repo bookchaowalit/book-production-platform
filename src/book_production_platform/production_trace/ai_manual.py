@@ -382,9 +382,10 @@ def maybe_write_ai_manual(
     program = program_for(tool_id, guide.program)
     try:
         raw = json.loads(Path(config_path).read_text(encoding="utf-8"))
-        writer = AIManualWriter(raw, ledger_root=os.environ.get(BUDGET_ENV, DEFAULT_BUDGET_ROOT))
-        if writer.mode != "live":
+        if not isinstance(raw, dict) or raw.get("mode") != "live":
+            # Shadow (or unset) mode: nothing is written and no ledger is touched.
             return {"schema_version": AI_MANUAL_SCHEMA, "status": "skipped", "issue": "shadow_mode_only", "program": program}
+        writer = AIManualWriter(raw, ledger_root=os.environ.get(BUDGET_ENV, DEFAULT_BUDGET_ROOT))
         result = writer.write(guide_facts(guide, tool_id=tool_id, trace=trace), program=program, job_id=f"manual-{tool_id}-{job_id}")
     except Exception as exc:  # noqa: BLE001 - the AI guide is optional; a job never fails because of it
         return {"schema_version": AI_MANUAL_SCHEMA, "status": "skipped", "issue": type(exc).__name__, "program": program}
