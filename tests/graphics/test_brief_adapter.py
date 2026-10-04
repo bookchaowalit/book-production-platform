@@ -18,6 +18,7 @@ from book_production_platform.graphics_production import cli as graphics_cli
 from book_production_platform.graphics_production.layout import LayoutError
 from book_production_platform.graphics_production.provider import (
     REPAIR_PROMPT,
+    REQUIRED_SLOTS,
     TEMPLATE_EVIDENCE,
     TEMPLATE_IDS,
     TEMPLATE_SLOTS,
@@ -156,11 +157,12 @@ def test_clear_brief_becomes_a_valid_batch_with_registry_colors(tmp_path: Path) 
 
 
 def test_template_registry_matches_the_engine() -> None:
-    assert set(TEMPLATE_IDS) == set(TEMPLATE_SLOTS)
+    assert set(TEMPLATE_IDS) == set(TEMPLATE_SLOTS) == set(REQUIRED_SLOTS)
+    assert {"quote_card", "product_card", "announcement"} <= set(TEMPLATE_IDS)
     for template_id, slots in TEMPLATE_SLOTS.items():
         content = {slot: "Text" for slot in slots}
         compile_template(build_request("probe", template_id, "square", BrandTokens(primary="#000000", accent="#FFFFFF"), content))
-        for slot in slots:
+        for slot in REQUIRED_SLOTS[template_id]:
             with pytest.raises(TemplateError, match="content_required"):
                 partial = {key: value for key, value in content.items() if key != slot}
                 compile_template(build_request("probe", template_id, "square", BrandTokens(primary="#000000", accent="#FFFFFF"), partial))
@@ -545,8 +547,8 @@ def test_unsupported_image_request_blocks_completion(tmp_path: Path) -> None:
 DEV_OVERFLOW = FIXTURES / "eval_gfx_dev_overflow.json"
 
 
-def test_config_default_prompt_version_is_v2() -> None:
-    assert parse_provider_config(config()).prompt_version == "graphics-brief.v3"
+def test_config_default_prompt_version() -> None:
+    assert parse_provider_config(config()).prompt_version == "graphics-brief.v4"
 
 
 def test_non_json_reply_gets_the_generic_repair_message(tmp_path: Path) -> None:

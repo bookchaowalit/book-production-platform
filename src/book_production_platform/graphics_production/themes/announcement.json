@@ -1,0 +1,36 @@
+{
+  "schema_version": "graphic-theme.v1",
+  "theme_id": "announcement",
+  "title": "Announcement",
+  "description": "Headline, body text, and a call-to-action button (original V1A template).",
+  "ir_version": "graphic-ir.v1",
+  "template_version": "2",
+  "renderer": "graphics-svg-browser-v2",
+  "variants": ["square", "portrait", "story"],
+  "evidence": ["announcement", "announce", "ประกาศ"],
+  "slots": {
+    "headline": {"required": true, "labels": ["headline", "heading", "title", "หัวข้อ", "พาดหัว"]},
+    "body": {"required": true, "labels": ["body", "details", "text", "เนื้อหา", "รายละเอียด", "ข้อความ"]},
+    "cta": {"required": true, "labels": ["button", "cta", "call to action", "ปุ่ม"]}
+  },
+  "vars": {
+    "cta_y": "H - 72 - 108",
+    "headline_height": {"by_variant": {"square": 260, "default": 300}},
+    "body_y": "110 + headline_height + 40"
+  },
+  "layers": [
+    {"id": "Background", "items": [
+      {"motif": "rect", "id": "background", "fill": "brand.background"},
+      {"motif": "rect", "id": "accent-bar", "height": 26, "fill": "brand.accent"}
+    ]},
+    {"id": "Text", "items": [
+      {"motif": "text_block", "id": "headline", "slot": "headline", "x": 72, "y": 110, "width": 936,
+       "height": "headline_height", "font_size": 80, "min_font_size": 32, "max_lines": 8, "color": "brand.foreground"},
+      {"motif": "text_block", "id": "body", "slot": "body", "x": 72, "y": "body_y", "width": 936,
+       "height": "cta_y - 40 - body_y", "font_size": 42, "min_font_size": 24, "max_lines": 12, "color": "brand.foreground"},
+      {"motif": "rect", "id": "cta-bg", "x": 72, "y": "cta_y", "width": 360, "height": 108, "fill": "brand.primary"},
+      {"motif": "text_block", "id": "cta", "slot": "cta", "x": 92, "y": "cta_y + 22", "width": 320, "height": 64,
+       "font_size": 32, "min_font_size": 20, "max_lines": 2, "color": "brand.background", "align": "center"}
+    ]}
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "schema_version": "graphic-theme.v1",
+  "theme_id": "bold_editorial",
+  "title": "Bold editorial",
+  "description": "Magazine-style cover: huge serif headline, halftone shading, accent disc, and print stripes.",
+  "ir_version": "graphic-ir.v2",
+  "template_version": "1",
+  "variants": ["square", "portrait", "story", "landscape"],
+  "evidence": ["editorial", "magazine", "magazine cover", "นิตยสาร", "ปกนิตยสาร", "บทความ"],
+  "slots": {
+    "kicker": {"required": false, "labels": ["kicker", "section", "issue", "หมวด", "ฉบับ"]},
+    "headline": {"required": true, "labels": ["headline", "title", "หัวข้อ", "พาดหัว"]},
+    "body": {"required": false, "labels": ["body", "intro", "dek", "เนื้อหา", "คำโปรย"]},
+    "footer": {"required": false, "labels": ["footer", "byline", "website", "ท้ายภาพ", "ผู้เขียน"]}
+  },
+  "palette": {"paper": "#F3EDE2", "ink": "#151515", "accent": "brand.accent", "accent2": "brand.primary"},
+  "vars": {
+    "S": "MIN / 1080",
+    "M": "MIN * 0.07",
+    "HEAD": {"by_variant": {"landscape": "MIN * 0.115", "story": "MIN * 0.16", "default": "MIN * 0.135"}},
+    "HEAD_Y": {"by_variant": {"landscape": "H * 0.22", "story": "H * 0.30", "default": "H * 0.24"}},
+    "HEAD_W": {"by_variant": {"landscape": "W * 0.58", "default": "W - 2 * M"}}
+  },
+  "layers": [
+    {"id": "Paper", "items": [
+      {"motif": "rect", "id": "paper", "fill": "palette.paper"},
+      {"motif": "grain", "id": "paper-grain", "count": "1400 * W * H / 1166400", "size": "1.4 * S", "color": "palette.ink", "opacity": 0.06}]},
+    {"id": "Shapes", "items": [
+      {"motif": "ellipse", "id": "sun-disc", "cx": "W - M - MIN * 0.17", "cy": "H * 0.68", "r": "MIN * 0.24", "fill": "palette.accent"},
+      {"motif": "halftone", "id": "halftone", "x": "W * 0.45", "y": "H * 0.55", "width": "W * 0.55", "height": "H * 0.45",
+       "spacing": "22 * S", "max_radius": "9 * S", "direction": 45, "color": "palette.ink", "opacity": 0.85},
+      {"motif": "stripes", "id": "print-stripes", "x": "M", "y": "H - M - MIN * 0.12", "width": "W * 0.35", "height": "MIN * 0.09",
+       "band": "6 * S", "gap": "10 * S", "angle": 0, "color": "palette.accent2", "opacity": 0.9},
+      {"motif": "rect", "id": "rule-top", "x": "M", "y": "M + MIN * 0.07", "width": "W - 2 * M", "height": "4 * S", "fill": "palette.ink"}]},
+    {"id": "Type", "items": [
+      {"motif": "text_block", "id": "kicker", "slot": "kicker", "x": "M", "y": "M", "width": "W - 2 * M", "height": "MIN * 0.05",
+       "font_size": "MIN * 0.03", "min_font_size": "MIN * 0.02", "max_lines": 1, "font": "builtin:mono", "letter_spacing": "6 * S",
+       "color": "palette.ink"},
+      {"motif": "text_block", "id": "headline", "slot": "headline", "x": "M", "y": "HEAD_Y", "width": "HEAD_W",
+       "height": "HEAD * 1.2 * 3", "font_size": "HEAD", "min_font_size": "HEAD * 0.45", "max_lines": 3, "font": "builtin:serif",
+       "weight": "black", "letter_spacing": "-2 * S", "color": "palette.ink"},
+      {"motif": "text_block", "id": "body", "slot": "body", "x": "M", "y": "HEAD_Y + HEAD * 1.2 * 3 + MIN * 0.03",
+       "width": {"by_variant": {"landscape": "W * 0.45", "default": "W * 0.42"}}, "height": "MIN * 0.2", "font_size": "MIN * 0.032",
+       "min_font_size": "MIN * 0.022", "max_lines": 5, "font": "builtin:thai", "color": "palette.ink", "overflow": "reject"},
+      {"motif": "text_block", "id": "footer", "slot": "footer", "x": "W * 0.5", "y": "M", "width": "W * 0.5 - M",
+       "height": "MIN * 0.03", "font_size": "MIN * 0.02", "min_font_size": "MIN * 0.014", "max_lines": 1, "font": "builtin:mono",
+       "letter_spacing": "4 * S", "align": "right", "color": "palette.ink"}]}
+  ]
+}

@@ -121,6 +121,15 @@ def _parser() -> argparse.ArgumentParser:
     brief.add_argument("--job-id", required=True, help="unique job id; the ledger allows at most two calls per job")
     brief.add_argument("--provider-config", default=None, help="graphics-provider-config.v1 JSON (no secrets)")
     brief.add_argument("--budget-root", default=DEFAULT_BUDGET_ROOT, help="persistent AI cost ledger directory")
+    commands.add_parser("themes", help="list the registered templates (themes): sizes, text slots, and brief words")
+    make = commands.add_parser("make", help="render one theme from command-line text (no JSON, no AI)")
+    make.add_argument("--theme", required=True, help="template/theme id (see the themes command)")
+    make.add_argument("--variant", action="append", default=None, help="square, portrait, story, landscape, or all; repeatable")
+    make.add_argument("--set", dest="slots", action="append", default=[], metavar="SLOT=TEXT", help="slot text; repeatable")
+    make.add_argument("--primary", default="#14213D", help="brand primary color")
+    make.add_argument("--accent", default="#FCA311", help="brand accent color")
+    make.add_argument("--output", required=True, help="local output directory")
+    make.add_argument("--idempotency-key", required=True)
     shadow = commands.add_parser("brief-shadow", help="shadow-evaluate the brief adapter; never renders or uses results")
     shadow.add_argument("--provider-config", required=True, help="graphics-provider-config.v1 JSON (no secrets)")
     shadow.add_argument("--cases", action="append", required=True, help="eval case JSON file; repeatable")
@@ -130,8 +139,53 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _make_items(args: argparse.Namespace) -> list[dict[str, Any]]:
+    from .themes import VARIANT_SIZES, get_theme
+
+    theme = get_theme(args.theme)
+    requested = args.variant or ["all"]
+    variants = list(theme.variants) if "all" in requested else requested
+    content: dict[str, str] = {}
+    for entry in args.slots:
+        slot, separator, text = entry.partition("=")
+        if not separator or slot not in theme.slots:
+            raise ValueError(f"unknown slot {slot!r}; {args.theme} takes: {', '.join(theme.slots)}")
+        content[slot] = text
+    items = []
+    for variant in variants:
+        if variant not in theme.variants:
+            raise ValueError(f"{args.theme} does not come in {variant}; sizes: {', '.join(theme.variants)}")
+        width, height = VARIANT_SIZES[variant]
+        items.append({
+            "request_id": f"{args.theme}-{variant}", "template_id": args.theme, "variant": variant,
+            "canvas": {"width": width, "height": height}, "brand": {"primary": args.primary, "accent": args.accent},
+            "content": content,
+        })
+    return items
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
+    if args.command == "themes":
+        from .themes import load_themes
+
+        print(json.dumps([theme.summary() for theme in load_themes().values()], ensure_ascii=False, indent=2))
+        return 0
+    if args.command == "make":
+        from .themes import ThemeError
+
+        try:
+            make_items = _make_items(args)
+        except (ValueError, ThemeError) as exc:
+            print(f"input error: {exc}", file=sys.stderr)
+            return 2
+        try:
+            made = run_batch(make_items, args.output, args.idempotency_key)
+        except IdempotencyConflict as exc:
+            print(f"idempotency error: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(made.to_dict(), ensure_ascii=False, default=str, indent=2))
+        return 0 if made.status in {"accepted", "partial"} else 2
     if args.command == "brief":
         return _run_brief(args)
     if args.command == "brief-shadow":

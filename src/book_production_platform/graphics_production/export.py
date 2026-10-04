@@ -2,7 +2,7 @@
 
 ``export_batch`` reads a ``graphics-batch.v1`` manifest, re-verifies every
 accepted SVG against its recorded hash, re-renders it through the local
-browser at ``scale`` times the canvas size, and writes a PNG plus a
+browser (or resvg when no browser is installed) at ``scale`` times the canvas size, and writes a PNG plus a
 single-page PDF that carries the requested DPI (a 1080 px canvas at scale 3
 and 300 DPI prints at about 27.4 cm). A ``graphics-export.v1`` manifest
 records every output with its hash and the source SVG hash. Nothing is
@@ -28,7 +28,7 @@ from PIL import Image
 from book_production_platform.production_trace import ManualGuide, TraceRecorder
 
 from .jobs import ENGINE_VERSION, TOOL_ID
-from .render import RenderError, _find_browser
+from .render import RenderError, _find_browser, rasterize_svg, rasterizer
 
 EXPORT_RECIPE = "graphics-print-export.v1"
 MIN_SCALE, MAX_SCALE = 1, 6
@@ -50,6 +50,8 @@ def _sha256(data: bytes) -> str:
 
 
 def _render_scaled(svg_path: Path, width: int, height: int, scale: int) -> bytes:
+    if rasterizer() == "resvg":
+        return rasterize_svg(svg_path.read_text(encoding="utf-8"), width=width * scale)
     browser = _find_browser()
     if browser is None:
         raise RenderError("browser_not_found")

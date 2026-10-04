@@ -90,9 +90,18 @@ class GraphicsBatchInputs(_ContractModel):
     """The graphics batch side of the handoff: one template plus per-size specs."""
 
     template_id: TemplateId
-    variants: tuple[VariantId, ...] = Field(min_length=1, max_length=3)
+    variants: tuple[VariantId, ...] = Field(min_length=1, max_length=4)
     brand: BrandTokens
     content: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("template_id")
+    @classmethod
+    def _registered_template(cls, value: str) -> str:
+        from book_production_platform.graphics_production.themes import load_themes
+
+        if value not in load_themes():
+            raise ValueError("template_id must name a registered graphics template")
+        return value
 
     @field_validator("variants")
     @classmethod

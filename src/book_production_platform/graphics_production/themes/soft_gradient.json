@@ -1,0 +1,47 @@
+{
+  "schema_version": "graphic-theme.v1",
+  "theme_id": "soft_gradient",
+  "title": "Soft gradient",
+  "description": "Calm brand-coloured gradient with organic blobs, layered waves, and a pill call to action.",
+  "ir_version": "graphic-ir.v2",
+  "template_version": "1",
+  "variants": ["square", "portrait", "story", "landscape"],
+  "evidence": ["soft gradient", "gradient", "pastel", "minimal promo", "ไล่สี", "พาสเทล", "มินิมอล"],
+  "slots": {
+    "headline": {"required": true, "labels": ["headline", "title", "หัวข้อ", "พาดหัว"]},
+    "body": {"required": false, "labels": ["body", "details", "text", "เนื้อหา", "รายละเอียด"]},
+    "cta": {"required": false, "labels": ["button", "cta", "call to action", "ปุ่ม"]}
+  },
+  "palette": {"a": "brand.primary", "b": "brand.accent", "light": "#FFFFFF"},
+  "paints": [
+    {"paint_id": "bg", "type": "linear", "angle": 60, "stops": [{"offset": 0, "color": "palette.a"}, {"offset": 1, "color": "palette.b"}]}
+  ],
+  "vars": {
+    "S": "MIN / 1080",
+    "M": "MIN * 0.08",
+    "HEAD": {"by_variant": {"landscape": "MIN * 0.11", "default": "MIN * 0.095"}},
+    "WAVE_Y": {"by_variant": {"landscape": "H * 0.74", "story": "H * 0.8", "default": "H * 0.76"}}
+  },
+  "layers": [
+    {"id": "Background", "items": [{"motif": "rect", "id": "bg", "fill": "paint:bg"}]},
+    {"id": "Blobs", "items": [
+      {"motif": "blobs", "id": "blobs", "count": 4, "min_radius": "MIN * 0.12", "max_radius": "MIN * 0.3",
+       "colors": ["palette.light", "palette.b", "palette.a"], "opacity": 0.22},
+      {"motif": "glow", "id": "glow", "cx": "W * 0.8", "cy": "H * 0.2", "r": "MIN * 0.45", "color": "palette.light", "strength": 0.35}]},
+    {"id": "Waves", "items": [
+      {"motif": "waves", "id": "waves", "y": "WAVE_Y", "count": 3, "step": "MIN * 0.05", "amplitude": "MIN * 0.025",
+       "wavelength": "W * 0.6", "colors": ["palette.light"], "opacity": 0.18}]},
+    {"id": "Type", "items": [
+      {"motif": "text_block", "id": "headline", "slot": "headline", "x": "M", "y": "H * 0.2", "width": "W - 2 * M",
+       "height": "HEAD * 1.2 * 3", "font_size": "HEAD", "min_font_size": "HEAD * 0.45", "max_lines": 3, "font": "builtin:thai",
+       "weight": "bold", "color": "palette.light"},
+      {"motif": "text_block", "id": "body", "slot": "body", "x": "M", "y": "H * 0.2 + HEAD * 1.2 * 3 + MIN * 0.02",
+       "width": "W * 0.7", "height": "MIN * 0.18", "font_size": "MIN * 0.036", "min_font_size": "MIN * 0.024", "max_lines": 4,
+       "font": "builtin:thai", "color": "palette.light", "opacity": 0.9},
+      {"motif": "rect", "id": "cta-pill", "x": "M", "y": "WAVE_Y - MIN * 0.14", "width": "MIN * 0.36", "height": "MIN * 0.085",
+       "rx": "MIN * 0.0425", "fill": "palette.light", "when": {"slot": "cta"}},
+      {"motif": "text_block", "id": "cta", "slot": "cta", "x": "M + MIN * 0.02", "y": "WAVE_Y - MIN * 0.14 + MIN * 0.018",
+       "width": "MIN * 0.32", "height": "MIN * 0.05", "font_size": "MIN * 0.032", "min_font_size": "MIN * 0.02", "max_lines": 1,
+       "font": "builtin:thai", "weight": "bold", "align": "center", "color": "palette.a"}]}
+  ]
+}

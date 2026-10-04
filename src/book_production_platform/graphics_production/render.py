@@ -1,4 +1,12 @@
-"""Editable SVG and local PNG preview renderers for GraphicIR."""
+"""Editable SVG and local PNG preview renderers for GraphicIR.
+
+SVG for a ``graphic-ir.v1`` IR is unchanged from V1A. ``graphic-ir.v2`` adds
+gradient paints in ``<defs>``, paths and ellipses, styled text, and one
+``<g id=...>`` per group, which editors such as Affinity import as named
+layers. PNG previews come from a local Chromium-family browser or, when none
+is installed (or ``GRAPHICS_PRODUCTION_RASTERIZER=resvg``), from the optional
+``resvg-py`` package; both shape complex scripts such as Thai.
+"""
 
 from __future__ import annotations
 
@@ -20,9 +28,13 @@ from PIL import Image, ImageFont
 
 from book_production_platform.graphics_ir import (
     GraphicIR,
+    GroupNode,
     ImageNode,
+    LinearGradient,
+    RadialGradient,
     ShapeNode,
     TextNode,
+    iter_nodes,
 )
 
 from .assets import AssetReferenceError, validate_local_reference
@@ -86,46 +98,160 @@ def _font_asset(reference: str, asset_root: str | Path | None) -> tuple[str, str
     return family, mime, css_format, encoded
 
 
-def render_svg(ir: GraphicIR, *, asset_root: str | Path | None = None) -> str:
-    """Return an editable SVG with custom fonts embedded as local font data."""
+# Font stacks for theme fonts; editors substitute the first installed family.
+BUILTIN_FONT_STACKS: dict[str, str] = {
+    "builtin:sans": "Arial, sans-serif",
+    "builtin:display": "Anton, 'Bebas Neue', Impact, 'Arial Black', Sarabun, sans-serif",
+    "builtin:serif": "'Playfair Display', Georgia, 'Times New Roman', serif",
+    "builtin:mono": "'Space Mono', Menlo, Consolas, 'Courier New', monospace",
+    "builtin:thai": "Sarabun, 'Noto Sans Thai', 'Leelawadee UI', Tahoma, sans-serif",
+}
+_WEIGHTS = {"normal": None, "bold": "700", "black": "900"}
+
+
+def _paint(value: str) -> str:
+    # Paint element ids are namespaced so they never collide with node ids.
+    return f"url(#paint-{value[len('paint:'):]})" if value.startswith("paint:") else value
+
+
+def _gradient(paint: LinearGradient | RadialGradient) -> str:
+    stops = "".join(
+        f'<stop offset="{_attr(stop.offset)}" stop-color="{_attr(stop.color)}"'
+        + (f' stop-opacity="{_attr(stop.opacity)}"' if stop.opacity != 1 else "")
+        + " />"
+        for stop in paint.stops
+    )
+    if isinstance(paint, LinearGradient):
+        return (
+            f'<linearGradient id="paint-{_attr(paint.paint_id)}" x1="{_attr(paint.x1)}" y1="{_attr(paint.y1)}" '
+            f'x2="{_attr(paint.x2)}" y2="{_attr(paint.y2)}">{stops}</linearGradient>'
+        )
+    return f'<radialGradient id="paint-{_attr(paint.paint_id)}" cx="{_attr(paint.cx)}" cy="{_attr(paint.cy)}" r="{_attr(paint.r)}">{stops}</radialGradient>'
+
+
+def _shape(node: ShapeNode, *, clip: bool = False) -> str:
+    if node.kind == "line" and not clip:
+        return f'<line x1="{_attr(node.x)}" y1="{_attr(node.y)}" x2="{_attr(node.x + node.width)}" y2="{_attr(node.y + node.height)}" stroke="{_attr(node.stroke or node.fill)}" stroke-width="{_attr(node.stroke_width or 1)}" />'
+    style = ""
+    if not clip:
+        style = f' fill="{_attr(_paint(node.fill))}"'
+        if node.stroke:
+            style += f' stroke="{_attr(_paint(node.stroke))}" stroke-width="{_attr(node.stroke_width)}"'
+            if node.kind == "path":
+                style += ' stroke-linejoin="round" stroke-linecap="round"'
+            if node.stroke_opacity != 1:
+                style += f' stroke-opacity="{_attr(node.stroke_opacity)}"'
+        if node.opacity != 1:
+            style += f' opacity="{_attr(node.opacity)}"'
+    if node.kind == "path":
+        return f'<path id="{_attr(node.node_id)}" d="{_attr(node.d)}"{style} />'
+    if node.kind == "ellipse":
+        return (
+            f'<ellipse id="{_attr(node.node_id)}" cx="{_attr(node.x + node.width / 2)}" cy="{_attr(node.y + node.height / 2)}" '
+            f'rx="{_attr(node.width / 2)}" ry="{_attr(node.height / 2)}"{style} />'
+        )
+    radius = f' rx="{_attr(node.rx)}"' if node.rx else ""
+    return f'<rect id="{_attr(node.node_id)}" x="{_attr(node.x)}" y="{_attr(node.y)}" width="{_attr(node.width)}" height="{_attr(node.height)}"{radius}{style} />'
+
+
+def _text(node: TextNode, family: str) -> list[str]:
+    anchor = {"left": "start", "center": "middle", "right": "end"}[node.align]
+    x = node.x if node.align == "left" else node.x + node.width if node.align == "right" else node.x + node.width / 2
+    extra = ""
+    weight = _WEIGHTS[node.font_weight]
+    if weight:
+        extra += f' font-weight="{weight}"'
+    if node.letter_spacing:
+        extra += f' letter-spacing="{_attr(node.letter_spacing)}"'
+    if node.stroke:
+        extra += f' stroke="{_attr(_paint(node.stroke))}" stroke-width="{_attr(node.stroke_width)}" paint-order="stroke"'
+    if node.opacity != 1:
+        extra += f' opacity="{_attr(node.opacity)}"'
+    parts = [f'<text id="{_attr(node.node_id)}" x="{_attr(x)}" y="{_attr(node.y)}" text-anchor="{anchor}" dominant-baseline="text-before-edge" font-family="{_attr(family)}" font-size="{_attr(node.font_size)}" fill="{_attr(_paint(node.color))}"{extra}>']
+    for index, line in enumerate(_lines(node)):
+        dy = node.font_size * 1.2 if index else 0
+        parts.append(f'<tspan x="{_attr(x)}" dy="{_attr(dy)}">{_attr(line)}</tspan>')
+    parts.append("</text>")
+    return parts
+
+
+def render_svg(ir: GraphicIR, *, asset_root: str | Path | None = None, embed_fonts: bool = True) -> str:
+    """Return an editable SVG with custom fonts embedded as local font data.
+
+    ``embed_fonts=False`` names custom fonts by their own family name instead
+    (for rasterizers that load font files directly).
+    """
 
     canvas = ir.canvas
+    leaves = iter_nodes(list(ir.nodes))
     font_assets: dict[str, str] = {}
-    families_by_reference: dict[str, str] = {}
-    for node in ir.nodes:
-        if isinstance(node, TextNode) and node.font_ref != "builtin:sans" and node.font_ref not in families_by_reference:
-            family, mime, css_format, encoded = _font_asset(node.font_ref, asset_root)
-            families_by_reference[node.font_ref] = family
-            font_assets[family] = f"@font-face{{font-family:'{family}';src:url(data:{mime};base64,{encoded}) format('{css_format}');}}"
+    families_by_reference: dict[str, str] = dict(BUILTIN_FONT_STACKS)
+    for node in leaves:
+        if isinstance(node, TextNode) and node.font_ref not in families_by_reference:
+            if embed_fonts:
+                family, mime, css_format, encoded = _font_asset(node.font_ref, asset_root)
+                families_by_reference[node.font_ref] = family
+                font_assets[family] = f"@font-face{{font-family:'{family}';src:url(data:{mime};base64,{encoded}) format('{css_format}');}}"
+            else:
+                families_by_reference[node.font_ref] = _font_family_name(node.font_ref, asset_root)
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{canvas.width}" height="{canvas.height}" viewBox="0 0 {canvas.width} {canvas.height}">',
         f"<title>{_attr(ir.template_ref)}</title>",
-        f"<desc>{_attr(' '.join(node.text for node in ir.nodes if isinstance(node, TextNode)))}</desc>",
+        f"<desc>{_attr(' '.join(node.text for node in leaves if isinstance(node, TextNode)))}</desc>",
     ]
+    defs = [_gradient(paint) for paint in ir.paints]
     if font_assets:
-        font_faces = "".join(font_assets[family] for family in sorted(font_assets))
-        parts.append(f"<defs><style>{font_faces}</style></defs>")
-    for node in ir.nodes:
-        if isinstance(node, ShapeNode):
-            if node.kind == "line":
-                parts.append(f'<line x1="{_attr(node.x)}" y1="{_attr(node.y)}" x2="{_attr(node.x + node.width)}" y2="{_attr(node.y + node.height)}" stroke="{_attr(node.stroke or node.fill)}" stroke-width="{_attr(node.stroke_width or 1)}" />')
+        defs.insert(0, "<style>" + "".join(font_assets[family] for family in sorted(font_assets)) + "</style>")
+    if defs:
+        parts.append("<defs>" + "".join(defs) + "</defs>")
+
+    def emit(nodes: list[TextNode | ShapeNode | ImageNode | GroupNode]) -> None:
+        for node in nodes:
+            if isinstance(node, GroupNode):
+                attrs = f' id="{_attr(node.node_id)}"'
+                if node.opacity != 1:
+                    attrs += f' opacity="{_attr(node.opacity)}"'
+                if node.clip:
+                    parts.append(f'<clipPath id="{_attr(node.node_id)}-clip">' + "".join(_shape(shape, clip=True) for shape in node.clip) + "</clipPath>")
+                    attrs += f' clip-path="url(#{_attr(node.node_id)}-clip)"'
+                parts.append(f"<g{attrs}>")
+                emit(list(node.children))
+                parts.append("</g>")
+            elif isinstance(node, ShapeNode):
+                parts.append(_shape(node))
+            elif isinstance(node, TextNode):
+                parts.extend(_text(node, families_by_reference[node.font_ref]))
             else:
-                stroke = f' stroke="{_attr(node.stroke)}" stroke-width="{_attr(node.stroke_width)}"' if node.stroke else ""
-                parts.append(f'<rect id="{_attr(node.node_id)}" x="{_attr(node.x)}" y="{_attr(node.y)}" width="{_attr(node.width)}" height="{_attr(node.height)}" fill="{_attr(node.fill)}"{stroke} />')
-        elif isinstance(node, TextNode):
-            anchor = {"left": "start", "center": "middle", "right": "end"}[node.align]
-            x = node.x if node.align == "left" else node.x + node.width if node.align == "right" else node.x + node.width / 2
-            family = "Arial, sans-serif" if node.font_ref == "builtin:sans" else families_by_reference[node.font_ref]
-            parts.append(f'<text id="{_attr(node.node_id)}" x="{_attr(x)}" y="{_attr(node.y)}" text-anchor="{anchor}" dominant-baseline="text-before-edge" font-family="{_attr(family)}" font-size="{_attr(node.font_size)}" fill="{_attr(node.color)}">')
-            for index, line in enumerate(_lines(node)):
-                dy = node.font_size * 1.2 if index else 0
-                parts.append(f'<tspan x="{_attr(x)}" dy="{_attr(dy)}">{_attr(line)}</tspan>')
-            parts.append("</text>")
-        else:
-            mime, encoded = _image_data(node)
-            parts.append(f'<image id="{_attr(node.node_id)}" x="{_attr(node.x)}" y="{_attr(node.y)}" width="{_attr(node.width)}" height="{_attr(node.height)}" preserveAspectRatio="xMidYMid meet" href="data:{mime};base64,{encoded}" />')
+                mime, encoded = _image_data(node)
+                parts.append(f'<image id="{_attr(node.node_id)}" x="{_attr(node.x)}" y="{_attr(node.y)}" width="{_attr(node.width)}" height="{_attr(node.height)}" preserveAspectRatio="xMidYMid meet" href="data:{mime};base64,{encoded}" />')
+
+    emit(list(ir.nodes))
     parts.append("</svg>")
     return "".join(parts)
+
+
+def _font_family_name(reference: str, asset_root: str | Path | None) -> str:
+    if asset_root is None:
+        raise RenderError("missing_font_asset_root")
+    try:
+        path = validate_local_reference(reference, asset_root, field="font_ref")
+        family, _style = ImageFont.truetype(str(path), 12).getname()
+    except (AssetReferenceError, OSError, ValueError) as exc:
+        raise RenderError("font_invalid") from exc
+    return f"'{family}'"
+
+
+def _font_files(ir: GraphicIR, asset_root: str | Path | None) -> list[str]:
+    files: list[str] = []
+    for node in iter_nodes(list(ir.nodes)):
+        if isinstance(node, TextNode) and node.font_ref not in BUILTIN_FONT_STACKS and asset_root is not None:
+            try:
+                path = str(validate_local_reference(node.font_ref, asset_root, field="font_ref"))
+            except AssetReferenceError as exc:
+                raise RenderError("invalid_font_reference") from exc
+            if path not in files:
+                files.append(path)
+    return files
 
 
 def _find_browser() -> str | None:
@@ -157,9 +283,59 @@ def _browser_profile() -> Path:
     return profile
 
 
-def render_png(ir: GraphicIR, *, asset_root: str | Path | None = None) -> bytes:
-    """Rasterize the SVG through a local browser engine with complex-script shaping."""
+def _resvg_available() -> bool:
+    try:
+        import resvg_py  # type: ignore[import-not-found,import-untyped]  # noqa: F401
+    except ImportError:
+        return False
+    return True
 
+
+def rasterizer() -> str:
+    """``browser`` or ``resvg``: which local engine ``render_png`` uses on this host."""
+
+    choice = os.environ.get("GRAPHICS_PRODUCTION_RASTERIZER", "auto").strip().lower()
+    if choice == "resvg":
+        if not _resvg_available():
+            raise RenderError("resvg_not_installed")
+        return "resvg"
+    if choice == "browser" or _find_browser() is not None:
+        return "browser"
+    if _resvg_available():
+        return "resvg"
+    raise RenderError("browser_not_found")
+
+
+def rasterize_svg(svg: str, *, width: int, font_files: list[str] | None = None) -> bytes:
+    """Rasterize SVG text with resvg at ``width`` pixels (height keeps the aspect ratio)."""
+
+    import resvg_py  # type: ignore[import-not-found,import-untyped]
+
+    extra = [part for part in os.environ.get("GRAPHICS_PRODUCTION_FONT_DIRS", "").split(os.pathsep) if part]
+    candidates = [*extra, "/usr/share/fonts", "/usr/local/share/fonts", str(Path.home() / ".fonts"), str(Path.home() / ".local/share/fonts")]
+    font_dirs = [path for path in candidates if Path(path).is_dir()]
+    try:
+        fallback = os.environ.get("GRAPHICS_PRODUCTION_FALLBACK_FONT", "").strip() or None
+        data = bytes(resvg_py.svg_to_bytes(
+            svg_string=svg, width=width, font_files=font_files or [], font_dirs=font_dirs,
+            font_family=fallback, serif_family=fallback, sans_serif_family=fallback, monospace_family=fallback,
+        ))
+    except Exception as exc:
+        raise RenderError("resvg_render_failed") from exc
+    try:
+        with Image.open(io.BytesIO(data)) as rendered:
+            rendered.verify()
+    except (OSError, ValueError) as exc:
+        raise RenderError("resvg_render_failed") from exc
+    return data
+
+
+def render_png(ir: GraphicIR, *, asset_root: str | Path | None = None) -> bytes:
+    """Rasterize the SVG through a local engine with complex-script shaping (see :func:`rasterizer`)."""
+
+    if rasterizer() == "resvg":
+        svg = render_svg(ir, asset_root=asset_root, embed_fonts=False)
+        return rasterize_svg(svg, width=ir.canvas.width, font_files=_font_files(ir, asset_root))
     browser = _find_browser()
     if browser is None:
         raise RenderError("browser_not_found")
@@ -208,4 +384,4 @@ def render_png(ir: GraphicIR, *, asset_root: str | Path | None = None) -> bytes:
         raise RenderError("browser_render_failed")
 
 
-__all__ = ["RenderError", "render_png", "render_svg"]
+__all__ = ["BUILTIN_FONT_STACKS", "RenderError", "rasterize_svg", "rasterizer", "render_png", "render_svg"]

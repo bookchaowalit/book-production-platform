@@ -39,7 +39,7 @@ class ProviderConfig(KitProviderConfig):
     schema_version: Literal["graphics-provider-config.v1"] = "graphics-provider-config.v1"  # type: ignore[assignment]
     tool_id: str = Field(default="graphics-v1a", pattern=r"^graphics-v1a$")
     route: str = Field(default="graphics.brief", pattern=r"^[A-Za-z0-9_.:/-]{1,64}$")
-    prompt_version: str = Field(default="graphics-brief.v3", pattern=r"^[A-Za-z0-9_.:/-]{1,64}$")
+    prompt_version: str = Field(default="graphics-brief.v4", pattern=r"^[A-Za-z0-9_.:/-]{1,64}$")
 
 
 def parse_provider_config(raw: Any) -> ProviderConfig:

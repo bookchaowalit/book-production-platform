@@ -42,6 +42,7 @@ def test_render_png_has_canvas_dimensions() -> None:
 def test_render_png_fails_clearly_when_no_shaping_browser_is_available(monkeypatch: pytest.MonkeyPatch) -> None:
     ir = compile_template(request_for("announcement"))
     monkeypatch.setattr(render_module, "_find_browser", lambda: None)
+    monkeypatch.setattr(render_module, "_resvg_available", lambda: False)
 
     with pytest.raises(RenderError, match="browser_not_found"):
         render_png(ir)

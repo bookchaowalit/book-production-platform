@@ -13,14 +13,19 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from book_production_platform.graphics_ir import ArtifactRef, GraphicIR, TextNode
+from book_production_platform.graphics_ir import (
+    ArtifactRef,
+    GraphicIR,
+    TextNode,
+    iter_nodes,
+)
 from book_production_platform.production_trace import TraceRecorder
 
 from .assets import AssetReferenceError, validate_local_reference
 from .layout import LayoutError
 from .manual import build_figma_guide, text_lines
 from .qa import contrast_report, run_graphic_qa
-from .render import RenderError, render_png, render_svg
+from .render import RenderError, rasterizer, render_png, render_svg
 from .telemetry import BatchTelemetry
 from .templates import TEMPLATE_VERSION, VARIANT_SIZES, TemplateError, compile_template
 
@@ -234,11 +239,18 @@ def _from_manifest(path: Path, payload: dict[str, Any], *, replay: bool) -> Batc
     )
 
 
+def _rasterizer_label() -> str:
+    try:
+        return "local-chromium-headless" if rasterizer() == "browser" else "local-resvg"
+    except RenderError:
+        return "unavailable"
+
+
 def _item_structure(ir: GraphicIR) -> list[dict[str, Any]]:
     """Structural, text-free description of the IR nodes for the trace."""
 
     nodes: list[dict[str, Any]] = []
-    for node in ir.nodes:
+    for node in iter_nodes(list(ir.nodes)):
         entry: dict[str, Any] = {"id": node.node_id, "type": node.node_type, "box": [node.x, node.y, node.width, node.height]}
         if isinstance(node, TextNode):
             entry.update({"font_size": node.font_size, "lines": len(text_lines(node)), "chars": len(node.text), "align": node.align})
@@ -367,7 +379,7 @@ def _render_batch(
             asset_root = raw.get("asset_root")
             with trace.step("render", "render_svg", item=item_no, renderer=ir.assumptions.get("renderer", "")):
                 svg = render_svg(ir, asset_root=asset_root)
-            with trace.step("render", "render_png", item=item_no, size=[ir.canvas.width, ir.canvas.height], rasterizer="local-chromium-headless"):
+            with trace.step("render", "render_png", item=item_no, size=[ir.canvas.width, ir.canvas.height], rasterizer=_rasterizer_label()):
                 png = render_png(ir, asset_root=asset_root)
             with trace.step("qa", "graphic_qa", item=item_no) as qa_step:
                 issues = run_graphic_qa(svg, png, ir)

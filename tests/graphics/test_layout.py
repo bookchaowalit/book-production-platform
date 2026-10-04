@@ -49,7 +49,7 @@ def test_blank_lines_and_english_words_are_preserved() -> None:
     assert _chars(lines) == "Helloworldsecondparagraphhere"
 
 
-@pytest.mark.parametrize("variant", sorted(VARIANT_SIZES))
+@pytest.mark.parametrize("variant", ["portrait", "square", "story"])
 def test_announcement_cta_stays_inside_canvas(variant: str) -> None:
     width, height = VARIANT_SIZES[variant]
     ir = compile_template({

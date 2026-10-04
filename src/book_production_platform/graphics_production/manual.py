@@ -16,9 +16,11 @@ from pathlib import Path
 
 from book_production_platform.graphics_ir import (
     GraphicIR,
+    GroupNode,
     ImageNode,
     ShapeNode,
     TextNode,
+    iter_nodes,
 )
 from book_production_platform.production_trace import ManualGuide
 
@@ -39,11 +41,22 @@ def _hex(value: str) -> str:
     return value.lstrip("#").upper()
 
 
+# Theme font stacks: the family to install and pick in an editor.
+THEME_FONT_FAMILIES = {
+    "builtin:display": "Anton",
+    "builtin:serif": "Playfair Display",
+    "builtin:mono": "Space Mono",
+    "builtin:thai": "Sarabun",
+}
+
+
 def font_family(node: TextNode) -> str:
     """The family a person selects in Figma for this text node."""
 
     if node.font_ref == "builtin:sans":
         return BUILTIN_FONT_FAMILY
+    if node.font_ref in THEME_FONT_FAMILIES:
+        return THEME_FONT_FAMILIES[node.font_ref]
     return f"ฟอนต์จากไฟล์ {Path(node.font_ref).name} (ติดตั้งไฟล์นี้ก่อน)"
 
 
@@ -63,7 +76,9 @@ def _box(node: ShapeNode | TextNode | ImageNode) -> str:
 
 def _minutes(ir: GraphicIR) -> float:
     total = 2.0 + 1.0  # frame + export
-    for node in ir.nodes:
+    if ir.schema_version == "graphic-ir.v2":
+        return total + 3.0  # install fonts, open the SVG, check layers
+    for node in iter_nodes(list(ir.nodes)):
         if isinstance(node, ShapeNode):
             total += 1.0
         elif isinstance(node, ImageNode):
@@ -73,7 +88,29 @@ def _minutes(ir: GraphicIR) -> float:
     return total
 
 
+def _add_layered_item(guide: ManualGuide, name: str, ir: GraphicIR) -> None:
+    """graphic-ir.v2 (themes): open the editable SVG; its named groups are the layers."""
+
+    canvas = ir.canvas
+    section = f"{name} — {canvas.width}×{canvas.height} ({ir.template_ref}, {ir.variant})"
+    fonts = sorted({font_family(node) for node in iter_nodes(list(ir.nodes)) if isinstance(node, TextNode)})
+    guide.layer(name, "Document", content=f"{ir.template_ref} · {ir.variant} · {len(ir.nodes)} layers", position=f"W={canvas.width}, H={canvas.height}")
+    for group in ir.nodes:
+        if isinstance(group, GroupNode):
+            texts = [node.node_id for node in iter_nodes(list(group.children)) if isinstance(node, TextNode)]
+            content = f"{len(group.children)} objects" + (f" · text: {', '.join(texts)}" if texts else "")
+            guide.layer(group.label or group.node_id, "Layer (group)", content=content, position="vector, editable")
+    guide.step("ติดตั้งฟอนต์ที่ธีมใช้ก่อนเปิดไฟล์ (ไม่มีจะถูกแทนด้วยฟอนต์อื่น)", tool="Google Fonts / Font Book", value=", ".join(fonts) or "-", section=section)
+    guide.step(f"เปิด `{name}.svg` ใน Affinity Designer/Photo หรือลากเข้า Figma", tool="Affinity: File ▸ Open… · Figma: ลากไฟล์ลง canvas", value=f"{name}.svg", section=section)
+    guide.step("ตรวจว่าเลเยอร์ตรงตามตาราง (group ชื่อเดียวกับใน SVG) และตัวอักษรยังแก้ไขได้", tool="Layers panel", section=section)
+    guide.step("แก้ข้อความ สี หรือ gradient ได้โดยตรง; ตำแหน่งและขนาดมาจาก theme แล้ว", tool="Text tool / Fill panel", section=section)
+    guide.step("Export เป็น PNG ขนาดเดิม", tool="Affinity: File ▸ Export ▸ PNG · Figma: Export ▸ PNG 1x", value=f"{name}.png, {canvas.width}×{canvas.height}", section=section)
+
+
 def _add_item(guide: ManualGuide, name: str, ir: GraphicIR) -> None:
+    if ir.schema_version == "graphic-ir.v2":
+        _add_layered_item(guide, name, ir)
+        return
     canvas = ir.canvas
     section = f"{name} — Frame {canvas.width}×{canvas.height} ({ir.template_ref}, {ir.variant})"
     guide.layer(name, "Frame", content=f"{ir.template_ref} · {ir.variant} · {len(ir.nodes)} layers", position=f"W={canvas.width}, H={canvas.height}")
@@ -87,7 +124,7 @@ def _add_item(guide: ManualGuide, name: str, ir: GraphicIR) -> None:
         target="Layers panel: layer ที่สร้างทีหลังจะอยู่บน",
         section=section,
     )
-    for node in ir.nodes:
+    for node in iter_nodes(list(ir.nodes)):
         if isinstance(node, ShapeNode):
             if node.kind == "line":
                 guide.layer(node.node_id, "Line", content=f"stroke {_hex(node.stroke or node.fill)} · {_num(node.stroke_width or 1)} px", position=_box(node))
@@ -166,7 +203,7 @@ def build_figma_guide(items: Sequence[tuple[str, GraphicIR]], *, batch_id: str) 
         _add_item(guide, name, ir)
     checks: list[str] = []
     for name, ir in items:
-        texts = [node for node in ir.nodes if isinstance(node, TextNode)]
+        texts = [node for node in iter_nodes(list(ir.nodes)) if isinstance(node, TextNode)]
         checks.append(f"`{name}`: Frame {ir.canvas.width}×{ir.canvas.height} px มี {len(ir.nodes)} layer เรียงตามตาราง และ `{name}.png` ที่ export มีขนาดเท่ากัน")
         for node in texts:
             checks.append(

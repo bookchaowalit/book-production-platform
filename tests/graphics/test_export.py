@@ -79,7 +79,11 @@ def test_export_rejects_non_batch_manifest(tmp_path: Path) -> None:
 
 
 def test_export_fails_clearly_without_browser(batch: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from book_production_platform.graphics_production import render as render_module
+
     monkeypatch.setattr(export_module, "_find_browser", lambda: None)
+    monkeypatch.setattr(render_module, "_find_browser", lambda: None)
+    monkeypatch.setattr(render_module, "_resvg_available", lambda: False)
     assert main(["export", "--manifest", str(batch), "--output", str(tmp_path)]) == 2
 
 

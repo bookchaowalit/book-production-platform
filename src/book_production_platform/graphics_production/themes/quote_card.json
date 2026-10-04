@@ -1,0 +1,27 @@
+{
+  "schema_version": "graphic-theme.v1",
+  "theme_id": "quote_card",
+  "title": "Quote card",
+  "description": "A centred quote with its author on the brand background (original V1A template).",
+  "ir_version": "graphic-ir.v1",
+  "template_version": "2",
+  "renderer": "graphics-svg-browser-v2",
+  "variants": ["square", "portrait", "story"],
+  "evidence": ["quote card", "quote", "การ์ดคำคม", "คำคม"],
+  "slots": {
+    "quote": {"required": true, "labels": ["quote", "คำคม"]},
+    "author": {"required": true, "labels": ["author", "by", "ผู้กล่าว", "ผู้เขียน", "โดย"]}
+  },
+  "layers": [
+    {"id": "Background", "items": [
+      {"motif": "rect", "id": "background", "fill": "brand.background"},
+      {"motif": "rect", "id": "accent-bar", "height": 26, "fill": "brand.accent"}
+    ]},
+    {"id": "Text", "items": [
+      {"motif": "text_block", "id": "quote", "slot": "quote", "x": 80, "y": 170, "width": 920, "height": 610,
+       "font_size": 72, "min_font_size": 28, "max_lines": 20, "color": "brand.foreground", "align": "center"},
+      {"motif": "text_block", "id": "author", "slot": "author", "format": "— {value}", "x": 120, "y": 850, "width": 840,
+       "height": 110, "font_size": 34, "min_font_size": 22, "max_lines": 3, "color": "brand.accent", "align": "center"}
+    ]}
+  ]
+}

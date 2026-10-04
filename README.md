@@ -291,12 +291,54 @@ pipeline manifest มีอยู่แล้วและตรงกันร�
 Graphics V1A turns validated JSON and brand tokens into editable SVG and PNG
 artifacts using `GraphicIR`, fixed templates, replay checks, and local QA. Its
 standard path is deterministic and reports `model_calls=0`; no model is used
-for layout or rendering. The three templates are `quote_card`, `product_card`,
-and `announcement`, with square, portrait, and story sizes.
+for layout or rendering.
 
-Python 3.12 or newer and a local Microsoft Edge or Google Chrome installation
-are required. A headless local browser rasterizes SVG so Thai marks are shaped
-correctly; assets never leave the machine. Custom TTF/OTF files are embedded in
+### Templates are data: themes and motifs
+
+Every template is a JSON theme in
+`src/book_production_platform/graphics_production/themes/` (`graphic-theme.v1`),
+compiled by `themes.py` from the reusable drawing motifs in `motifs.py`. A new
+look is a new theme file, not new code; a new kind of drawing is one motif
+function that every theme can then use.
+
+- **Themes now:** `quote_card`, `product_card`, `announcement` (the original V1A
+  templates, still compiled to the identical flat `graphic-ir.v1`; square,
+  portrait, story) and `synthwave`, `bold_editorial`, `soft_gradient`
+  (`graphic-ir.v2`, also `landscape` 1920×1080).
+- **A theme declares** its sizes, text slots (required or optional, with the
+  brief labels the AI adapter accepts), the brief words that name it, a palette
+  (`#RRGGBB`, `brand.primary|accent|foreground|background`, or another palette
+  entry), gradient paints, layout variables, and ordered layers of motif items.
+- **Layout values** are numbers or safe arithmetic over `W`, `H`, `CX`, `CY`,
+  `MIN`, `MAX`, and the theme's own variables (`min`, `max`, `round`, `abs`,
+  `sqrt`, `sin`, `cos`; nothing else parses), with `by_variant`, `if_asset`,
+  and `if_slot` selectors, so one theme fits every size.
+- **Motifs:** `rect`, `ellipse`, `line`, `polygon`, `glow`, `text_block`,
+  `display_text` (title with echo shadows), `image`, `starfield`,
+  `perspective_grid`, `striped_sun`, `ridge`, `waves`, `blobs`, `halftone`,
+  `rays`, `rings`, `stripes`, `grain`, `corner_frame`. Random motifs are
+  seeded by theme, request id, and item id, so a job always replays exactly.
+- **`graphic-ir.v2` output** has gradients, paths, styled text (weight, letter
+  spacing, stroke, opacity), and one named `<g>` per theme layer, which
+  Affinity, Figma, and Illustrator import as editable layers. Theme fonts are
+  font stacks (`builtin:display` = Anton…, `builtin:serif` = Playfair
+  Display…, `builtin:mono` = Space Mono…, `builtin:thai` = Sarabun…); install
+  them for the intended look.
+
+```powershell
+book-production graphics themes                       # sizes, slots, brief words
+book-production graphics make --theme synthwave --variant all `
+  --set headline=SOLO --set headline2=EMPIRE --set "subhead=สร้างอาณาจักร · คนเดียว" `
+  --output .\.runtime\graphics\themes --idempotency-key synthwave-1
+```
+
+Python 3.12 or newer and a local PNG rasterizer are required: a Microsoft Edge
+or Google Chrome installation, or the optional `resvg-py` package
+(`pip install .[preview]`), used automatically when no browser is found or
+when `GRAPHICS_PRODUCTION_RASTERIZER=resvg`. Both shape Thai marks correctly;
+assets never leave the machine. With resvg, `GRAPHICS_PRODUCTION_FONT_DIRS`
+adds font folders and `GRAPHICS_PRODUCTION_FALLBACK_FONT` names the family
+used when a stack has no installed font. Custom TTF/OTF files are embedded in
 SVG outputs under a content-derived family name. Configure
 `GRAPHICS_PRODUCTION_BROWSER` to select a browser executable, or
 `GRAPHICS_PRODUCTION_BROWSER_PROFILE` to relocate its isolated local profile.
