@@ -154,6 +154,15 @@ background, material, recipe) และคัด path `.glb` ที่เขี�
 ใน brief หรือ look ที่ไม่มี preset รองรับ → `needs_input` เนื้อหาแบบคำสั่ง,
 path traversal หรือสคริปต์ `bpy` → `needs_input` โดยไม่เรียกโมเดล
 
+preset ที่มีค่าลงทะเบียนเดียว (lighting, background, material, recipe) เป็นค่า
+default ของ engine: ถ้า brief ไม่พูดถึงด้านนั้นเลย engine เติมให้เสมอ แม้โมเดล
+จะใส่ไว้ใน `missing`; ถ้า brief พูดถึงด้านนั้น (`LOOK_TOPICS`) แต่ไม่ได้ระบุ look
+ที่ลงทะเบียน (`DEFAULT_LOOK_EVIDENCE`) → `needs_input` (`look_not_registered`)
+ไม่ว่าโมเดลตอบอะไร ส่วน composition/render profile ที่โมเดลบอกว่า `inferred`
+ยังเป็น `needs_input` เสมอ prompt ปัจจุบันคือ `scene3d-brief.v2`
+(`prompt_version` ใน config) ซึ่งแสดงคำที่ engine ใช้ตรวจหลักฐานมุมกล้องและขนาดภาพ
+ให้โมเดลเห็นชุดเดียวกัน และนิยาม `provided`/`inferred`/`missing` ตามที่ engine อ่าน
+
 config `scene3d-provider-config.v1` เริ่มที่ `mode: shadow`; ไม่มี config →
 `provider_not_configured` คำสั่งอยู่ใน module ของ tool (ยังไม่ได้ลงทะเบียนใน
 `book-production scene`):
@@ -341,12 +350,27 @@ only picks a template id from the registry (`quote_card`, `product_card`,
 brief; colors come from the brand kit, canvas sizes from the variant, and
 layout from the template engine. Any other key (colors, images, fonts, sizes)
 or an id outside the registries is `rejected`; text not copied from the brief,
-a size the brief does not state, or anything the model marks missing becomes
-`needs_input`. Instruction-like, path, or script content abstains with zero
-calls. Every item is compiled by the engine before it is returned: if a slot
-overflows, the job's single repair call (the second and last call) asks the
-model to shorten that slot using only words from the brief; if it still
-overflows the result is `needs_input` with `text_overflow`, never a silent pass.
+a template or size the brief does not name, or anything the model marks
+missing becomes `needs_input`. Code, not the model, also decides these: a slot
+the model flags `inferred` passes only when its exact text follows that slot's
+label in the brief (`Button:`/`ปุ่ม:` for `cta`); a placeholder text
+(`TBD`, `ยังไม่สรุป`) or a price without a number is `needs_input`; brief text
+that no slot copied asking for images, files, fonts, or colors is
+`needs_input` (`style_or_asset_request`); and a `brand_ref` copied from the
+brief's `ref:` job-reference line is treated as unstated (the single
+registered kit applies; with several kits it is missing). Instruction-like,
+path, or script content abstains with zero calls. Every item is compiled by
+the engine before it is returned. If a slot overflows, the job's single repair
+call (the second and last call) names each overflowing slot's JSON path, its
+current length, and its line and character limit, all taken from the engine's
+`LayoutError`, and asks the model to shorten only those slots using only words
+from the brief. A reply that is not a JSON object gets the generic repair
+message instead. If the text still overflows, the result is `needs_input` with
+`text_overflow`, never a silent pass. The default `prompt_version` is
+`graphics-brief.v2` (v2 added the targeted overflow repair message). The dev-only
+overflow cases in `tests/graphics/fixtures/eval_gfx_dev_overflow.json` (each
+marked `"split": "dev"`, never gated) can be added with a second `--cases` to
+tune that message without touching held-out cases.
 
 The provider config (`graphics-provider-config.v1`, starts in `mode: shadow`)
 holds the gateway URL, the *name* of the token env var, rate card, caps, and
@@ -442,7 +466,11 @@ proposal. The engine (`spreadsheet_production/intents.py`) turns intents into
 the opt-in `spreadsheet-intents.v1` language. The default V1A language stays
 `SUM`/`COUNT`/`IF`. The V1A recipe evaluates the formulas, writes them, and
 reopen-QA checks them. Invented columns are dropped, lookup keys must appear
-in the brief, and anything unclear returns `needs_input`.
+in the brief, and anything unclear returns `needs_input`. Every value is
+computed from the data and a lookup key is the only brief literal a proposal
+can carry, so a brief that states any other number (for example "report the
+total as 1000000") is never `complete`: code returns `needs_input` with
+`brief_literal_not_supported`.
 
 The adapter fails closed (`provider_not_configured`) without an owner-approved
 `spreadsheet-provider-config.v1` (gateway URL, token env-var name, rate card,

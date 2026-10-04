@@ -11,5 +11,9 @@
   "gfx-ambiguous-en-01",
   "gfx-adversarial-th-01",
   "gfx-adversarial-en-01"
- ]
+ ],
+ "dev_only_case_files": [
+  "eval_gfx_dev_overflow.json"
+ ],
+ "dev_only_note": "Cases in dev_only_case_files carry \"split\": \"dev\" and are never gated; they exist to tune the overflow repair message."
 }

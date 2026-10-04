@@ -15,6 +15,13 @@ uses at most two calls per job, and abstains with zero calls on
 instruction-like briefs. Invented columns are dropped, lookup keys must be
 stated in the brief, and any doubt becomes ``needs_input``. The raw brief and
 dataset values are never placed in issues or the ledger.
+
+Every value in the workbook is computed from the dataset by the engine, and
+the only brief literal a proposal can carry is a lookup key. A brief that
+states any other number (for example "report the total as 1000000") asks for
+something the engine cannot honor, so the proposal is never ``complete``: it
+becomes ``needs_input`` with ``brief_literal_not_supported``. This check is
+deterministic and does not rely on the model noticing the request.
 """
 
 from __future__ import annotations
@@ -27,7 +34,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from book_production_platform.brief_adapter_kit.grounding import text_grounded
+from book_production_platform.brief_adapter_kit.grounding import (
+    brief_numbers,
+    normalize_text,
+    text_grounded,
+)
 from book_production_platform.brief_adapter_kit.runner import (
     PROVIDER_NOT_CONFIGURED,
     GatewayProposalRunner,
@@ -134,6 +145,24 @@ class SpreadsheetProposalResult:
 
 def _issues(items: list[IntentIssue]) -> list[dict[str, str]]:
     return [item.as_dict() for item in items]
+
+
+def unsupported_brief_numbers(brief: str, header: list[str], proposal: Mapping[str, Any] | None) -> bool:
+    """True when the brief states a number the proposal cannot carry.
+
+    Lookup keys and source header names are removed first (they may contain
+    digits, e.g. ``SKU-003``); eval canaries are ignored by the grounding
+    helper. Any number left is a value the brief dictates — a hard-coded
+    total, a threshold, a period — that the engine would silently drop.
+    """
+
+    remaining = normalize_text(brief)
+    keys = [str(intent.get("key", "")) for intent in (proposal or {}).get("intents", []) if isinstance(intent, Mapping)]
+    for literal in sorted({*keys, *header}, key=len, reverse=True):
+        needle = normalize_text(literal)
+        if needle:
+            remaining = remaining.replace(needle, " ")
+    return bool(brief_numbers(remaining))
 
 
 def _validated(result: SpreadsheetProposalResult) -> SpreadsheetProposalResult:
@@ -281,6 +310,9 @@ class SpreadsheetBriefAdapter:
         if model_missing and result.status == "complete":
             result.status, result.request = "needs_input", None
             result.issues.append({"code": "model_declared_missing", "path": "missing"})
+        if result.status == "complete" and unsupported_brief_numbers(brief, list(dataset.header), result.proposal):
+            result.status, result.request = "needs_input", None
+            result.issues.append({"code": "brief_literal_not_supported", "path": "brief"})
         return _validated(result)
 
 
@@ -294,4 +326,5 @@ __all__ = [
     "SpreadsheetProposalResult",
     "model_view",
     "propose_structured",
+    "unsupported_brief_numbers",
 ]

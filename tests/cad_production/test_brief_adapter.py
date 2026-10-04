@@ -192,6 +192,29 @@ def test_inferred_dimension_is_not_kept() -> None:
     assert "thickness_mm" in result.missing
 
 
+def test_dimension_the_model_lists_as_missing_is_never_filled_from_the_scanner() -> None:
+    # Captured real-model reply (gpt-6-luna, prompt cad-brief.v1). "ระยะแกน x/y" can
+    # mean shaft/axis spacing on a motor plate, so the scanner no longer reads it as
+    # an edge offset, and the model's doubt stays a veto: no scanner fallback.
+    brief = (
+        "แผ่นยึดมอเตอร์ กว้าง 25 ซม. สูง 18 ซม. หนา 12 มม. รูขนาดเส้นผ่านศูนย์กลาง 14 มม. "
+        "ระยะแกน x 30 มม. ระยะแกน y 25 มม."
+    )
+    captured = (
+        '{"template":"mounting-plate.v1","hole_pattern":"four-corner.v1","dimensions":{'
+        '"width_mm":{"value":"25","unit":"cm"},"height_mm":{"value":"18","unit":"cm"},'
+        '"thickness_mm":{"value":"12","unit":"mm"},"hole_diameter_mm":{"value":"14","unit":"mm"}},'
+        '"missing":["hole_offset_x_mm","hole_offset_y_mm"]}'
+    )
+    assert not analyze_brief(brief).is_clear("hole_offset_x_mm")
+    result = ground_proposal(json.loads(captured), brief)
+
+    assert result.status == "needs_input"
+    assert result.missing == ["hole_offset_x_mm", "hole_offset_y_mm"]
+    assert result.parameters["width_mm"] == "250.000"
+    assert "hole_offset_x_mm" not in result.parameters
+
+
 @pytest.mark.parametrize(
     ("proposal", "code"),
     [

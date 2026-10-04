@@ -6,7 +6,37 @@ from dataclasses import dataclass
 
 
 class LayoutError(ValueError):
-    """Raised when bounded text layout cannot preserve all input text."""
+    """Raised when bounded text layout cannot preserve all input text.
+
+    The message stays ``text_does_not_fit``. The attributes describe the bound
+    that was exceeded so callers can say which text node overflowed and by how
+    much: ``max_lines`` and ``line_chars`` are the line count and characters per
+    line that fit at the minimum font size, ``length`` is the visible length of
+    the text, and ``node_id`` is set by the template that laid it out.
+    """
+
+    def __init__(
+        self,
+        message: str = "text_does_not_fit",
+        *,
+        node_id: str | None = None,
+        max_lines: int | None = None,
+        line_chars: int | None = None,
+        length: int | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.node_id = node_id
+        self.max_lines = max_lines
+        self.line_chars = line_chars
+        self.length = length
+
+    @property
+    def max_chars(self) -> int | None:
+        """Upper bound on visible characters for the node (word wrap may fit fewer)."""
+
+        if self.max_lines is None or self.line_chars is None:
+            return None
+        return self.max_lines * self.line_chars
 
 
 @dataclass(frozen=True)
@@ -115,4 +145,8 @@ def fit_text(
         candidate -= 1
     if overflow_policy == "wrap" and len(wrap_text(text, width, min_font_size)) <= max_lines:
         return TextLayout(lines=wrap_text(text, width, min_font_size), font_size=round(min_font_size, 2))
-    raise LayoutError("text_does_not_fit")
+    line_chars = max(1, int(width / max(min_font_size * 0.55, 1)))
+    fitting_lines = max_lines if overflow_policy == "wrap" else min(max_lines, int(height / (min_font_size * line_height)))
+    raise LayoutError(
+        "text_does_not_fit", max_lines=max(1, fitting_lines), line_chars=line_chars, length=visible_length(text)
+    )

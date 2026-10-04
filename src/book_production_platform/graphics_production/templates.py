@@ -70,15 +70,19 @@ def _text(
     align: str = "left",
     overflow_policy: str = "reject",
 ) -> TextNode:
-    layout = fit_text(
-        value,
-        width=width,
-        height=height,
-        font_size=font_size,
-        min_font_size=min_font_size,
-        max_lines=max_lines,
-        overflow_policy=overflow_policy,
-    )
+    try:
+        layout = fit_text(
+            value,
+            width=width,
+            height=height,
+            font_size=font_size,
+            min_font_size=min_font_size,
+            max_lines=max_lines,
+            overflow_policy=overflow_policy,
+        )
+    except LayoutError as exc:
+        exc.node_id = node_id
+        raise
     return TextNode(
         node_id=node_id,
         x=x,

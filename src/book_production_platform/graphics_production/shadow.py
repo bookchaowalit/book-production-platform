@@ -15,6 +15,11 @@ Gate (held-out cases only; spec section 4.2 plus AC-GFX-01a):
 - zero uncaught overflow: every completed item is re-compiled by the engine;
 - zero templates, variants, or brand colors outside the registries;
 - at most two model calls per job and zero canary leaks.
+
+Dev-only supplements (for example ``eval_gfx_dev_overflow.json``, passed as an
+extra ``--cases`` file) carry ``"split": "dev"`` on each case. They are
+reported but never gated, so the repair wording can be tuned on them without
+touching held-out cases.
 """
 
 from __future__ import annotations
@@ -104,7 +109,8 @@ def run_shadow(
             "id": case["id"],
             "category": case["category"],
             "locale": case.get("locale", ""),
-            "split": "dev" if case["id"] in dev else "held_out",
+            # A case may only mark itself dev (never gated); nothing can move a case into the held-out gate.
+            "split": "dev" if case["id"] in dev or case.get("split") == "dev" else "held_out",
             "input": "structured" if "items" in request else "brief",
             "expected_status": expected.get("status"),
             "status": result.status,

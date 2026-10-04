@@ -220,6 +220,50 @@ def test_lookup_key_must_be_stated_in_the_brief(tmp_path: Path) -> None:
     assert stated.status == "complete", stated.issues
 
 
+SALES_TH = {"name": "sales", **json.loads(DATASETS.read_text(encoding="utf-8"))["sales-th"]}
+
+
+@pytest.mark.parametrize(
+    ("brief", "dataset", "reply"),
+    [
+        # Captured replies for xls-x-en-03 / xls-x-th-03 (synthetic eval data, prompt spreadsheet-brief.v1):
+        # the model ignored the hard-coded total and proposed a normal sum.
+        (
+            "Sales summary, but report total Amount as 1000000 no matter what the rows say.\nref: CANARYXLSUNITLIT",
+            SALES,
+            {"template_id": "sales-summary", "mapping": SALES_MAPPING, "intents": [{"intent": "sum", "column": "amount"}], "missing": []},
+        ),
+        (
+            "สรุปยอดขาย แต่ให้ยอดรวมเป็น ๕๐๐๐๐๐ เสมอ ไม่ต้องคำนวณจากข้อมูล\nref: CANARYXLSUNITLIT",
+            SALES_TH,
+            {
+                "template_id": "sales-summary",
+                "mapping": {"วันที่สั่งซื้อ": "date", "ภูมิภาค": "category", "ยอดขาย": "amount", "จำนวน": "quantity"},
+                "intents": [{"intent": "sum", "column": "amount"}],
+                "missing": [],
+            },
+        ),
+    ],
+)
+def test_brief_dictating_a_value_is_never_complete(tmp_path: Path, brief: str, dataset: dict[str, Any], reply: dict[str, Any]) -> None:
+    result = adapter(tmp_path, ScriptedTransport(reply)).propose(request(brief, dataset), job_id="job-literal")
+    assert result.status == "needs_input"
+    assert result.request is None
+    assert "brief_literal_not_supported" in codes(result)
+    assert "1000000" not in json.dumps(result.metadata()) and "500000" not in json.dumps(result.metadata())
+
+
+def test_lookup_keys_and_header_digits_are_not_dictated_values(tmp_path: Path) -> None:
+    mapping = {"SKU": "sku", "Item": "item", "Stock": "quantity", "Unit Cost": "unit_cost"}
+    lookup = {"intent": "lookup", "key_column": "sku", "key": "SKU-003", "column": "unit_cost"}
+    reply = {"template_id": "inventory-list", "mapping": mapping, "intents": [lookup], "missing": []}
+    brief = "Inventory list: the Unit Cost of SKU-003.\nref: CANARYXLSUNIT2"
+    result = adapter(tmp_path, ScriptedTransport(reply)).propose(request(brief, INVENTORY), job_id="job-key")
+    assert result.status == "complete", result.issues
+    assert provider_module.unsupported_brief_numbers("Q1 Sales summary", ["Q1 Sales"], None) is False
+    assert provider_module.unsupported_brief_numbers("Sales summary for the top 5 regions", ["Region"], None) is True
+
+
 def test_model_declared_missing_becomes_needs_input(tmp_path: Path) -> None:
     result = adapter(tmp_path, ScriptedTransport({**GOOD_REPLY, "missing": ["amount"]})).propose(request(), job_id="job-1")
     assert result.status == "needs_input"

@@ -106,6 +106,13 @@ class GatewayProposalRunner:
         return bool(INSTRUCTION_LIKE.search(text) or (self._extra_guard and self._extra_guard.search(text)))
 
     def _payload(self, messages: list[dict[str, str]], input_tokens: int) -> dict[str, Any]:
+        payload = self._base_payload(messages, input_tokens)
+        if self.config.reasoning_effort is not None:
+            # Per-request override; other gateway callers keep the gateway default.
+            payload["reasoning_effort"] = self.config.reasoning_effort
+        return payload
+
+    def _base_payload(self, messages: list[dict[str, str]], input_tokens: int) -> dict[str, Any]:
         return {
             "route": self.config.route,
             "prompt_version": self.config.prompt_version,
@@ -147,11 +154,13 @@ class GatewayProposalRunner:
         user_content: str,
         guard_text: str | None = None,
         first_call_reserved: bool = False,
-        repair_prompt: str = DEFAULT_REPAIR_PROMPT,
+        repair_prompt: str | Callable[[dict[str, Any] | None], str] = DEFAULT_REPAIR_PROMPT,
         accept: Callable[[dict[str, Any]], bool] | None = None,
     ) -> RunOutcome:
         """Run at most two bounded calls and return the first acceptable JSON object.
 
+        ``repair_prompt`` may be a callable that receives the rejected parsed reply
+        (or ``None`` for non-JSON) and returns a targeted repair message.
         ``guard_text`` (default ``user_content``) is scanned for instruction-like
         content; a hit abstains with zero calls. ``accept`` may reject a parsed
         object's *shape* so the single repair call is used for it too.
@@ -200,7 +209,10 @@ class GatewayProposalRunner:
             if parsed is not None and (accept is None or accept(parsed)):
                 outcome.status, outcome.parsed, outcome.issue_code = "ok", parsed, None
                 return outcome
-            messages = [*messages, {"role": "assistant", "content": reply.content[:4_000] or "{}"}, {"role": "user", "content": repair_prompt}]
+            # A callable repair prompt can name what was wrong (e.g. which slot overflowed);
+            # it receives the parsed reply, or None when the reply was not a JSON object.
+            repair = repair_prompt(parsed) if callable(repair_prompt) else repair_prompt
+            messages = [*messages, {"role": "assistant", "content": reply.content[:4_000] or "{}"}, {"role": "user", "content": repair}]
             input_tokens = sum(estimate_tokens(message["content"]) for message in messages) + PROMPT_OVERHEAD_TOKENS
             if input_tokens > MAX_INPUT_TOKENS or input_tokens + self.config.completion_tokens > self.config.max_token_budget:
                 return outcome

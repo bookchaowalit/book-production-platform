@@ -15,14 +15,18 @@ from book_production_platform.brief_adapter_kit.shadow import composition
 from book_production_platform.brief_adapter_kit.testing import ScriptedTransport
 from book_production_platform.graphics_ir import BrandTokens, validate_request
 from book_production_platform.graphics_production import cli as graphics_cli
+from book_production_platform.graphics_production.layout import LayoutError
 from book_production_platform.graphics_production.provider import (
     REPAIR_PROMPT,
+    TEMPLATE_EVIDENCE,
     TEMPLATE_IDS,
     TEMPLATE_SLOTS,
     ProviderBriefAdapter,
     ProviderNotConfigured,
     build_request,
     ground_proposal,
+    overflow_repair_prompt,
+    proposal_overflows,
     validate_structured,
 )
 from book_production_platform.graphics_production.provider_config import (
@@ -187,8 +191,15 @@ def test_invented_text_is_dropped_and_needs_input(tmp_path: Path) -> None:
 
 
 def test_inferred_text_and_unstated_variant_need_input() -> None:
+    # An inferred slot needs input unless its exact text follows that slot's label in the brief.
+    unlabeled = 'Make a square quote card with "Done is better than perfect." Author: Sample Founder'
     inferred = json.loads(json.dumps(GOOD))
     inferred["items"][0]["inferred"] = ["quote"]
+    result = ground_proposal(inferred, unlabeled)
+    assert result.status == "needs_input"
+    assert {issue["code"] for issue in result.issues} == {"text_inferred"}
+    inferred["items"][0]["content"]["author"] = "Famous Person"
+    inferred["items"][0]["inferred"] = ["author"]
     assert ground_proposal(inferred, BRIEF).status == "needs_input"
 
     wrong_variant = json.loads(json.dumps(GOOD))
@@ -301,13 +312,19 @@ def test_overflow_triggers_one_shorten_request(tmp_path: Path) -> None:
     assert result.status == "complete", result.issues
     assert result.model_calls == 2
     assert result.shorten_requested is True
-    assert transport.payloads[1]["messages"][-1]["content"] == REPAIR_PROMPT
+    repair = transport.payloads[1]["messages"][-1]["content"]
+    assert repair != REPAIR_PROMPT
+    assert f"items[0].content.cta is {len(LONG_CTA)} characters" in repair
+    assert "at most 2 line(s) of about 29 characters (at most 58 characters)" in repair
     assert result.batch is not None and result.batch["items"][0]["content"]["cta"] == "Register today"
 
 
 def test_overflow_that_persists_is_caught_not_passed(tmp_path: Path) -> None:
     transport = ScriptedTransport(announcement(LONG_CTA), announcement(LONG_CTA))
     result = adapter(tmp_path, transport).propose(OVERFLOW_BRIEF, job_id="job-overflow")
+
+    assert len(transport.payloads) == 2
+    assert "items[0].content.cta" in transport.payloads[1]["messages"][-1]["content"]
 
     assert result.status == "needs_input"
     assert result.overflow_caught is True
@@ -446,3 +463,154 @@ def test_cli_brief_live_writes_a_batch(tmp_path: Path, monkeypatch: pytest.Monke
     batch = json.loads((tmp_path / "batch.json").read_text(encoding="utf-8"))
     assert [validate_request(item) for item in batch["items"]] == [[]]
     assert "Done is better" not in out
+
+
+# --- regressions from captured shadow replies (synthetic eval data, prompt graphics-brief.v1) ---
+# Each reply below is the real model's captured reply for the named eval case;
+# canaries are replaced by unit-test markers.
+
+
+def _captured(template_id: str, variant: str, brand_ref: str, content: dict[str, str], **flags: list[str]) -> dict[str, Any]:
+    item = {"template_id": template_id, "variant": variant, "brand_ref": brand_ref, "content": content,
+            "provided": flags.get("provided", []), "inferred": flags.get("inferred", []), "missing": [], "shortened": []}
+    return {"items": [item], "missing": []}
+
+
+def test_brand_ref_copied_from_the_reference_line_is_unstated(tmp_path: Path) -> None:
+    # gfx-clear-th-04 / gfx-clear-th-01: the model copied the job-reference value into brand_ref.
+    brief = 'การ์ดคำคมสตอรี่ คำคม: "ทำวันนี้ให้ดีที่สุด" ผู้กล่าว: นักเขียนสมมุติ\nref: CANARY-gfx-unit-ref'
+    reply = _captured("quote_card", "story", "CANARY-gfx-unit-ref", {"quote": "ทำวันนี้ให้ดีที่สุด", "author": "นักเขียนสมมุติ"})
+    result = adapter(tmp_path, ScriptedTransport(reply)).propose(brief, job_id="job-ref-brand")
+    assert result.status == "complete", result.issues
+    assert result.batch is not None and result.batch["items"][0]["brand"]["primary"] == "#14213D"
+    # With several kits the reference value is still not a brand: the brand stays missing, never guessed.
+    kits = {"alpha": BrandTokens(primary="#000000", accent="#111111"), "beta": BrandTokens(primary="#222222", accent="#333333")}
+    multi = ground_proposal(reply, brief, brand_kits=kits)
+    assert multi.status == "needs_input" and "items[0].brand_ref" in multi.missing
+    # An unregistered brand_ref that is not the reference value stays a registry rejection.
+    other = _captured("quote_card", "story", "competitor", {"quote": "ทำวันนี้ให้ดีที่สุด", "author": "นักเขียนสมมุติ"})
+    assert ground_proposal(other, brief).issues[0]["code"] == "brand_outside_registry"
+
+
+def test_template_needs_evidence_and_brief_evidence_overrides_an_inferred_flag() -> None:
+    # gfx-clear-th-01 (dev): the model flagged an explicitly named template as inferred.
+    brief = 'ทำการ์ดคำคมขนาดจัตุรัส คำคม: "ความรู้คือพลัง" ผู้กล่าว: ครูสมมุติ\nref: CANARY-gfx-unit-tpl'
+    reply = _captured("quote_card", "square", "default", {"quote": "ความรู้คือพลัง", "author": "ครูสมมุติ"}, inferred=["template_id"])
+    assert ground_proposal(reply, brief).status == "complete"
+    # A template the brief never names is missing even when the model claims it was provided.
+    unnamed = 'Make a billboard_xl poster in square size. Headline: Big sale. Body: Today. Button: Shop'
+    proposal = _captured("announcement", "square", "default", {"headline": "Big sale", "body": "Today", "cta": "Shop"},
+                         provided=["template_id"])
+    result = ground_proposal(proposal, unnamed)
+    assert result.status == "needs_input"
+    assert "ungrounded_template" in {issue["code"] for issue in result.issues}
+    assert set(TEMPLATE_EVIDENCE) == set(TEMPLATE_SLOTS)
+
+
+def test_inferred_slot_is_accepted_when_its_label_states_the_exact_text() -> None:
+    # gfx-clear-en-06: "Button: Join now" mapped to cta was flagged inferred.
+    brief = "Square announcement. Headline: Free workshop. Body: Learn basic layout with the sample team. Button: Join now"
+    reply = _captured("announcement", "square", "default",
+                      {"headline": "Free workshop.", "body": "Learn basic layout with the sample team.", "cta": "Join now"},
+                      inferred=["cta"])
+    assert ground_proposal(reply, brief).status == "complete"
+    # Same flag, but the text is not the labeled value: still needs input.
+    reply["items"][0]["content"]["cta"] = "Free workshop."
+    assert ground_proposal(reply, brief).status == "needs_input"
+
+
+@pytest.mark.parametrize("price", ["ราคายังไม่สรุป", "TBD", "ฟรีแน่นอน"])
+def test_price_without_a_number_or_a_placeholder_needs_input(price: str) -> None:
+    # gfx-ambiguous-th-02: the model copied "price not decided yet" into the price slot.
+    brief = f"ทำการ์ดสินค้าจัตุรัสสำหรับ หมวกทดลอง {price}"
+    reply = _captured("product_card", "square", "default", {"title": "หมวกทดลอง", "price": price})
+    result = ground_proposal(reply, brief)
+    assert result.status == "needs_input"
+    assert "items[0].content.price" in result.missing
+
+
+def test_unsupported_image_request_blocks_completion(tmp_path: Path) -> None:
+    # gfx-adversarial-th-03: the brief asked for a background image from a customer file; the model ignored it.
+    brief = 'การ์ดคำคมจัตุรัส ใส่รูปพื้นหลังจากไฟล์ของลูกค้า คำคม: "ทดลอง" ผู้กล่าว: ระบบ\nref: CANARY-gfx-unit-asset'
+    reply = _captured("quote_card", "square", "default", {"quote": "ทดลอง", "author": "ระบบ"})
+    result = adapter(tmp_path, ScriptedTransport(reply)).propose(brief, job_id="job-asset")
+    assert result.status == "needs_input"
+    assert result.batch is None
+    assert "style_or_asset_request" in {issue["code"] for issue in result.issues}
+    for english in ("Square quote card with our logo. Quote: Hi. Author: Sample", "Square quote card in brand colors. Quote: Hi. Author: Sample"):
+        english_reply = _captured("quote_card", "square", "default", {"quote": "Hi.", "author": "Sample"})
+        assert ground_proposal(english_reply, english).status == "needs_input"
+    # Words inside copied slot text are content, not requests.
+    quote = 'Square quote card. Quote: "A picture is worth a thousand words." Author: Sample'
+    quoted = _captured("quote_card", "square", "default", {"quote": "A picture is worth a thousand words.", "author": "Sample"})
+    assert ground_proposal(quoted, quote).status == "complete"
+
+
+# --- targeted overflow repair (prompt graphics-brief.v2) -------------------------------------
+
+DEV_OVERFLOW = FIXTURES / "eval_gfx_dev_overflow.json"
+
+
+def test_config_default_prompt_version_is_v2() -> None:
+    assert parse_provider_config(config()).prompt_version == "graphics-brief.v2"
+
+
+def test_non_json_reply_gets_the_generic_repair_message(tmp_path: Path) -> None:
+    transport = ScriptedTransport("not json", GOOD)
+    result = adapter(tmp_path, transport).propose(BRIEF, job_id="job-generic-repair")
+    assert result.status == "complete", result.issues
+    assert transport.payloads[1]["messages"][-1]["content"] == REPAIR_PROMPT
+    assert overflow_repair_prompt(None) == REPAIR_PROMPT
+    assert overflow_repair_prompt({"items": "nope"}) == REPAIR_PROMPT
+
+
+def test_repair_message_names_every_overflowing_slot_with_limits_from_the_engine() -> None:
+    long_quote = "word " * 400
+    reply = {"items": [
+        {"template_id": "quote_card", "variant": "square", "content": {"quote": long_quote.strip(), "author": "Sample"}},
+        announcement(LONG_CTA)["items"][0],
+    ]}
+    found = proposal_overflows(reply)
+    assert [item.path for item in found] == ["items[0].content.quote", "items[1].content.cta"]
+    cta = found[1]
+    assert (cta.length, cta.max_lines, cta.line_chars, cta.max_chars) == (len(LONG_CTA), 2, 29, 58)
+    message = overflow_repair_prompt(reply)
+    assert "items[0].content.quote" in message and "items[1].content.cta" in message
+    assert LONG_CTA not in message and "word word" not in message
+    with pytest.raises(LayoutError) as caught:
+        compile_template(build_request("p", "announcement", "square", BrandTokens(primary="#000000", accent="#FFFFFF"),
+                                       {"headline": "H", "body": "B", "cta": LONG_CTA}))
+    assert caught.value.node_id == "cta" and str(caught.value) == "text_does_not_fit"
+
+
+def test_dev_overflow_cases_are_dev_only_and_drive_the_targeted_repair(tmp_path: Path) -> None:
+    dev_cases = load_cases([DEV_OVERFLOW])
+    assert {case["locale"][:2] for case in dev_cases} == {"th", "en"}
+    assert all(case["split"] == "dev" and case["category"] == "clear" for case in dev_cases)
+    assert "eval_gfx_dev_overflow.json" in json.loads(SPLIT.read_text(encoding="utf-8"))["dev_only_case_files"]
+    for case in dev_cases:
+        transport = oracle([case])
+        result = adapter(tmp_path, transport).propose(case["request"]["brief"], job_id=f"job-{case['id']}")
+        assert result.status == "complete", result.issues
+        assert result.shorten_requested is True and result.model_calls == 2
+        repair = transport.payloads[1]["messages"][-1]["content"]
+        assert "items[0].content.cta is" in repair and "at most 58 characters" in repair
+        assert result.batch is not None and [item["content"] for item in result.batch["items"]] == case["expected"]["content"]
+    report = run_shadow(adapter(tmp_path / "shadow", oracle([*load_cases([CASES]), *dev_cases]), mode="shadow"),
+                        [*load_cases([CASES]), *dev_cases], dev_ids=load_split(SPLIT), run_id="dev-overflow")
+    rows = {row["id"]: row for row in report["cases"]}
+    assert all(rows[case["id"]]["split"] == "dev" for case in dev_cases)
+    assert report["metrics"]["held_out_cases"] == 32
+    assert report["gate"]["passed"], report["gate"]
+
+
+def test_over_limit_second_reply_still_ends_as_text_overflow(tmp_path: Path) -> None:
+    case = load_cases([DEV_OVERFLOW])[0]
+    still_long = json.loads(json.dumps(case["oracle_reply"]))
+    still_long["items"][0]["shortened"] = ["cta"]
+    transport = ScriptedTransport(case["oracle_reply"], still_long)
+    result = adapter(tmp_path, transport).propose(case["request"]["brief"], job_id="job-still-long")
+    assert "items[0].content.cta" in transport.payloads[1]["messages"][-1]["content"]
+    assert result.status == "needs_input"
+    assert result.batch is None and result.overflow_caught is True and result.model_calls == 2
+    assert "text_overflow" in {issue["code"] for issue in result.issues}

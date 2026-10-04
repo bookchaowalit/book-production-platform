@@ -51,8 +51,8 @@ _CHAIN_NUMBER = re.compile(_NUMBER)
 
 # Ordered by priority: a span claimed by an earlier role is not re-read by a later one.
 _ROLE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
-    ("hole_offset_x_mm", re.compile(r"offset[\s_-]*x(?![a-z])|(?<![a-z])x[\s_-]*offset|ระยะ(?:ขอบ)?(?:\s*แกน)?\s*x(?![a-z])")),
-    ("hole_offset_y_mm", re.compile(r"offset[\s_-]*y(?![a-z])|(?<![a-z])y[\s_-]*offset|ระยะ(?:ขอบ)?(?:\s*แกน)?\s*y(?![a-z])")),
+    ("hole_offset_x_mm", re.compile(r"offset[\s_-]*x(?![a-z])|(?<![a-z])x[\s_-]*offset|ระยะ(?:ขอบ)?\s*x(?![a-z])")),
+    ("hole_offset_y_mm", re.compile(r"offset[\s_-]*y(?![a-z])|(?<![a-z])y[\s_-]*offset|ระยะ(?:ขอบ)?\s*y(?![a-z])")),
     ("offset_both", re.compile(r"\boffsets?\b|from\s+(?:each|every|the|all)?\s*edges?|ระยะ(?:ห่าง)?จากขอบ|ห่างจากขอบ|ระยะขอบ")),
     ("hole_diameter_mm", re.compile(r"diameter|\bdia\b\.?|ø|⌀|เส้นผ่าน")),
     ("thickness_mm", re.compile(r"thickness|\bthick\b|ความหนา|หนา")),

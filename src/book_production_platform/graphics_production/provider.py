@@ -13,16 +13,28 @@ Fail-closed rules:
 - instruction-like or path/script content in the brief → ``needs_input``
   with zero calls;
 - any key, template, variant, or brand ref outside the allowlists → ``rejected``;
-- text not copied from the brief (or a slot flagged ``inferred``), an
-  unevidenced variant, or a missing value → ``needs_input``, never a guess;
+- text not copied from the brief (or a slot flagged ``inferred`` whose text
+  the brief does not state after that slot's label), an unevidenced template
+  or variant, or a missing value → ``needs_input``, never a guess;
+- a placeholder slot text (``TBD``, ``ยังไม่สรุป``) or a price without a
+  number → ``needs_input``;
+- a brief that asks for images, files, fonts, or colors the templates cannot
+  take → ``needs_input`` (``style_or_asset_request``), decided by code over
+  the brief text the proposal did not copy into a slot, never by the model;
+- a brief job-reference line (``ref: ...``) is metadata, never a brand kit: a
+  ``brand_ref`` copied from it is treated as unstated;
 - every proposed item is compiled by the real template engine; a slot that
   does not fit is reported as ``text_overflow``.
 
 Overflow and the one shorten request (REQ-GFX-02): the runner's ``accept``
 hook compiles each proposed item. If text overflows, the reply is not
 accepted and the runner's single repair call (the second and last call of the
-job) carries :data:`REPAIR_PROMPT`, which asks the model to shorten the slot by
-deleting words and to list it in ``shortened``. A shortened value is accepted
+job) carries a targeted message built by :func:`overflow_repair_prompt`: for
+each overflowing slot it names the JSON path, the current visible length, and
+the line and character limit, all taken from the engine's ``LayoutError``. It
+asks the model to shorten only those slots by deleting words and to list them
+in ``shortened``. A reply that is not a JSON object (or has no ``items`` list)
+gets the generic :data:`REPAIR_PROMPT` instead. A shortened value is accepted
 only when every word of it appears in the brief. If the second reply still
 overflows (or is unusable), the adapter returns ``needs_input`` with a
 ``text_overflow`` issue, so no overflow is ever passed on silently.
@@ -58,7 +70,7 @@ from book_production_platform.graphics_ir import (
 )
 from book_production_platform.graphics_ir.models import TemplateId, VariantId
 
-from .layout import LayoutError
+from .layout import LayoutError, visible_length
 from .provider_config import ProviderConfig, ProviderConfigError, parse_provider_config
 from .templates import VARIANT_SIZES, TemplateError, compile_template
 
@@ -82,6 +94,24 @@ VARIANT_EVIDENCE: dict[str, tuple[str, ...]] = {
     "portrait": ("portrait", "4:5", "1080x1350", "1080 x 1350", "แนวตั้ง 4:5", "พอร์ตเทรต"),
     "story": ("story", "stories", "9:16", "1080x1920", "1080 x 1920", "สตอรี่"),
 }
+# Words that evidence a template in the brief. A template the brief does not
+# evidence is treated as missing, whatever the model reports.
+TEMPLATE_EVIDENCE: dict[str, tuple[str, ...]] = {
+    "quote_card": ("quote card", "quote", "การ์ดคำคม", "คำคม"),
+    "product_card": ("product card", "product", "การ์ดสินค้า", "สินค้า"),
+    "announcement": ("announcement", "announce", "ประกาศ"),
+}
+# Labels a brief uses for each slot (English and Thai). A slot the model flags
+# ``inferred`` is accepted only when its exact text follows one of these labels.
+SLOT_LABELS: dict[str, tuple[str, ...]] = {
+    "quote": ("quote", "คำคม"),
+    "author": ("author", "by", "ผู้กล่าว", "ผู้เขียน", "โดย"),
+    "title": ("title", "name", "product", "ชื่อสินค้า", "ชื่อ"),
+    "price": ("price", "ราคา"),
+    "headline": ("headline", "heading", "title", "หัวข้อ", "พาดหัว"),
+    "body": ("body", "details", "text", "เนื้อหา", "รายละเอียด", "ข้อความ"),
+    "cta": ("button", "cta", "call to action", "ปุ่ม"),
+}
 DEFAULT_BRAND_KITS: dict[str, BrandTokens] = {
     "default": BrandTokens(primary="#14213D", accent="#FCA311", foreground="#111111", background="#FFFFFF"),
 }
@@ -94,6 +124,24 @@ _EXTRA_GUARD = re.compile(
     r"\.\./|\.\.\\|<\s*script|javascript:|file:/|\bset\s+(?:the\s+)?colou?r\s+to\b|ตั้งสีเป็น",
     re.IGNORECASE,
 )
+# Requests for things the fixed templates never take (images, files, fonts,
+# colors). Matched only on brief text that no proposed slot copied.
+_STYLE_OR_ASSET_REQUEST = re.compile(
+    r"(?<![a-z0-9])(?:background|backdrop|images?|photos?|photograph|pictures?|logos?|icons?|fonts?|typeface"
+    r"|colou?rs?|uploads?|uploaded|attach(?:ed|ment)?|files?)(?![a-z0-9])"
+    r"|#[0-9a-f]{3}(?:[0-9a-f]{3})?(?:[0-9a-f]{2})?(?![0-9a-z])"
+    r"|พื้นหลัง|รูปภาพ|รูปถ่าย|ใส่รูป|ใส่ภาพ|แนบรูป|แนบภาพ|ไฟล์|โลโก้|ไอคอน|ฟอนต์|แบบอักษร|ใช้สี|เปลี่ยนสี|โทนสี|สีพื้น",
+    re.IGNORECASE,
+)
+# A brief's job-reference line (``ref: ...``) is metadata, never content or a brand.
+_REFERENCE_LINE = re.compile(r"^[ \t]*(?:ref|reference|job[ \t]*ref|อ้างอิง)[ \t]*[:#][ \t]*(\S+)[ \t]*$", re.IGNORECASE | re.MULTILINE)
+_PLACEHOLDER = re.compile(
+    r"^(?:tbd|tba|tbc|n/?a|none|null|unknown|pending|to be (?:decided|confirmed|announced)|\?+|-+"
+    r"|ไม่ระบุ|ไม่ทราบ|ยังไม่สรุป|ยังไม่ระบุ|ยังไม่กำหนด|รอสรุป|รอยืนยัน)$",
+    re.IGNORECASE,
+)
+_DIGIT = re.compile(r"\d")
+_QUOTES = "\"'“”‘’"
 _WORD_PUNCTUATION = re.compile(r"^[\"'“”‘’(\[{]+|[\"'“”‘’)\]},.;:!?]+$")
 
 SYSTEM_PROMPT = (
@@ -108,10 +156,18 @@ SYSTEM_PROMPT = (
     "A template, variant, brand_ref, or slot that the brief does not state goes in missing; never guess."
 )
 REPAIR_PROMPT = (
-    "Your previous reply was not acceptable: it was not the required JSON object, or a slot text was too long "
-    "for its template slot. Reply again with only the same JSON object. If a slot was too long, shorten that "
-    "slot only by deleting words copied from the brief (add no new words) and list the slot in shortened."
+    "Your previous reply was not the required JSON object with an items list. "
+    "Reply again with only that JSON object, following the same rules."
 )
+OVERFLOW_REPAIR_PROMPT = (
+    "Your previous reply was valid JSON, but these slot texts do not fit their template slot: {details}. "
+    "Shorten only these slots, by deleting words copied from the brief (add, translate, or rewrite no words), "
+    "until each fits its limit; keep every other value unchanged and list each shortened slot in shortened. "
+    "Reply again with only the same JSON object."
+)
+# Template text nodes whose id differs from the slot name, and fixed text a node adds around the slot.
+_SLOT_NODES: dict[str, str] = {"title": "product-title", "price": "product-price"}
+_SLOT_DECORATION: dict[str, int] = {"author": len("— ")}
 
 ResultStatus = Literal["complete", "needs_input", "rejected"]
 
@@ -186,6 +242,56 @@ def variant_evidenced(variant: str, brief: str) -> bool:
     return evidence_present(VARIANT_EVIDENCE.get(variant, ()), brief)
 
 
+def template_evidenced(template_id: str, brief: str) -> bool:
+    return evidence_present(TEMPLATE_EVIDENCE.get(template_id, ()), _without_references(brief))
+
+
+def labeled_in_brief(slot: str, value: str, brief: str) -> bool:
+    """True when ``value`` follows one of the slot's labels (``Button: Join now``) in the brief."""
+
+    text = normalize_text(brief)
+    needle = normalize_text(value).strip(_QUOTES).strip()
+    if not needle:
+        return False
+    for label in SLOT_LABELS.get(slot, ()):
+        word = normalize_text(label)
+        boundary = r"(?<![a-z0-9])" if word.isascii() else ""
+        pattern = rf"{boundary}{re.escape(word)}\s*[:：]\s*[{_QUOTES}]?\s*{re.escape(needle)}"
+        if re.search(pattern, text):
+            return True
+    return False
+
+
+def reference_values(brief: str) -> set[str]:
+    """Values of the brief's job-reference lines (``ref: X``), normalized."""
+
+    return {normalize_text(match) for match in _REFERENCE_LINE.findall(brief)}
+
+
+def _without_references(brief: str) -> str:
+    return _REFERENCE_LINE.sub(" ", brief)
+
+
+def placeholder_text(slot: str, value: str) -> bool:
+    """True for placeholder text (``TBD``, ``ยังไม่สรุป``) or a price that states no number."""
+
+    text = normalize_text(value).strip(_QUOTES).strip()
+    if _PLACEHOLDER.match(text):
+        return True
+    return slot == "price" and not _DIGIT.search(text)
+
+
+def style_or_asset_requested(brief: str, copied: list[str]) -> bool:
+    """True when brief text outside the copied slot texts asks for images, files, fonts, or colors."""
+
+    remaining = normalize_text(_without_references(brief))
+    for value in sorted(copied, key=len, reverse=True):
+        needle = normalize_text(value)
+        if needle:
+            remaining = remaining.replace(needle, " ")
+    return bool(_STYLE_OR_ASSET_REQUEST.search(remaining))
+
+
 def shortened_grounded(value: str, brief: str) -> bool:
     """True when every word of a shortened slot text is copied from the brief."""
 
@@ -219,6 +325,77 @@ def overflows(request: Mapping[str, Any]) -> bool:
     except (TemplateError, ValidationError, ValueError):
         return False
     return False
+
+
+@dataclass(frozen=True)
+class SlotOverflow:
+    """One slot that does not fit: its JSON path, visible length, and limits (no text)."""
+
+    path: str
+    length: int
+    max_lines: int
+    line_chars: int
+    max_chars: int
+
+
+def slot_overflows(template_id: str, variant: str, content: Mapping[str, str], *, path: str = "items[0]") -> list[SlotOverflow]:
+    """Probe each slot alone in the engine and report every slot that overflows, with its limits."""
+
+    brand = next(iter(DEFAULT_BRAND_KITS.values()))
+    slots = TEMPLATE_SLOTS.get(template_id, ())
+    found: list[SlotOverflow] = []
+    for slot in slots:
+        value = content.get(slot)
+        if not isinstance(value, str) or not value.strip():
+            continue
+        probe = {name: (value if name == slot else "x") for name in slots}
+        try:
+            compile_template(build_request("overflow-probe", template_id, variant, brand, probe))
+        except LayoutError as exc:
+            if exc.node_id not in (slot, _SLOT_NODES.get(slot)) or exc.max_lines is None or exc.line_chars is None:
+                continue
+            decoration = _SLOT_DECORATION.get(slot, 0)
+            found.append(SlotOverflow(
+                path=f"{path}.content.{slot}",
+                length=visible_length(value),
+                max_lines=exc.max_lines,
+                line_chars=max(1, exc.line_chars - decoration),
+                max_chars=max(1, exc.max_lines * exc.line_chars - decoration),
+            ))
+        except (TemplateError, ValidationError, ValueError):
+            continue
+    return found
+
+
+def proposal_overflows(parsed: Mapping[str, Any]) -> list[SlotOverflow]:
+    items = parsed.get("items")
+    if not isinstance(items, list):
+        return []
+    found: list[SlotOverflow] = []
+    for index, item in enumerate(items):
+        if not isinstance(item, dict):
+            continue
+        template_id, variant, content = item.get("template_id"), item.get("variant"), item.get("content")
+        if template_id not in TEMPLATE_SLOTS or variant not in VARIANT_SIZES or not isinstance(content, dict):
+            continue
+        if not all(isinstance(value, str) for value in content.values()):
+            continue
+        found.extend(slot_overflows(str(template_id), str(variant), content, path=f"items[{index}]"))
+    return found
+
+
+def overflow_repair_prompt(parsed: Mapping[str, Any] | None) -> str:
+    """Repair message for the single second call: targeted for overflow, generic otherwise."""
+
+    found = proposal_overflows(parsed) if parsed is not None else []
+    if not found:
+        return REPAIR_PROMPT
+    details = "; ".join(
+        f"{item.path} is {item.length} characters but fits at most {item.max_lines} line(s) of about "
+        f"{item.line_chars} characters (at most {item.max_chars} characters)"
+        for item in found
+    )
+    return OVERFLOW_REPAIR_PROMPT.format(details=details)
 
 
 def _shape_overflow(parsed: Mapping[str, Any]) -> bool:
@@ -268,6 +445,7 @@ def ground_proposal(
     templates: list[str] = []
     variants: list[str] = []
     overflow_caught = False
+    copied: list[str] = []
     for index, item in enumerate(raw_items):
         path = f"items[{index}]"
         if not isinstance(item, dict):
@@ -290,7 +468,9 @@ def ground_proposal(
             template_id = None
         elif not isinstance(template_id, str) or template_id not in TEMPLATE_SLOTS:
             return _rejected("template_outside_registry", f"{path}.template_id", "template_id must come from the template registry")
-        if template_id is not None and "template_id" in inferred:
+        if template_id is not None and not template_evidenced(template_id, brief):
+            # The brief must name the template; the model's own "provided"/"inferred" flag is not evidence.
+            issues.append(_issue("ungrounded_template", f"{path}.template_id", "the brief does not name this template"))
             missing.append(f"{path}.template_id")
             template_id = None
 
@@ -306,6 +486,9 @@ def ground_proposal(
             variant = None
 
         brand_ref = item.get("brand_ref")
+        if isinstance(brand_ref, str) and brand_ref not in brand_kits and normalize_text(brand_ref) in reference_values(brief):
+            # A value copied from the job-reference line is not a brand: treat brand_ref as unstated.
+            brand_ref = None
         brand: BrandTokens | None = None
         if brand_ref is None or brand_ref == "" or "brand_ref" in item_missing:
             if len(brand_kits) == 1:
@@ -336,10 +519,14 @@ def ground_proposal(
                 continue
             if len(value) > MAX_TEXT_CHARS or _UNSAFE_TEXT.search(value):
                 return _rejected("unsafe_text", slot_path, "slot text is unsafe or too long")
-            if slot in inferred:
+            if placeholder_text(slot, value):
+                issues.append(_issue("placeholder_text", slot_path, "the brief does not state a usable value for this slot"))
+                missing.append(slot_path)
+            elif slot in inferred and not (text_grounded(value, brief) and labeled_in_brief(slot, value, brief)):
                 issues.append(_issue("text_inferred", slot_path, "slot text must be copied from the brief"))
                 missing.append(slot_path)
             elif text_grounded(value, brief) or (slot in shortened and shortened_grounded(value, brief)):
+                copied.append(value)
                 content[slot] = value
             else:
                 issues.append(_issue("ungrounded_text", slot_path, "slot text is not copied from the brief"))
@@ -364,6 +551,9 @@ def ground_proposal(
         templates.append(template_id)
         variants.append(variant)
 
+    if style_or_asset_requested(brief, copied):
+        issues.append(_issue("style_or_asset_request", "brief", "the brief asks for images, files, fonts, or colors the templates do not take"))
+        missing.append("brief")
     complete = not missing and not issues and len(items) == len(raw_items)
     return GraphicsBriefResult(
         status="complete" if complete else "needs_input",
@@ -475,7 +665,7 @@ class ProviderBriefAdapter:
             system_prompt=SYSTEM_PROMPT,
             user_content=user_content,
             guard_text=brief,
-            repair_prompt=REPAIR_PROMPT,
+            repair_prompt=overflow_repair_prompt,
             accept=accept,
         )
         if outcome.status == "abstained":
@@ -510,10 +700,13 @@ def _request_prefix(job_id: str) -> str:
 __all__ = [
     "BRIEF_ADAPTER_VERSION",
     "DEFAULT_BRAND_KITS",
+    "OVERFLOW_REPAIR_PROMPT",
     "PROVIDER_NOT_CONFIGURED",
     "REPAIR_PROMPT",
     "SHADOW_MODE_ONLY",
+    "SLOT_LABELS",
     "SYSTEM_PROMPT",
+    "TEMPLATE_EVIDENCE",
     "TEMPLATE_IDS",
     "TEMPLATE_SLOTS",
     "VARIANT_EVIDENCE",
@@ -521,11 +714,20 @@ __all__ = [
     "GraphicsBriefResult",
     "ProviderBriefAdapter",
     "ProviderNotConfigured",
+    "SlotOverflow",
     "build_request",
     "evidence_present",
     "ground_proposal",
+    "labeled_in_brief",
+    "overflow_repair_prompt",
     "overflows",
+    "placeholder_text",
+    "proposal_overflows",
+    "reference_values",
     "shortened_grounded",
+    "slot_overflows",
+    "style_or_asset_requested",
+    "template_evidenced",
     "validate_structured",
     "variant_evidenced",
 ]

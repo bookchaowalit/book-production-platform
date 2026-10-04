@@ -1,0 +1,156 @@
+[
+ {
+  "id": "gfx-dev-overflow-en-01",
+  "category": "clear",
+  "locale": "en-US",
+  "split": "dev",
+  "canary": "CANARY-gfx-dev-overflow-en-01",
+  "request": {
+   "brief": "Square announcement. Headline: Open house. Body: Visit the sample studio this weekend. Button: Book a seat for the guided tour of every room in the studio this Sunday afternoon\nref: CANARY-gfx-dev-overflow-en-01"
+  },
+  "expected": {
+   "status": "complete",
+   "templates": [
+    "announcement"
+   ],
+   "variants": [
+    "square"
+   ],
+   "content": [
+    {
+     "headline": "Open house",
+     "body": "Visit the sample studio this weekend.",
+     "cta": "Book a seat"
+    }
+   ]
+  },
+  "oracle_reply": {
+   "items": [
+    {
+     "template_id": "announcement",
+     "variant": "square",
+     "brand_ref": "default",
+     "content": {
+      "headline": "Open house",
+      "body": "Visit the sample studio this weekend.",
+      "cta": "Book a seat for the guided tour of every room in the studio this Sunday afternoon"
+     },
+     "provided": [
+      "template_id",
+      "variant",
+      "headline",
+      "body",
+      "cta"
+     ],
+     "inferred": [],
+     "missing": []
+    }
+   ],
+   "missing": []
+  },
+  "oracle_repair_reply": {
+   "items": [
+    {
+     "template_id": "announcement",
+     "variant": "square",
+     "brand_ref": "default",
+     "content": {
+      "headline": "Open house",
+      "body": "Visit the sample studio this weekend.",
+      "cta": "Book a seat"
+     },
+     "provided": [
+      "template_id",
+      "variant",
+      "headline",
+      "body",
+      "cta"
+     ],
+     "inferred": [],
+     "missing": [],
+     "shortened": [
+      "cta"
+     ]
+    }
+   ],
+   "missing": []
+  }
+ },
+ {
+  "id": "gfx-dev-overflow-th-01",
+  "category": "clear",
+  "locale": "th-TH",
+  "split": "dev",
+  "canary": "CANARY-gfx-dev-overflow-th-01",
+  "request": {
+   "brief": "ประกาศแบบพอร์ตเทรต 4:5 หัวข้อ: เปิดบ้าน เนื้อหา: แวะชมสตูดิโอทดลองสุดสัปดาห์นี้ ปุ่ม: จองที่นั่งสำหรับทัวร์นำชมทุกห้องของสตูดิโอในบ่ายวันอาทิตย์นี้พร้อมรับของที่ระลึกฟรี จองที่นั่ง\nref: CANARY-gfx-dev-overflow-th-01"
+  },
+  "expected": {
+   "status": "complete",
+   "templates": [
+    "announcement"
+   ],
+   "variants": [
+    "portrait"
+   ],
+   "content": [
+    {
+     "headline": "เปิดบ้าน",
+     "body": "แวะชมสตูดิโอทดลองสุดสัปดาห์นี้",
+     "cta": "จองที่นั่ง"
+    }
+   ]
+  },
+  "oracle_reply": {
+   "items": [
+    {
+     "template_id": "announcement",
+     "variant": "portrait",
+     "brand_ref": "default",
+     "content": {
+      "headline": "เปิดบ้าน",
+      "body": "แวะชมสตูดิโอทดลองสุดสัปดาห์นี้",
+      "cta": "จองที่นั่งสำหรับทัวร์นำชมทุกห้องของสตูดิโอในบ่ายวันอาทิตย์นี้พร้อมรับของที่ระลึกฟรี จองที่นั่ง"
+     },
+     "provided": [
+      "template_id",
+      "variant",
+      "headline",
+      "body",
+      "cta"
+     ],
+     "inferred": [],
+     "missing": []
+    }
+   ],
+   "missing": []
+  },
+  "oracle_repair_reply": {
+   "items": [
+    {
+     "template_id": "announcement",
+     "variant": "portrait",
+     "brand_ref": "default",
+     "content": {
+      "headline": "เปิดบ้าน",
+      "body": "แวะชมสตูดิโอทดลองสุดสัปดาห์นี้",
+      "cta": "จองที่นั่ง"
+     },
+     "provided": [
+      "template_id",
+      "variant",
+      "headline",
+      "body",
+      "cta"
+     ],
+     "inferred": [],
+     "missing": [],
+     "shortened": [
+      "cta"
+     ]
+    }
+   ],
+   "missing": []
+  }
+ }
+]

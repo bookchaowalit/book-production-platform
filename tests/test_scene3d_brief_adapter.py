@@ -329,6 +329,93 @@ def test_degraded_transport_fails_the_gate(tmp_path: Path) -> None:
     assert report["gate"]["checks"]["preset_exact_match_clear_ge_95pct"] is False
 
 
+# --- regression: captured real-model replies (prompt scene3d-brief.v1) -----------------------
+
+CAPTURED = FIXTURES / "captured_replies_gpt6_luna_run2.json"
+
+
+def _captured_report(tmp_path: Path) -> dict[str, Any]:
+    cases = load_cases([CASES])
+    replies = json.loads(CAPTURED.read_text(encoding="utf-8"))["replies"]
+
+    def respond(payload: dict[str, Any]) -> Any:
+        text = payload["messages"][1]["content"]
+        return next(reply for case_id, reply in replies.items() if f"CANARY-{case_id}\n" in text)
+
+    transport = ScriptedTransport(responder=respond)
+    return run_shadow(adapter(tmp_path, transport, mode="shadow"), cases, dev_ids=load_split(SPLIT), run_id="captured")
+
+
+def test_captured_replies_listing_single_value_presets_as_missing_now_complete(tmp_path: Path) -> None:
+    # The model left lighting/background/material/recipe empty and listed them
+    # as missing because the briefs never mention them; the engine owns those
+    # single-valued defaults, so the scene is complete and exactly as expected.
+    rows = {row["id"]: row for row in _captured_report(tmp_path)["cases"]}
+    for case_id in (
+        "s3d-clear-th-01", "s3d-clear-th-02", "s3d-clear-th-03", "s3d-clear-th-04",
+        "s3d-clear-en-01", "s3d-clear-en-02", "s3d-clear-en-03", "s3d-clear-en-04",
+    ):
+        assert rows[case_id]["status"] == "complete", (case_id, rows[case_id]["issue_codes"])
+        assert rows[case_id]["scene_match"], case_id
+
+
+def test_captured_replies_keep_safety_outcomes(tmp_path: Path) -> None:
+    report = _captured_report(tmp_path)
+    rows = {row["id"]: row for row in report["cases"]}
+    # A model-flagged inferred camera angle / output size is still a veto.
+    for case_id in ("s3d-clear-th-05", "s3d-clear-en-05", "s3d-adversarial-en-02"):
+        assert rows[case_id]["status"] == "needs_input"
+        assert "critical_value_inferred" in rows[case_id]["issue_codes"]
+    # Unregistered looks (sunset lighting, neon-rim.v1) are caught by the engine itself.
+    for case_id in ("s3d-ambiguous-th-03", "s3d-adversarial-en-03"):
+        assert rows[case_id]["status"] == "needs_input"
+        assert "look_not_registered" in rows[case_id]["issue_codes"]
+    metrics = report["metrics"]
+    assert metrics["adversarial_silent_passes"] == 0
+    assert metrics["needs_input_recall_ambiguous"] == 1.0
+    assert metrics["preset_outside_registry"] == 0
+    assert metrics["free_numeric_values"] == 0
+    assert metrics["canary_leaks"] == 0
+    assert metrics["max_model_calls_per_job"] <= 2
+
+
+@pytest.mark.parametrize(
+    ("brief", "missing"),
+    [
+        ("Use demo/box.glb from the front, square, with sunset lighting.", ["lighting"]),
+        ("Use demo/box.glb from the front, square, on a black velvet backdrop.", ["background"]),
+        ("Use demo/box.glb from the front, square, recolour it in matte red.", ["material_preset"]),
+        ("ไฟล์ demo/box.glb มุมหน้าตรง ภาพจัตุรัส พื้นหลังลายไม้", ["background"]),
+    ],
+)
+def test_unregistered_look_needs_input_even_when_the_model_fills_the_default(brief: str, missing: list[str]) -> None:
+    proposal = reply(asset_path="demo/box.glb", composition="front-fit.v1", render_profile="square-1024.v1")
+    result = ground_proposal(proposal, brief)
+    assert result.status == "needs_input"
+    assert result.missing == missing
+    assert "look_not_registered" in {issue["code"] for issue in result.issues}
+
+
+def test_registered_look_named_in_the_brief_is_kept() -> None:
+    brief = "Use demo/box.glb from the front, square, studio softbox lighting on a plain backdrop."
+    proposal = reply(asset_path="demo/box.glb", composition="front-fit.v1", render_profile="square-1024.v1")
+    assert ground_proposal(proposal, brief).status == "complete"
+    flagged = json.loads(json.dumps(proposal))
+    flagged["scene"]["lighting"] = ""
+    flagged["missing"] = ["lighting"]
+    # The brief talks about lighting and the model did not map it: never default it.
+    assert ground_proposal(flagged, brief).missing == ["lighting"]
+
+
+def test_prompt_shares_the_engine_evidence_vocabulary() -> None:
+    from book_production_platform.scene3d.provider import COMPOSITION_EVIDENCE, RENDER_EVIDENCE, SYSTEM_PROMPT
+
+    for words in (*COMPOSITION_EVIDENCE.values(), *RENDER_EVIDENCE.values()):
+        for word in words:
+            assert word in SYSTEM_PROMPT
+    assert parse_provider_config({key: value for key, value in config().items() if key != "mode"}).prompt_version == "scene3d-brief.v2"
+
+
 # --- CLI -----------------------------------------------------------------------------------
 
 
