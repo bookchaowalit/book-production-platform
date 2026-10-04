@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from .file_input import FileInputError, is_table_file, table_envelope
 from .jobs import IdempotencyConflict, run_workbook_job
 from .provider import (
     PROVIDER_NOT_CONFIGURED,
@@ -68,7 +69,16 @@ def _run_brief(args: argparse.Namespace) -> int:
         print(f"{SHADOW_MODE_ONLY}: the provider config is in shadow mode; run brief-shadow and get owner approval before mode=live", file=sys.stderr)
         return 2
     try:
-        envelope: Any = json.loads(Path(args.input).read_text(encoding="utf-8"))
+        if is_table_file(args.input):
+            if not args.brief:
+                print("input error: --brief is required when --input is a CSV/XLSX file", file=sys.stderr)
+                return 2
+            envelope: Any = table_envelope(args.input, brief=args.brief, sheet=args.sheet, locale=args.locale)
+        else:
+            envelope = json.loads(Path(args.input).read_text(encoding="utf-8"))
+    except FileInputError as exc:
+        print(f"input error: {exc.code}: {exc}", file=sys.stderr)
+        return 2
     except (OSError, json.JSONDecodeError) as exc:
         print(f"input error: {type(exc).__name__}", file=sys.stderr)
         return 2
@@ -103,11 +113,23 @@ def _parser() -> argparse.ArgumentParser:
     benchmark.add_argument("--fixture", required=True)
     benchmark.add_argument("--output-dir", required=True)
     brief = commands.add_parser("brief", help="propose a workbook from a brief via the AI gateway (mode=live only), then build it")
-    brief.add_argument("--input", required=True, help="JSON envelope: workbook_id, brief, locale, dataset{header, rows}")
+    brief.add_argument("--input", required=True, help="JSON envelope (workbook_id, brief, locale, dataset{header, rows}), or a CSV/XLSX file with --brief")
+    brief.add_argument("--brief", default=None, help="the workbook brief, required when --input is a CSV/XLSX file")
+    brief.add_argument("--sheet", default=None, help="XLSX sheet name when --input is a workbook (default: first sheet)")
+    brief.add_argument("--locale", default="th-TH", help="brief locale when --input is a CSV/XLSX file")
     brief.add_argument("--output", required=True)
     brief.add_argument("--idempotency-key", required=True)
     brief.add_argument("--provider-config", default=None, help="spreadsheet-provider-config.v1 JSON (no secrets)")
     brief.add_argument("--budget-root", default=DEFAULT_BUDGET_ROOT, help="persistent AI cost ledger directory")
+    from_file = commands.add_parser(
+        "from-file", help="build a workbook from a CSV/XLSX file and a structured proposal (no AI, zero model calls)"
+    )
+    from_file.add_argument("--input", required=True, help="CSV or XLSX file")
+    from_file.add_argument("--proposal", required=True, help="JSON: template_id, mapping{source header: parameter}, intents")
+    from_file.add_argument("--sheet", default=None, help="XLSX sheet name (default: first sheet)")
+    from_file.add_argument("--locale", default="th-TH")
+    from_file.add_argument("--output", required=True)
+    from_file.add_argument("--idempotency-key", required=True)
     shadow = commands.add_parser("brief-shadow", help="shadow-evaluate the provider adapter; never builds or uses results")
     shadow.add_argument("--provider-config", required=True, help="spreadsheet-provider-config.v1 JSON (no secrets)")
     shadow.add_argument("--cases", action="append", required=True, help="eval case JSON file; repeatable")
@@ -118,12 +140,41 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _run_from_file(args: argparse.Namespace) -> int:
+    from .provider import propose_structured
+
+    try:
+        proposal = json.loads(Path(args.proposal).read_text(encoding="utf-8"))
+        envelope = table_envelope(args.input, proposal=proposal, sheet=args.sheet, locale=args.locale)
+    except FileInputError as exc:
+        print(json.dumps({"status": "rejected", "error_code": exc.code, "message": str(exc)}, ensure_ascii=False))
+        return 2
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"input error: {type(exc).__name__}", file=sys.stderr)
+        return 2
+    result = propose_structured(envelope)
+    summary: dict[str, Any] = {"proposal": result.metadata()}
+    if result.status != "complete" or result.request is None:
+        print(json.dumps(summary, ensure_ascii=False, indent=2))
+        return 4 if result.status == "needs_input" else 2
+    try:
+        job = run_workbook_job(result.request, args.output, args.idempotency_key)
+    except IdempotencyConflict as exc:
+        print(f"idempotency error: {exc}", file=sys.stderr)
+        return 2
+    summary["job"] = job.to_dict()
+    print(json.dumps(summary, ensure_ascii=False, default=str, indent=2))
+    return 0 if job.status == "accepted" else 2
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if args.command == "brief-shadow":
         return _run_shadow(args)
     if args.command == "brief":
         return _run_brief(args)
+    if args.command == "from-file":
+        return _run_from_file(args)
     if args.command == "benchmark":
         try:
             summary = run_benchmark(args.fixture, args.output_dir)

@@ -453,6 +453,24 @@ The HTTP interface is available from
 does not call an LLM; future semantic column mapping or anomaly explanations
 remain optional adapters and cannot replace formula evaluation.
 
+### Building from a CSV or XLSX file
+
+`spreadsheet from-file` reads a `.csv`, `.tsv`, `.xlsx`, or `.xlsm` file with
+the vendored shared reader (`book_production_platform.file_intake`, identical to
+the root `packages/file-intake`) and builds the workbook from a structured
+proposal (template, column mapping, intents) with zero model calls. Formulas in
+the source are never evaluated (cached values only); numbers are read as Excel
+displays them. `spreadsheet brief --input <file> --brief "..."` does the same
+with the AI proposal instead.
+
+```powershell
+book-production spreadsheet from-file `
+  --input .\sales.xlsx --sheet "ยอดขาย" `
+  --proposal .\proposal.json `
+  --output .\.runtime\spreadsheet\output `
+  --idempotency-key sales-1
+```
+
 ### AI brief adapter (V1B)
 
 `spreadsheet brief` turns a brief plus a dataset into a workbook. The model
