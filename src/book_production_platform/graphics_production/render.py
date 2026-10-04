@@ -287,7 +287,7 @@ def _browser_profile() -> Path:
 
 def _resvg_available() -> bool:
     try:
-        import resvg_py  # type: ignore[import-not-found,import-untyped]  # noqa: F401
+        import resvg_py  # type: ignore[import-not-found,import-untyped,unused-ignore]  # noqa: F401
     except ImportError:
         return False
     return True
@@ -311,7 +311,7 @@ def rasterizer() -> str:
 def rasterize_svg(svg: str, *, width: int, font_files: list[str] | None = None) -> bytes:
     """Rasterize SVG text with resvg at ``width`` pixels (height keeps the aspect ratio)."""
 
-    import resvg_py  # type: ignore[import-not-found,import-untyped]
+    import resvg_py  # type: ignore[import-not-found,import-untyped,unused-ignore]
 
     extra = [part for part in os.environ.get("GRAPHICS_PRODUCTION_FONT_DIRS", "").split(os.pathsep) if part]
     candidates = [*extra, "/usr/share/fonts", "/usr/local/share/fonts", str(Path.home() / ".fonts"), str(Path.home() / ".local/share/fonts")]

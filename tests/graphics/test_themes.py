@@ -38,6 +38,11 @@ SAMPLE = {
     "quote_card": {"quote": "Done is better than perfect.", "author": "Sample"},
     "product_card": {"title": "ร่มพับทดลอง", "price": "฿199"},
     "announcement": {"headline": "เปิดบ้าน", "body": "แวะชมสตูดิโอ", "cta": "จองที่นั่ง"},
+    "menu_board": {"shop": "SAMPLE CAFE", "title": "เมนูแนะนำ", "item1": "ลาเต้", "price1": "65.-", "item2": "มอคค่า",
+                   "price2": "70.-", "item3": "ชาไทย", "price3": "55.-", "note": "เปิดทุกวัน"},
+    "promo_sale": {"headline": "ลดปลายปี", "discount": "-30%", "detail": "ทุกเมนู", "date": "1–15 ธ.ค.", "cta": "สั่งเลย"},
+    "grand_opening": {"shop": "ร้านตัวอย่าง", "headline": "เปิดแล้ว!", "date": "12 ธันวาคม", "time": "09:00–20:00",
+                      "location": "ถนนตัวอย่าง", "offer": "ลด 20%"},
 }
 
 

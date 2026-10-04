@@ -1,0 +1,245 @@
+{
+  "schema_version": "graphic-theme.v1",
+  "theme_id": "promo_sale",
+  "title": "Promo sale",
+  "description": "ป้ายโปรโมชันลดราคา: หัวข้อ ตัวเลขส่วนลดใหญ่ เงื่อนไข วันที่ และปุ่ม บนแสงแฉก",
+  "ir_version": "graphic-ir.v2",
+  "template_version": "1",
+  "variants": [
+    "square",
+    "portrait",
+    "story",
+    "landscape"
+  ],
+  "evidence": [
+    "sale",
+    "discount",
+    "promotion",
+    "promo",
+    "ลดราคา",
+    "โปรโมชัน",
+    "โปรลด",
+    "ส่วนลด"
+  ],
+  "slots": {
+    "headline": {
+      "required": true,
+      "labels": [
+        "headline",
+        "title",
+        "หัวข้อ"
+      ]
+    },
+    "discount": {
+      "required": true,
+      "labels": [
+        "discount",
+        "ส่วนลด",
+        "ลด"
+      ]
+    },
+    "detail": {
+      "required": false,
+      "labels": [
+        "detail",
+        "condition",
+        "เงื่อนไข",
+        "รายละเอียด"
+      ]
+    },
+    "date": {
+      "required": false,
+      "labels": [
+        "date",
+        "period",
+        "วันที่",
+        "ระยะเวลา"
+      ]
+    },
+    "cta": {
+      "required": false,
+      "labels": [
+        "button",
+        "cta",
+        "ปุ่ม"
+      ]
+    }
+  },
+  "styles": {
+    "mint": {
+      "title": "Mint",
+      "palette": {
+        "bg": "#0F766E",
+        "accent": "#FDE68A"
+      }
+    },
+    "midnight": {
+      "title": "Midnight",
+      "palette": {
+        "bg": "#111827",
+        "accent": "#F472B6"
+      }
+    },
+    "brand": {
+      "title": "Brand colours",
+      "palette": {
+        "bg": "brand.primary",
+        "accent": "brand.accent"
+      }
+    }
+  },
+  "palette": {
+    "bg": "#E11D48",
+    "accent": "#FACC15",
+    "ink": "#FFFFFF"
+  },
+  "vars": {
+    "S": "MIN / 1080",
+    "BIG": {
+      "by_variant": {
+        "landscape": "MIN * 0.26",
+        "default": "MIN * 0.3"
+      }
+    },
+    "DISC_Y": {
+      "by_variant": {
+        "story": "H * 0.33",
+        "landscape": "H * 0.21",
+        "default": "H * 0.27"
+      }
+    },
+    "M_BTN": "MIN * 0.09"
+  },
+  "layers": [
+    {
+      "id": "Background",
+      "items": [
+        {
+          "motif": "rect",
+          "id": "bg",
+          "fill": "palette.bg"
+        },
+        {
+          "motif": "rays",
+          "id": "burst",
+          "cx": "CX",
+          "cy": "CY",
+          "count": 28,
+          "outer": "MAX",
+          "color": "palette.accent",
+          "opacity": 0.18
+        }
+      ]
+    },
+    {
+      "id": "Text",
+      "items": [
+        {
+          "motif": "text_block",
+          "id": "headline",
+          "slot": "headline",
+          "x": "W * 0.08",
+          "y": "H * 0.12",
+          "width": "W * 0.84",
+          "height": "MIN * 0.12",
+          "font_size": "MIN * 0.08",
+          "min_font_size": "MIN * 0.04",
+          "max_lines": 1,
+          "font": "builtin:thai",
+          "weight": "bold",
+          "align": "center",
+          "color": "palette.ink"
+        },
+        {
+          "motif": "display_text",
+          "id": "discount",
+          "slot": "discount",
+          "x": "W * 0.05",
+          "y": "DISC_Y",
+          "width": "W * 0.9",
+          "height": "BIG * 1.2",
+          "font_size": "BIG",
+          "min_font_size": "BIG * 0.5",
+          "max_lines": 1,
+          "font": "builtin:display",
+          "weight": "black",
+          "align": "center",
+          "color": "palette.accent",
+          "shadows": [
+            {
+              "dx": "8 * S",
+              "dy": "10 * S",
+              "color": "#000000",
+              "opacity": 0.35
+            }
+          ]
+        },
+        {
+          "motif": "text_block",
+          "id": "detail",
+          "slot": "detail",
+          "x": "W * 0.08",
+          "y": "DISC_Y + BIG * 1.25",
+          "width": "W * 0.84",
+          "height": "MIN * 0.1",
+          "font_size": "MIN * 0.036",
+          "min_font_size": "MIN * 0.024",
+          "max_lines": 2,
+          "font": "builtin:thai",
+          "align": "center",
+          "color": "palette.ink"
+        },
+        {
+          "motif": "text_block",
+          "id": "date",
+          "slot": "date",
+          "x": "W * 0.08",
+          "y": "DISC_Y + BIG * 1.25 + MIN * 0.11",
+          "width": "W * 0.84",
+          "height": "MIN * 0.05",
+          "font_size": "MIN * 0.03",
+          "min_font_size": "MIN * 0.02",
+          "max_lines": 1,
+          "font": "builtin:mono",
+          "letter_spacing": "3 * S",
+          "align": "center",
+          "color": "palette.accent"
+        }
+      ]
+    },
+    {
+      "id": "Button",
+      "items": [
+        {
+          "motif": "rect",
+          "id": "cta-pill",
+          "x": "CX - MIN * 0.2",
+          "y": "H - M_BTN - MIN * 0.09",
+          "width": "MIN * 0.4",
+          "height": "MIN * 0.09",
+          "rx": "MIN * 0.045",
+          "fill": "palette.ink",
+          "when": {
+            "slot": "cta"
+          }
+        },
+        {
+          "motif": "text_block",
+          "id": "cta",
+          "slot": "cta",
+          "x": "CX - MIN * 0.18",
+          "y": "H - M_BTN - MIN * 0.07",
+          "width": "MIN * 0.36",
+          "height": "MIN * 0.05",
+          "font_size": "MIN * 0.035",
+          "min_font_size": "MIN * 0.02",
+          "max_lines": 1,
+          "font": "builtin:thai",
+          "weight": "bold",
+          "align": "center",
+          "color": "palette.bg"
+        }
+      ]
+    }
+  ]
+}

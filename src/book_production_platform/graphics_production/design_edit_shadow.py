@@ -43,9 +43,9 @@ def _layer(controls: Mapping[str, Any], layer_id: str) -> Mapping[str, Any] | No
 def _check(check: Mapping[str, Any], before: Mapping[str, Any], after: Mapping[str, Any], content: Mapping[str, str]) -> bool:
     tolerance = float(check.get("tol", 2 if "delta" in check else 0.03))
     if "style" in check:
-        return after["style"] == check["style"]
+        return bool(after["style"] == check["style"])
     if "content" in check:
-        return content.get(check["content"]) == check["equals"]
+        return bool(content.get(check["content"]) == check["equals"])
     if "hidden" in check:
         layer = _layer(after, check["hidden"])
         return layer is not None and (not layer["visible"] or all(not item["visible"] for item in layer["items"]))

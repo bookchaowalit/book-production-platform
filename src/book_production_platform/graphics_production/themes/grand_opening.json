@@ -1,0 +1,346 @@
+{
+  "schema_version": "graphic-theme.v1",
+  "theme_id": "grand_opening",
+  "title": "Grand opening",
+  "description": "ประกาศเปิดร้าน/เปิดสาขา: ชื่อร้าน หัวข้อใหญ่ วัน เวลา สถานที่ และข้อเสนอวันเปิด พร้อมคอนเฟตตี",
+  "ir_version": "graphic-ir.v2",
+  "template_version": "1",
+  "variants": [
+    "square",
+    "portrait",
+    "story",
+    "landscape"
+  ],
+  "evidence": [
+    "grand opening",
+    "opening",
+    "now open",
+    "เปิดร้าน",
+    "เปิดใหม่",
+    "เปิดสาขา",
+    "เปิดตัว"
+  ],
+  "slots": {
+    "shop": {
+      "required": true,
+      "labels": [
+        "shop",
+        "shop name",
+        "brand",
+        "ชื่อร้าน",
+        "ร้าน"
+      ]
+    },
+    "headline": {
+      "required": true,
+      "labels": [
+        "headline",
+        "title",
+        "หัวข้อ"
+      ]
+    },
+    "date": {
+      "required": true,
+      "labels": [
+        "date",
+        "วันที่",
+        "วัน"
+      ]
+    },
+    "time": {
+      "required": false,
+      "labels": [
+        "time",
+        "เวลา"
+      ]
+    },
+    "location": {
+      "required": false,
+      "labels": [
+        "location",
+        "address",
+        "สถานที่",
+        "ที่อยู่"
+      ]
+    },
+    "offer": {
+      "required": false,
+      "labels": [
+        "offer",
+        "promotion",
+        "ข้อเสนอ",
+        "โปร"
+      ]
+    }
+  },
+  "styles": {
+    "night": {
+      "title": "Night party",
+      "palette": {
+        "bg_top": "#0B1026",
+        "bg_bottom": "#2A1B5C",
+        "ink": "#FFFFFF",
+        "gold": "#FFD166",
+        "pink": "#FF6FB5",
+        "teal": "#43E8D8"
+      }
+    },
+    "brand": {
+      "title": "Brand colours",
+      "palette": {
+        "bg_top": "brand.primary",
+        "bg_bottom": "brand.primary",
+        "gold": "brand.accent"
+      }
+    }
+  },
+  "palette": {
+    "bg_top": "#FFF4E0",
+    "bg_bottom": "#FFD9C2",
+    "ink": "#2A1A12",
+    "gold": "#E8A317",
+    "pink": "#F25F7A",
+    "teal": "#2BB3A3"
+  },
+  "paints": [
+    {
+      "paint_id": "bg",
+      "type": "linear",
+      "stops": [
+        {
+          "offset": 0,
+          "color": "palette.bg_top"
+        },
+        {
+          "offset": 1,
+          "color": "palette.bg_bottom"
+        }
+      ]
+    }
+  ],
+  "vars": {
+    "S": "MIN / 1080",
+    "M": "MIN * 0.08",
+    "HEAD": {
+      "by_variant": {
+        "landscape": "MIN * 0.15",
+        "default": "MIN * 0.16"
+      }
+    },
+    "HEAD_Y": {
+      "by_variant": {
+        "story": "H * 0.32",
+        "landscape": "H * 0.26",
+        "default": "H * 0.28"
+      }
+    }
+  },
+  "layers": [
+    {
+      "id": "Background",
+      "items": [
+        {
+          "motif": "rect",
+          "id": "bg",
+          "fill": "paint:bg"
+        },
+        {
+          "motif": "rays",
+          "id": "burst",
+          "cx": "CX",
+          "cy": "HEAD_Y + HEAD",
+          "count": 36,
+          "outer": "MAX",
+          "color": "palette.gold",
+          "opacity": 0.12
+        }
+      ]
+    },
+    {
+      "id": "Confetti",
+      "items": [
+        {
+          "motif": "starfield",
+          "id": "confetti-gold",
+          "count": "60 * W * H / 1166400",
+          "sizes": [
+            "4 * S",
+            "6 * S",
+            "8 * S"
+          ],
+          "sparkles": 4,
+          "sparkle_size": "18 * S",
+          "color": "palette.gold"
+        },
+        {
+          "motif": "starfield",
+          "id": "confetti-pink",
+          "count": "50 * W * H / 1166400",
+          "sizes": [
+            "3 * S",
+            "5 * S",
+            "7 * S"
+          ],
+          "sparkles": 2,
+          "sparkle_size": "14 * S",
+          "color": "palette.pink"
+        },
+        {
+          "motif": "starfield",
+          "id": "confetti-teal",
+          "count": "40 * W * H / 1166400",
+          "sizes": [
+            "3 * S",
+            "5 * S"
+          ],
+          "sparkles": 2,
+          "sparkle_size": "12 * S",
+          "color": "palette.teal"
+        }
+      ]
+    },
+    {
+      "id": "Title",
+      "items": [
+        {
+          "motif": "text_block",
+          "id": "shop",
+          "slot": "shop",
+          "x": "M",
+          "y": "HEAD_Y - MIN * 0.09",
+          "width": "W - 2 * M",
+          "height": "MIN * 0.07",
+          "font_size": "MIN * 0.045",
+          "min_font_size": "MIN * 0.026",
+          "max_lines": 1,
+          "font": "builtin:thai",
+          "weight": "bold",
+          "letter_spacing": "2 * S",
+          "align": "center",
+          "color": "palette.pink"
+        },
+        {
+          "motif": "display_text",
+          "id": "headline",
+          "slot": "headline",
+          "x": "M",
+          "y": "HEAD_Y",
+          "width": "W - 2 * M",
+          "height": "HEAD * 1.35",
+          "font_size": "HEAD",
+          "min_font_size": "HEAD * 0.45",
+          "max_lines": 1,
+          "font": "builtin:thai",
+          "weight": "bold",
+          "align": "center",
+          "color": "palette.ink",
+          "shadows": [
+            {
+              "dx": "6 * S",
+              "dy": "7 * S",
+              "color": "palette.gold",
+              "opacity": 0.9
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "Details",
+      "items": [
+        {
+          "motif": "rect",
+          "id": "info-card",
+          "x": "W * 0.12",
+          "y": "HEAD_Y + HEAD * 1.55",
+          "width": "W * 0.76",
+          "height": "MIN * 0.24",
+          "rx": "MIN * 0.03",
+          "fill": "#FFFFFF",
+          "opacity": 0.85
+        },
+        {
+          "motif": "text_block",
+          "id": "date",
+          "slot": "date",
+          "x": "W * 0.15",
+          "y": "HEAD_Y + HEAD * 1.55 + MIN * 0.025",
+          "width": "W * 0.7",
+          "height": "MIN * 0.06",
+          "font_size": "MIN * 0.045",
+          "min_font_size": "MIN * 0.026",
+          "max_lines": 1,
+          "font": "builtin:thai",
+          "weight": "bold",
+          "align": "center",
+          "color": "palette.ink"
+        },
+        {
+          "motif": "text_block",
+          "id": "time",
+          "slot": "time",
+          "x": "W * 0.15",
+          "y": "HEAD_Y + HEAD * 1.55 + MIN * 0.09",
+          "width": "W * 0.7",
+          "height": "MIN * 0.05",
+          "font_size": "MIN * 0.034",
+          "min_font_size": "MIN * 0.022",
+          "max_lines": 1,
+          "font": "builtin:thai",
+          "align": "center",
+          "color": "palette.ink"
+        },
+        {
+          "motif": "text_block",
+          "id": "location",
+          "slot": "location",
+          "x": "W * 0.15",
+          "y": "HEAD_Y + HEAD * 1.55 + MIN * 0.145",
+          "width": "W * 0.7",
+          "height": "MIN * 0.08",
+          "font_size": "MIN * 0.03",
+          "min_font_size": "MIN * 0.02",
+          "max_lines": 2,
+          "font": "builtin:thai",
+          "align": "center",
+          "color": "palette.ink",
+          "opacity": 0.8
+        }
+      ]
+    },
+    {
+      "id": "Offer",
+      "items": [
+        {
+          "motif": "rect",
+          "id": "offer-pill",
+          "x": "W * 0.2",
+          "y": "H - M - MIN * 0.1",
+          "width": "W * 0.6",
+          "height": "MIN * 0.09",
+          "rx": "MIN * 0.045",
+          "fill": "palette.pink",
+          "when": {
+            "slot": "offer"
+          }
+        },
+        {
+          "motif": "text_block",
+          "id": "offer",
+          "slot": "offer",
+          "x": "W * 0.22",
+          "y": "H - M - MIN * 0.08",
+          "width": "W * 0.56",
+          "height": "MIN * 0.05",
+          "font_size": "MIN * 0.034",
+          "min_font_size": "MIN * 0.02",
+          "max_lines": 1,
+          "font": "builtin:thai",
+          "weight": "bold",
+          "align": "center",
+          "color": "#FFFFFF"
+        }
+      ]
+    }
+  ]
+}

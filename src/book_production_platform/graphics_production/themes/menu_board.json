@@ -1,0 +1,497 @@
+{
+  "schema_version": "graphic-theme.v1",
+  "theme_id": "menu_board",
+  "title": "Menu board",
+  "description": "ป้ายเมนูร้านอาหาร/คาเฟ่: ชื่อร้าน หัวข้อ รายการ 3–5 รายการพร้อมราคา และหมายเหตุ",
+  "ir_version": "graphic-ir.v2",
+  "template_version": "1",
+  "variants": [
+    "square",
+    "portrait",
+    "story",
+    "landscape"
+  ],
+  "evidence": [
+    "menu",
+    "menu board",
+    "เมนู",
+    "ป้ายเมนู",
+    "รายการอาหาร",
+    "เมนูแนะนำ"
+  ],
+  "slots": {
+    "shop": {
+      "required": true,
+      "labels": [
+        "shop",
+        "shop name",
+        "brand",
+        "ชื่อร้าน",
+        "ร้าน"
+      ]
+    },
+    "title": {
+      "required": true,
+      "labels": [
+        "title",
+        "headline",
+        "หัวข้อ"
+      ]
+    },
+    "item1": {
+      "required": true,
+      "labels": [
+        "item 1",
+        "รายการ 1",
+        "เมนู 1"
+      ]
+    },
+    "item2": {
+      "required": true,
+      "labels": [
+        "item 2",
+        "รายการ 2",
+        "เมนู 2"
+      ]
+    },
+    "item3": {
+      "required": true,
+      "labels": [
+        "item 3",
+        "รายการ 3",
+        "เมนู 3"
+      ]
+    },
+    "item4": {
+      "required": false,
+      "labels": [
+        "item 4",
+        "รายการ 4",
+        "เมนู 4"
+      ]
+    },
+    "item5": {
+      "required": false,
+      "labels": [
+        "item 5",
+        "รายการ 5",
+        "เมนู 5"
+      ]
+    },
+    "price1": {
+      "required": true,
+      "labels": [
+        "price 1",
+        "ราคา 1"
+      ]
+    },
+    "price2": {
+      "required": true,
+      "labels": [
+        "price 2",
+        "ราคา 2"
+      ]
+    },
+    "price3": {
+      "required": true,
+      "labels": [
+        "price 3",
+        "ราคา 3"
+      ]
+    },
+    "price4": {
+      "required": false,
+      "labels": [
+        "price 4",
+        "ราคา 4"
+      ]
+    },
+    "price5": {
+      "required": false,
+      "labels": [
+        "price 5",
+        "ราคา 5"
+      ]
+    },
+    "note": {
+      "required": false,
+      "labels": [
+        "note",
+        "footer",
+        "หมายเหตุ",
+        "ท้ายภาพ"
+      ]
+    }
+  },
+  "styles": {
+    "night": {
+      "title": "Night chalk",
+      "palette": {
+        "paper": "#1F2421",
+        "ink": "#F4EFE6",
+        "accent": "#F2B544",
+        "rule": "#5C6B60",
+        "band": "#2E3631"
+      }
+    },
+    "matcha": {
+      "title": "Matcha",
+      "palette": {
+        "paper": "#EEF2E6",
+        "ink": "#2F3E2A",
+        "accent": "#6B8F3B",
+        "rule": "#A9BC8F",
+        "band": "#D8E3C5"
+      }
+    }
+  },
+  "palette": {
+    "paper": "#F7F1E6",
+    "ink": "#2B2118",
+    "accent": "brand.accent",
+    "rule": "#CDB89A",
+    "band": "#EADBC3"
+  },
+  "vars": {
+    "S": "MIN / 1080",
+    "M": "MIN * 0.08",
+    "LIST_Y": {
+      "by_variant": {
+        "landscape": "H * 0.36",
+        "story": "H * 0.3",
+        "default": "H * 0.34"
+      }
+    },
+    "ROW": {
+      "by_variant": {
+        "landscape": "H * 0.105",
+        "story": "H * 0.085",
+        "default": "H * 0.098"
+      }
+    }
+  },
+  "layers": [
+    {
+      "id": "Background",
+      "items": [
+        {
+          "motif": "rect",
+          "id": "paper",
+          "fill": "palette.paper"
+        },
+        {
+          "motif": "grain",
+          "id": "paper-grain",
+          "count": "1200 * W * H / 1166400",
+          "size": "1.3 * S",
+          "color": "palette.ink",
+          "opacity": 0.05
+        },
+        {
+          "motif": "rect",
+          "id": "band",
+          "y": "0",
+          "height": "LIST_Y - MIN * 0.06",
+          "fill": "palette.band"
+        },
+        {
+          "motif": "rings",
+          "id": "rings",
+          "cx": "W - M",
+          "cy": "M",
+          "radius": "MIN * 0.06",
+          "step": "MIN * 0.03",
+          "count": 5,
+          "stroke": "palette.accent",
+          "stroke_width": "3 * S",
+          "opacity": 0.35
+        }
+      ]
+    },
+    {
+      "id": "Header",
+      "items": [
+        {
+          "motif": "text_block",
+          "id": "shop",
+          "slot": "shop",
+          "x": "M",
+          "y": "M",
+          "width": "W - 2 * M",
+          "height": "MIN * 0.06",
+          "font_size": "MIN * 0.034",
+          "min_font_size": "MIN * 0.022",
+          "max_lines": 1,
+          "font": "builtin:mono",
+          "letter_spacing": "4 * S",
+          "color": "palette.accent"
+        },
+        {
+          "motif": "text_block",
+          "id": "title",
+          "slot": "title",
+          "x": "M",
+          "y": "M + MIN * 0.07",
+          "width": "W - 2 * M",
+          "height": "LIST_Y - M - MIN * 0.16",
+          "font_size": "MIN * 0.1",
+          "min_font_size": "MIN * 0.05",
+          "max_lines": 1,
+          "font": "builtin:thai",
+          "weight": "bold",
+          "color": "palette.ink"
+        }
+      ]
+    },
+    {
+      "id": "Menu",
+      "items": [
+        {
+          "motif": "text_block",
+          "id": "item1",
+          "slot": "item1",
+          "x": "M",
+          "y": "LIST_Y + 0 * ROW",
+          "width": "W * 0.6",
+          "height": "ROW * 0.8",
+          "font_size": "MIN * 0.045",
+          "min_font_size": "MIN * 0.028",
+          "max_lines": 1,
+          "font": "builtin:thai",
+          "weight": "bold",
+          "color": "palette.ink"
+        },
+        {
+          "motif": "text_block",
+          "id": "price1",
+          "slot": "price1",
+          "x": "W * 0.62",
+          "y": "LIST_Y + 0 * ROW",
+          "width": "W * 0.38 - M",
+          "height": "ROW * 0.8",
+          "font_size": "MIN * 0.045",
+          "min_font_size": "MIN * 0.028",
+          "max_lines": 1,
+          "font": "builtin:thai",
+          "weight": "bold",
+          "align": "right",
+          "color": "palette.accent"
+        },
+        {
+          "motif": "line",
+          "id": "rule1",
+          "x1": "M",
+          "y1": "LIST_Y + 0 * ROW + ROW * 0.86",
+          "x2": "W - M",
+          "y2": "LIST_Y + 0 * ROW + ROW * 0.86",
+          "stroke": "palette.rule",
+          "stroke_width": "2 * S",
+          "opacity": 0.6,
+          "when": {
+            "slot": "item1"
+          }
+        },
+        {
+          "motif": "text_block",
+          "id": "item2",
+          "slot": "item2",
+          "x": "M",
+          "y": "LIST_Y + 1 * ROW",
+          "width": "W * 0.6",
+          "height": "ROW * 0.8",
+          "font_size": "MIN * 0.045",
+          "min_font_size": "MIN * 0.028",
+          "max_lines": 1,
+          "font": "builtin:thai",
+          "weight": "bold",
+          "color": "palette.ink"
+        },
+        {
+          "motif": "text_block",
+          "id": "price2",
+          "slot": "price2",
+          "x": "W * 0.62",
+          "y": "LIST_Y + 1 * ROW",
+          "width": "W * 0.38 - M",
+          "height": "ROW * 0.8",
+          "font_size": "MIN * 0.045",
+          "min_font_size": "MIN * 0.028",
+          "max_lines": 1,
+          "font": "builtin:thai",
+          "weight": "bold",
+          "align": "right",
+          "color": "palette.accent"
+        },
+        {
+          "motif": "line",
+          "id": "rule2",
+          "x1": "M",
+          "y1": "LIST_Y + 1 * ROW + ROW * 0.86",
+          "x2": "W - M",
+          "y2": "LIST_Y + 1 * ROW + ROW * 0.86",
+          "stroke": "palette.rule",
+          "stroke_width": "2 * S",
+          "opacity": 0.6,
+          "when": {
+            "slot": "item2"
+          }
+        },
+        {
+          "motif": "text_block",
+          "id": "item3",
+          "slot": "item3",
+          "x": "M",
+          "y": "LIST_Y + 2 * ROW",
+          "width": "W * 0.6",
+          "height": "ROW * 0.8",
+          "font_size": "MIN * 0.045",
+          "min_font_size": "MIN * 0.028",
+          "max_lines": 1,
+          "font": "builtin:thai",
+          "weight": "bold",
+          "color": "palette.ink"
+        },
+        {
+          "motif": "text_block",
+          "id": "price3",
+          "slot": "price3",
+          "x": "W * 0.62",
+          "y": "LIST_Y + 2 * ROW",
+          "width": "W * 0.38 - M",
+          "height": "ROW * 0.8",
+          "font_size": "MIN * 0.045",
+          "min_font_size": "MIN * 0.028",
+          "max_lines": 1,
+          "font": "builtin:thai",
+          "weight": "bold",
+          "align": "right",
+          "color": "palette.accent"
+        },
+        {
+          "motif": "line",
+          "id": "rule3",
+          "x1": "M",
+          "y1": "LIST_Y + 2 * ROW + ROW * 0.86",
+          "x2": "W - M",
+          "y2": "LIST_Y + 2 * ROW + ROW * 0.86",
+          "stroke": "palette.rule",
+          "stroke_width": "2 * S",
+          "opacity": 0.6,
+          "when": {
+            "slot": "item3"
+          }
+        },
+        {
+          "motif": "text_block",
+          "id": "item4",
+          "slot": "item4",
+          "x": "M",
+          "y": "LIST_Y + 3 * ROW",
+          "width": "W * 0.6",
+          "height": "ROW * 0.8",
+          "font_size": "MIN * 0.045",
+          "min_font_size": "MIN * 0.028",
+          "max_lines": 1,
+          "font": "builtin:thai",
+          "weight": "bold",
+          "color": "palette.ink"
+        },
+        {
+          "motif": "text_block",
+          "id": "price4",
+          "slot": "price4",
+          "x": "W * 0.62",
+          "y": "LIST_Y + 3 * ROW",
+          "width": "W * 0.38 - M",
+          "height": "ROW * 0.8",
+          "font_size": "MIN * 0.045",
+          "min_font_size": "MIN * 0.028",
+          "max_lines": 1,
+          "font": "builtin:thai",
+          "weight": "bold",
+          "align": "right",
+          "color": "palette.accent"
+        },
+        {
+          "motif": "line",
+          "id": "rule4",
+          "x1": "M",
+          "y1": "LIST_Y + 3 * ROW + ROW * 0.86",
+          "x2": "W - M",
+          "y2": "LIST_Y + 3 * ROW + ROW * 0.86",
+          "stroke": "palette.rule",
+          "stroke_width": "2 * S",
+          "opacity": 0.6,
+          "when": {
+            "slot": "item4"
+          }
+        },
+        {
+          "motif": "text_block",
+          "id": "item5",
+          "slot": "item5",
+          "x": "M",
+          "y": "LIST_Y + 4 * ROW",
+          "width": "W * 0.6",
+          "height": "ROW * 0.8",
+          "font_size": "MIN * 0.045",
+          "min_font_size": "MIN * 0.028",
+          "max_lines": 1,
+          "font": "builtin:thai",
+          "weight": "bold",
+          "color": "palette.ink"
+        },
+        {
+          "motif": "text_block",
+          "id": "price5",
+          "slot": "price5",
+          "x": "W * 0.62",
+          "y": "LIST_Y + 4 * ROW",
+          "width": "W * 0.38 - M",
+          "height": "ROW * 0.8",
+          "font_size": "MIN * 0.045",
+          "min_font_size": "MIN * 0.028",
+          "max_lines": 1,
+          "font": "builtin:thai",
+          "weight": "bold",
+          "align": "right",
+          "color": "palette.accent"
+        },
+        {
+          "motif": "line",
+          "id": "rule5",
+          "x1": "M",
+          "y1": "LIST_Y + 4 * ROW + ROW * 0.86",
+          "x2": "W - M",
+          "y2": "LIST_Y + 4 * ROW + ROW * 0.86",
+          "stroke": "palette.rule",
+          "stroke_width": "2 * S",
+          "opacity": 0.6,
+          "when": {
+            "slot": "item5"
+          }
+        }
+      ]
+    },
+    {
+      "id": "Footer",
+      "items": [
+        {
+          "motif": "text_block",
+          "id": "note",
+          "slot": "note",
+          "x": "M",
+          "y": "H - M - MIN * 0.04",
+          "width": "W - 2 * M",
+          "height": "MIN * 0.045",
+          "font_size": "MIN * 0.026",
+          "min_font_size": "MIN * 0.018",
+          "max_lines": 1,
+          "font": "builtin:thai",
+          "color": "palette.ink",
+          "opacity": 0.75
+        }
+      ]
+    }
+  ]
+}

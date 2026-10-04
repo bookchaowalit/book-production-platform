@@ -78,3 +78,18 @@ def test_hard_split_never_starts_a_line_with_a_following_vowel_or_mai_yamok(widt
     assert _chars(lines) == text
     for line in lines:
         assert line[0] not in THAI_FOLLOWING | THAI_COMBINING
+
+
+def test_long_thai_phrase_breaks_between_words_when_the_tokenizer_is_installed() -> None:
+    pytest.importorskip("pythainlp")
+    lines = wrap_text("ถึงเวลาฉีดวัคซีนประจำปีแล้ว", 16 * 0.55 * 16, 16)
+    assert "".join(lines) == "ถึงเวลาฉีดวัคซีนประจำปีแล้ว"
+    assert lines[0] == "ถึงเวลาฉีดวัคซีน" and lines[1].startswith("ประจำปี")
+
+
+def test_thai_wrap_falls_back_to_clusters_without_the_tokenizer(monkeypatch: pytest.MonkeyPatch) -> None:
+    from book_production_platform.graphics_production import layout as layout_module
+
+    monkeypatch.setattr(layout_module, "_thai_tokenizer", lambda: None)
+    lines = layout_module.wrap_text("ถึงเวลาฉีดวัคซีนประจำปีแล้ว", 16 * 0.55 * 16, 16)
+    assert "".join(lines) == "ถึงเวลาฉีดวัคซีนประจำปีแล้ว" and all(lines)

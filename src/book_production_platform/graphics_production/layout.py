@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import re
+from collections.abc import Callable
 from dataclasses import dataclass
+from functools import lru_cache
 
 
 class LayoutError(ValueError):
@@ -91,11 +94,71 @@ def _hard_split(word: str, max_chars: int) -> list[str]:
     return pieces
 
 
+_THAI_CHAR = re.compile("[\u0e00-\u0e7f]")
+
+
+@lru_cache(maxsize=1)
+def _thai_tokenizer() -> Callable[[str], list[str]] | None:
+    """PyThaiNLP ``newmm`` (dictionary-based, no model download) when installed; optional."""
+
+    try:
+        from pythainlp.tokenize import (
+            word_tokenize,  # type: ignore[import-not-found,import-untyped,unused-ignore]
+        )
+    except ImportError:
+        return None
+
+    def tokenize(word: str) -> list[str]:
+        return [token for token in word_tokenize(word, engine="newmm", keep_whitespace=False) if token]
+
+    return tokenize
+
+
+def _split_long_word(word: str, max_chars: int) -> list[str]:
+    """Split a word longer than a line, at Thai word boundaries when possible.
+
+    Thai is written without spaces, so a long phrase is one "word" here. With the
+    optional Thai tokenizer the pieces break between words (ถึงเวลาฉีดวัคซีน | ประจำปีแล้ว);
+    otherwise, or for a single over-long token, between character clusters.
+    """
+
+    tokenize = _thai_tokenizer() if _THAI_CHAR.search(word) else None
+    if tokenize is None:
+        return _hard_split(word, max_chars)
+    tokens = tokenize(word)
+    if "".join(tokens) != word:
+        return _hard_split(word, max_chars)
+    # Keep the cluster rules: a token may not start with a combining or following
+    # mark, and a leading vowel stays with the token after it.
+    merged: list[str] = []
+    for token in tokens:
+        if merged and (token[0] in _THAI_COMBINING or token[0] in _THAI_FOLLOWING or merged[-1][-1] in _THAI_LEADING):
+            merged[-1] += token
+        else:
+            merged.append(token)
+    tokens = merged
+    pieces: list[str] = []
+    current = ""
+    for token in tokens:
+        if current and visible_length(current + token) > max_chars:
+            pieces.append(current)
+            current = ""
+        if visible_length(token) > max_chars:
+            *full, current = _hard_split(current + token, max_chars)
+            pieces.extend(full)
+            continue
+        current += token
+    if current:
+        pieces.append(current)
+    return pieces
+
+
 def wrap_text(text: str, width: float, font_size: float) -> tuple[str, ...]:
     """Wrap by a conservative width estimate, preferring spaces and never splitting a Thai cluster.
 
-    Lines break at whitespace first; a word longer than one line is split between
-    character clusters so a vowel, tone mark or mai yamok never starts a line. Every
+    Lines break at whitespace first; a word longer than one line is split at Thai
+    word boundaries when the optional PyThaiNLP tokenizer is installed, else between
+    character clusters, so a vowel, tone mark or mai yamok never starts a line. Every
     non-space character of the input is kept in order.
     """
 
@@ -118,7 +181,7 @@ def wrap_text(text: str, width: float, font_size: float) -> tuple[str, ...]:
             if visible_length(word) <= max_chars:
                 current = word
             else:
-                *full, current = _hard_split(word, max_chars)
+                *full, current = _split_long_word(word, max_chars)
                 lines.extend(full)
         lines.append(current)
     return tuple(lines)

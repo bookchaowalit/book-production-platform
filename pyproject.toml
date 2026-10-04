@@ -14,6 +14,8 @@ dependencies = ["fastapi>=0.115,<1", "pydantic>=2.13,<3", "Pillow>=12,<13", "xls
 test = ["httpx>=0.27,<1", "mypy>=1.13,<2", "pytest>=9,<10", "ruff>=0.8,<1"]
 # Local PNG previews without a browser (Graphics); optional.
 preview = ["resvg-py>=0.2,<1"]
+# Thai word-boundary line breaks in Graphics (PyThaiNLP newmm; no model download).
+thai = ["pythainlp>=5.1,<6"]
 
 [project.scripts]
 book-production = "book_production_platform.cli:main"
