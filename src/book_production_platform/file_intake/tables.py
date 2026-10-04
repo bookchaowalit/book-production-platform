@@ -26,6 +26,7 @@ MAX_UNCOMPRESSED_BYTES = 100 * 1024 * 1024
 MAX_ROWS = 100_000
 MAX_COLUMNS = 200
 MAX_CELL_CHARS = 32_767
+MAX_CELLS = 2_000_000  # rows x columns of the materialized sheet
 CSV_ENCODINGS = ("utf-8-sig", "cp874")
 
 _MAIN = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
@@ -323,12 +324,17 @@ def _read_xlsx(file: Path, sheet: str | None) -> Table:
         raise TableReadError("table_empty", "the sheet is empty")
     last_row = max(grid)
     last_column = max(column for cells in grid.values() for column in cells)
+    # Check the extent before building a dense grid: a sparse sheet (A1 plus one far cell)
+    # must be refused, not expanded into millions of empty cells.
+    if last_column + 1 > MAX_COLUMNS or last_row > MAX_ROWS or (last_row + 1) * (last_column + 1) > MAX_CELLS:
+        raise TableReadError("table_too_large", "the sheet is larger than the table limits")
     raw_rows = [[grid.get(r, {}).get(c, "") for c in range(last_column + 1)] for r in range(last_row + 1)]
     table.notes = sorted(set(table.notes))
     return _shape(raw_rows, table)
 
 
 __all__ = [
+    "MAX_CELLS",
     "MAX_COLUMNS",
     "MAX_ROWS",
     "MAX_TABLE_FILE_BYTES",

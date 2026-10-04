@@ -106,6 +106,7 @@ def test_edits_accumulate_on_the_previous_result() -> None:
         (change(items={"Sun/sun": {"params": {"motif": "rect"}}}), "rejected", "design_param_not_editable"),
         (change(palette={"pink": "red"}), "rejected", "design_invalid"),
         (change(style="unknown_style"), "rejected", "design_style_unknown"),
+        (change(content={"button": "Change"}), "rejected", "slot_unknown"),
         (change(layers={"Title": {"dy": 3000}}), "needs_input", "out_of_canvas"),
         (change(unsupported=["add a unicorn"]), "needs_input", "unsupported_request"),
         (change(missing=["which part"]), "needs_input", "instruction_unclear"),

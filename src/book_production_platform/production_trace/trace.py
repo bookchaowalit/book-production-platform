@@ -26,13 +26,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from .ai_manual import MANUAL_FACTS_FILENAME
 from .guide import ManualGuide, render_manual_markdown
 
 TRACE_SCHEMA = "production-trace.v1"
 HISTORY_FILENAME = "history.jsonl"
 TRACE_FILENAME = "trace.json"
 MANUAL_FILENAME = "MANUAL-STEPS.md"
-MANUAL_FACTS_FILENAME = "manual-facts.json"
 _MAX_PARAM_TEXT = 300
 
 
@@ -210,14 +210,17 @@ class TraceRecorder:
                 "layers": [asdict(layer) for layer in guide.layers], "steps": [asdict(step) for step in guide.steps],
                 "checks": list(guide.checks),
             }, ensure_ascii=False, indent=2) + "\n")
-            # Optional, job-specific guide written by AI (only with a live config; never fails the job).
-            from .ai_manual import maybe_write_ai_manual
-
-            ai_manual = maybe_write_ai_manual(guide, tool_id=self.tool_id, job_id=self.job_id, job_dir=directory, trace=trace)
-            if ai_manual is not None:
-                trace["ai_manual"] = ai_manual
         _atomic_write(directory / TRACE_FILENAME, json.dumps(trace, ensure_ascii=False, indent=2) + "\n")
         append_history(output_root, trace, trace_path=directory / TRACE_FILENAME)
+        if guide is not None:
+            # Optional, job-specific guide written by AI. It starts only after the job is fully
+            # recorded and runs in the background, so no job, CLI, or caller waits for it;
+            # its outcome is ai-manual.json (trace.json is never rewritten).
+            from .ai_manual import schedule_ai_manual
+
+            ai_manual = schedule_ai_manual(guide, tool_id=self.tool_id, job_id=self.job_id, job_dir=directory)
+            if ai_manual is not None:
+                trace["ai_manual"] = ai_manual
         return trace
 
 

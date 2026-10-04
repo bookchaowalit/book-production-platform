@@ -28,15 +28,21 @@ import importlib
 import json
 import os
 import re
+import subprocess
+import sys
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
-from .guide import ManualGuide
+from .guide import GuideLayer, GuideStep, ManualGuide
 
 AI_MANUAL_FILENAME = "MANUAL-AI.md"
+AI_MANUAL_STATUS_FILENAME = "ai-manual.json"
+MANUAL_FACTS_FILENAME = "manual-facts.json"
+INLINE_ENV = "PRODUCTION_AI_MANUAL_INLINE"
+TESTS_ENV = "PRODUCTION_AI_MANUAL_IN_TESTS"  # opt-in for this package's own tests
 AI_MANUAL_SCHEMA = "production-ai-manual.v1"
 CONFIG_ENV = "PRODUCTION_AI_MANUAL_CONFIG"
 BUDGET_ENV = "PRODUCTION_AI_MANUAL_BUDGET_ROOT"
@@ -366,50 +372,123 @@ def program_for(tool_id: str, default: str) -> str:
     return str(value) if isinstance(value, str) and value.strip() else default
 
 
-def maybe_write_ai_manual(
-    guide: ManualGuide,
-    *,
-    tool_id: str,
-    job_id: str,
-    job_dir: Path,
-    trace: Mapping[str, Any],
-) -> dict[str, Any] | None:
-    """Write ``MANUAL-AI.md`` when a live AI-manual config is set; never raises."""
+def _write_atomic(path: Path, text: str) -> None:
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    temporary.write_text(text, encoding="utf-8")
+    os.replace(temporary, path)
+
+
+def _record(job_dir: Path, metadata: Mapping[str, Any]) -> None:
+    _write_atomic(job_dir / AI_MANUAL_STATUS_FILENAME, json.dumps(dict(metadata), ensure_ascii=False, indent=2) + "\n")
+
+
+def _skipped(program: str, issue: str) -> dict[str, Any]:
+    return {"schema_version": AI_MANUAL_SCHEMA, "status": "skipped", "issue": issue, "program": program}
+
+
+def write_ai_manual_now(job_dir: Path, *, tool_id: str, job_id: str, program: str, raw_config: Mapping[str, Any]) -> dict[str, Any]:
+    """Write ``MANUAL-AI.md`` + ``ai-manual.json`` for a finished job from its saved facts; never raises."""
+
+    try:
+        facts_raw = json.loads((job_dir / MANUAL_FACTS_FILENAME).read_text(encoding="utf-8"))
+        trace_path = job_dir / "trace.json"
+        trace = json.loads(trace_path.read_text(encoding="utf-8")) if trace_path.is_file() else None
+        guide = ManualGuide(
+            program=facts_raw["program"], title=facts_raw.get("title", ""), summary=facts_raw.get("summary", ""),
+            layers=[GuideLayer(**layer) for layer in facts_raw.get("layers", [])],
+            steps=[GuideStep(**step) for step in facts_raw.get("steps", [])], checks=list(facts_raw.get("checks", [])),
+        )
+        writer = AIManualWriter(raw_config, ledger_root=os.environ.get(BUDGET_ENV, DEFAULT_BUDGET_ROOT))
+        result = writer.write(guide_facts(guide, tool_id=tool_id, trace=trace), program=program, job_id=f"manual-{tool_id}-{job_id}")
+        if result.markdown:
+            _write_atomic(job_dir / AI_MANUAL_FILENAME, result.markdown)
+        metadata = result.metadata()
+    except Exception as exc:  # noqa: BLE001 - the AI guide is optional; a job never fails because of it
+        metadata = _skipped(program, type(exc).__name__)
+    try:
+        _record(job_dir, metadata)
+    except OSError:
+        pass
+    return metadata
+
+
+def schedule_ai_manual(guide: ManualGuide, *, tool_id: str, job_id: str, job_dir: Path) -> dict[str, Any] | None:
+    """Start the AI guide for a finished job without making the job wait; never raises.
+
+    Runs in a detached background process (the job, its CLI, and any caller with a
+    timeout return at once). ``PRODUCTION_AI_MANUAL_INLINE=1`` runs it in-process
+    instead (tests, the ``explain`` command). The outcome lands in ``ai-manual.json``.
+    """
 
     config_path = os.environ.get(CONFIG_ENV, "").strip()
     if not config_path:
         return None
+    if os.environ.get("PYTEST_CURRENT_TEST") and os.environ.get(TESTS_ENV) != "1":
+        # A live config in the developer's shell must never turn test jobs into paid model calls.
+        return None
     program = program_for(tool_id, guide.program)
     try:
         raw = json.loads(Path(config_path).read_text(encoding="utf-8"))
-        if not isinstance(raw, dict) or raw.get("mode") != "live":
-            # Shadow (or unset) mode: nothing is written and no ledger is touched.
-            return {"schema_version": AI_MANUAL_SCHEMA, "status": "skipped", "issue": "shadow_mode_only", "program": program}
-        writer = AIManualWriter(raw, ledger_root=os.environ.get(BUDGET_ENV, DEFAULT_BUDGET_ROOT))
-        result = writer.write(guide_facts(guide, tool_id=tool_id, trace=trace), program=program, job_id=f"manual-{tool_id}-{job_id}")
-    except Exception as exc:  # noqa: BLE001 - the AI guide is optional; a job never fails because of it
-        return {"schema_version": AI_MANUAL_SCHEMA, "status": "skipped", "issue": type(exc).__name__, "program": program}
-    if result.markdown:
-        path = job_dir / AI_MANUAL_FILENAME
-        temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-        temporary.write_text(result.markdown, encoding="utf-8")
-        os.replace(temporary, path)
-    return result.metadata()
+    except (OSError, json.JSONDecodeError) as exc:
+        return _skipped(program, type(exc).__name__)
+    if not isinstance(raw, dict) or raw.get("mode") != "live":
+        # Shadow (or unset) mode: nothing is written and no ledger is touched.
+        return _skipped(program, "shadow_mode_only")
+    if os.environ.get(INLINE_ENV) == "1":
+        return write_ai_manual_now(job_dir, tool_id=tool_id, job_id=job_id, program=program, raw_config=raw)
+    queued = {"schema_version": AI_MANUAL_SCHEMA, "status": "queued", "program": program, "file": AI_MANUAL_STATUS_FILENAME}
+    try:
+        _record(job_dir, queued)
+        environment = {**os.environ, "PYTHONPATH": os.pathsep.join(path for path in sys.path if path)}
+        options: dict[str, Any] = {"start_new_session": True} if os.name != "nt" else {"creationflags": 0x00000008 | 0x00000200}
+        subprocess.Popen(
+            [sys.executable, "-m", __name__, "--job-dir", str(job_dir), "--tool-id", tool_id, "--job-id", job_id, "--program", program],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=environment,
+            close_fds=True, **options,
+        )
+    except OSError as exc:
+        return _skipped(program, type(exc).__name__)
+    return queued
+
+
+def _main(argv: list[str] | None = None) -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(prog="production_trace.ai_manual")
+    parser.add_argument("--job-dir", required=True)
+    parser.add_argument("--tool-id", required=True)
+    parser.add_argument("--job-id", required=True)
+    parser.add_argument("--program", required=True)
+    args = parser.parse_args(argv)
+    try:
+        raw = json.loads(Path(os.environ[CONFIG_ENV]).read_text(encoding="utf-8"))
+    except (KeyError, OSError, json.JSONDecodeError):
+        return 2
+    metadata = write_ai_manual_now(Path(args.job_dir), tool_id=args.tool_id, job_id=args.job_id, program=args.program, raw_config=raw)
+    return 0 if metadata.get("status") in ("complete", "complete_with_warnings") else 1
 
 
 __all__ = [
     "AI_MANUAL_FILENAME",
     "AI_MANUAL_SCHEMA",
+    "AI_MANUAL_STATUS_FILENAME",
     "BUDGET_ENV",
     "CONFIG_ENV",
+    "INLINE_ENV",
     "PROGRAMS_ENV",
+    "TESTS_ENV",
     "AIManualResult",
     "AIManualWriter",
     "check_answer",
     "fact_values",
     "guide_facts",
     "kit_module",
-    "maybe_write_ai_manual",
     "program_for",
     "render_ai_manual",
+    "schedule_ai_manual",
+    "write_ai_manual_now",
 ]
+
+
+if __name__ == "__main__":
+    raise SystemExit(_main())

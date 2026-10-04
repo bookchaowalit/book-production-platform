@@ -44,6 +44,7 @@ from book_production_platform.graphics_ir import (
 from .layout import LayoutError
 from .provider_config import ProviderConfig, ProviderConfigError, parse_provider_config
 from .templates import TemplateError, compile_template, controls_for
+from .themes import ThemeError, get_theme
 
 EDIT_ADAPTER_VERSION = "graphics-design-edit.v1"
 MAX_INSTRUCTION_CHARS = 1_500
@@ -202,6 +203,16 @@ def apply_change(
         return DesignEditResult("rejected", issues=[_issue("request_invalid", "request", "the base request is not a valid graphic request")])
 
     content_change = {str(slot): str(text) for slot, text in (change.get("content") or {}).items()}
+    try:
+        theme_slots = set(get_theme(base.template_id).slots)
+    except ThemeError:
+        return DesignEditResult("rejected", issues=[_issue("template_unknown", "request.template_id", "the request names no registered theme")])
+    unknown_slots = sorted(set(content_change) - theme_slots)
+    if unknown_slots:
+        return DesignEditResult(
+            "rejected",
+            issues=[_issue("slot_unknown", f"content.{slot}", "the theme has no text slot with this name") for slot in unknown_slots],
+        )
     issues: list[dict[str, str]] = []
     for slot, text in content_change.items():
         cleaned = text.strip().strip(_QUOTES).strip()
