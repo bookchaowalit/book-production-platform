@@ -119,7 +119,7 @@ def test_invalid_configuration_fails_closed(tmp_path: Path, bad: dict[str, Any])
 
 def test_config_defaults_and_loopback_rule() -> None:
     parsed = parse_provider_config(config(gateway_url="http://localhost:8787"))
-    assert (parsed.tool_id, parsed.route, parsed.prompt_version) == ("data-pipeline-v1a", "data-pipeline.question", "data-pipeline-question.v1")
+    assert (parsed.tool_id, parsed.route, parsed.prompt_version) == ("data-pipeline-v1a", "data-pipeline.question", "data-pipeline-question.v2")
     assert parse_provider_config({k: v for k, v in config().items() if k != "mode"}).mode == "shadow"
     with pytest.raises(ProviderConfigError):
         parse_provider_config(config(gateway_url="http://192.168.1.10"))

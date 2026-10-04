@@ -408,12 +408,16 @@ def test_registered_look_named_in_the_brief_is_kept() -> None:
 
 
 def test_prompt_shares_the_engine_evidence_vocabulary() -> None:
-    from book_production_platform.scene3d.provider import COMPOSITION_EVIDENCE, RENDER_EVIDENCE, SYSTEM_PROMPT
+    from book_production_platform.scene3d.provider import (
+        COMPOSITION_EVIDENCE,
+        RENDER_EVIDENCE,
+        SYSTEM_PROMPT,
+    )
 
     for words in (*COMPOSITION_EVIDENCE.values(), *RENDER_EVIDENCE.values()):
         for word in words:
             assert word in SYSTEM_PROMPT
-    assert parse_provider_config({key: value for key, value in config().items() if key != "mode"}).prompt_version == "scene3d-brief.v2"
+    assert parse_provider_config({key: value for key, value in config().items() if key != "mode"}).prompt_version == "scene3d-brief.v3"
 
 
 # --- CLI -----------------------------------------------------------------------------------

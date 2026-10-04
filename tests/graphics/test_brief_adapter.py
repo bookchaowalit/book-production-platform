@@ -25,7 +25,6 @@ from book_production_platform.graphics_production.provider import (
     ProviderNotConfigured,
     build_request,
     ground_proposal,
-    overflow_repair_prompt,
     proposal_overflows,
     validate_structured,
 )
@@ -209,6 +208,16 @@ def test_inferred_text_and_unstated_variant_need_input() -> None:
     assert "items[0].variant" in result.missing
 
 
+def test_evidenced_variant_counts_even_when_the_model_flags_it_inferred() -> None:
+    # Live shadow 2026-10-04: a Thai brief said "จัตุรัส" and the model listed variant as inferred.
+    brief = "การ์ดสินค้าจัตุรัส ชื่อ: ร่มพับทดลอง ราคา: ฿199\nref: CANARY-gfx-unit"
+    reply = {"items": [{"template_id": "product_card", "variant": "square", "content": {"title": "ร่มพับทดลอง", "price": "฿199"},
+                        "provided": ["title", "price"], "inferred": ["variant"], "missing": []}], "missing": []}
+    assert ground_proposal(reply, brief).status == "complete"
+    unstated = "การ์ดสินค้า ชื่อ: ร่มพับทดลอง ราคา: ฿199"
+    assert ground_proposal(reply, unstated).status == "needs_input"
+
+
 def test_variant_evidence_needs_word_boundaries() -> None:
     brief = 'Quote card about history. Quote: "Keep going." Author: Sample'
     reply = {"items": [{"template_id": "quote_card", "variant": "story", "content": {"quote": "Keep going.", "author": "Sample"}}]}
@@ -304,37 +313,22 @@ def test_at_most_two_calls_per_job(tmp_path: Path) -> None:
 # --- overflow (REQ-GFX-02) -----------------------------------------------------------------
 
 
-def test_overflow_triggers_one_shorten_request(tmp_path: Path) -> None:
-    shortened = announcement("Register today", shortened=["cta"])
-    transport = ScriptedTransport(announcement(LONG_CTA), shortened)
-    result = adapter(tmp_path, transport).propose(OVERFLOW_BRIEF, job_id="job-shorten")
-
-    assert result.status == "complete", result.issues
-    assert result.model_calls == 2
-    assert result.shorten_requested is True
-    repair = transport.payloads[1]["messages"][-1]["content"]
-    assert repair != REPAIR_PROMPT
-    assert f"items[0].content.cta is {len(LONG_CTA)} characters" in repair
-    assert "at most 2 line(s) of about 29 characters (at most 58 characters)" in repair
-    assert result.batch is not None and result.batch["items"][0]["content"]["cta"] == "Register today"
-
-
-def test_overflow_that_persists_is_caught_not_passed(tmp_path: Path) -> None:
-    transport = ScriptedTransport(announcement(LONG_CTA), announcement(LONG_CTA))
+def test_overflow_returns_to_the_person_without_a_shorten_call(tmp_path: Path) -> None:
+    # REQ-GFX-02 (2026-10-04): the model never shortens client copy; one call, then the person shortens it.
+    transport = ScriptedTransport(announcement(LONG_CTA), announcement("Register today", shortened=["cta"]))
     result = adapter(tmp_path, transport).propose(OVERFLOW_BRIEF, job_id="job-overflow")
 
-    assert len(transport.payloads) == 2
-    assert "items[0].content.cta" in transport.payloads[1]["messages"][-1]["content"]
-
-    assert result.status == "needs_input"
-    assert result.overflow_caught is True
-    assert result.model_calls == 2
-    assert "text_overflow" in {issue["code"] for issue in result.issues}
-    assert result.batch is None
+    assert len(transport.payloads) == 1
+    assert result.status == "needs_input" and result.batch is None
+    assert result.overflow_caught is True and result.shorten_requested is False
+    assert result.model_calls == 1
+    assert [issue["code"] for issue in result.issues] == ["text_overflow"]
+    assert result.templates == ["announcement"]
 
 
-def test_shortened_text_must_reuse_brief_words(tmp_path: Path) -> None:
-    transport = ScriptedTransport(announcement(LONG_CTA), announcement("Sign up now", shortened=["cta"]))
+def test_rewritten_slot_text_is_not_accepted(tmp_path: Path) -> None:
+    # A "shortened" flag is not evidence: slot text must still be copied from the brief.
+    transport = ScriptedTransport(announcement("Sign up now", shortened=["cta"]))
     result = adapter(tmp_path, transport).propose(OVERFLOW_BRIEF, job_id="job-short-invent")
 
     assert result.status == "needs_input"
@@ -552,7 +546,7 @@ DEV_OVERFLOW = FIXTURES / "eval_gfx_dev_overflow.json"
 
 
 def test_config_default_prompt_version_is_v2() -> None:
-    assert parse_provider_config(config()).prompt_version == "graphics-brief.v2"
+    assert parse_provider_config(config()).prompt_version == "graphics-brief.v3"
 
 
 def test_non_json_reply_gets_the_generic_repair_message(tmp_path: Path) -> None:
@@ -560,11 +554,9 @@ def test_non_json_reply_gets_the_generic_repair_message(tmp_path: Path) -> None:
     result = adapter(tmp_path, transport).propose(BRIEF, job_id="job-generic-repair")
     assert result.status == "complete", result.issues
     assert transport.payloads[1]["messages"][-1]["content"] == REPAIR_PROMPT
-    assert overflow_repair_prompt(None) == REPAIR_PROMPT
-    assert overflow_repair_prompt({"items": "nope"}) == REPAIR_PROMPT
 
 
-def test_repair_message_names_every_overflowing_slot_with_limits_from_the_engine() -> None:
+def test_overflow_report_names_every_slot_with_limits_from_the_engine() -> None:
     long_quote = "word " * 400
     reply = {"items": [
         {"template_id": "quote_card", "variant": "square", "content": {"quote": long_quote.strip(), "author": "Sample"}},
@@ -574,16 +566,13 @@ def test_repair_message_names_every_overflowing_slot_with_limits_from_the_engine
     assert [item.path for item in found] == ["items[0].content.quote", "items[1].content.cta"]
     cta = found[1]
     assert (cta.length, cta.max_lines, cta.line_chars, cta.max_chars) == (len(LONG_CTA), 2, 29, 58)
-    message = overflow_repair_prompt(reply)
-    assert "items[0].content.quote" in message and "items[1].content.cta" in message
-    assert LONG_CTA not in message and "word word" not in message
     with pytest.raises(LayoutError) as caught:
         compile_template(build_request("p", "announcement", "square", BrandTokens(primary="#000000", accent="#FFFFFF"),
                                        {"headline": "H", "body": "B", "cta": LONG_CTA}))
     assert caught.value.node_id == "cta" and str(caught.value) == "text_does_not_fit"
 
 
-def test_dev_overflow_cases_are_dev_only_and_drive_the_targeted_repair(tmp_path: Path) -> None:
+def test_dev_overflow_cases_are_dev_only_and_return_to_the_person(tmp_path: Path) -> None:
     dev_cases = load_cases([DEV_OVERFLOW])
     assert {case["locale"][:2] for case in dev_cases} == {"th", "en"}
     assert all(case["split"] == "dev" and case["category"] == "clear" for case in dev_cases)
@@ -591,29 +580,16 @@ def test_dev_overflow_cases_are_dev_only_and_drive_the_targeted_repair(tmp_path:
     for case in dev_cases:
         transport = oracle([case])
         result = adapter(tmp_path, transport).propose(case["request"]["brief"], job_id=f"job-{case['id']}")
-        assert result.status == "complete", result.issues
-        assert result.shorten_requested is True and result.model_calls == 2
-        repair = transport.payloads[1]["messages"][-1]["content"]
-        assert "items[0].content.cta is" in repair and "at most 58 characters" in repair
-        assert result.batch is not None and [item["content"] for item in result.batch["items"]] == case["expected"]["content"]
+        assert (result.status, result.model_calls, result.shorten_requested) == ("needs_input", 1, False)
+        assert [issue["code"] for issue in result.issues] == ["text_overflow"]
+        assert (result.templates, result.variants) == (case["expected"]["templates"], case["expected"]["variants"])
     report = run_shadow(adapter(tmp_path / "shadow", oracle([*load_cases([CASES]), *dev_cases]), mode="shadow"),
                         [*load_cases([CASES]), *dev_cases], dev_ids=load_split(SPLIT), run_id="dev-overflow")
     rows = {row["id"]: row for row in report["cases"]}
     assert all(rows[case["id"]]["split"] == "dev" for case in dev_cases)
     assert report["metrics"]["held_out_cases"] == 32
+    assert report["metrics"]["shorten_requests"] == 0
     assert report["gate"]["passed"], report["gate"]
-
-
-def test_over_limit_second_reply_still_ends_as_text_overflow(tmp_path: Path) -> None:
-    case = load_cases([DEV_OVERFLOW])[0]
-    still_long = json.loads(json.dumps(case["oracle_reply"]))
-    still_long["items"][0]["shortened"] = ["cta"]
-    transport = ScriptedTransport(case["oracle_reply"], still_long)
-    result = adapter(tmp_path, transport).propose(case["request"]["brief"], job_id="job-still-long")
-    assert "items[0].content.cta" in transport.payloads[1]["messages"][-1]["content"]
-    assert result.status == "needs_input"
-    assert result.batch is None and result.overflow_caught is True and result.model_calls == 2
-    assert "text_overflow" in {issue["code"] for issue in result.issues}
 
 
 def test_overflow_is_returned_to_the_person_with_the_template_kept() -> None:

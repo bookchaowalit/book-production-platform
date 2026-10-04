@@ -347,6 +347,24 @@ def test_proposal_allowlist_accepts_distinct_and_comparisons() -> None:
         assert check_proposal({"table": "orders", "steps": [bad_step]}, dataset, pipeline_id="p").status == "rejected"
 
 
+def test_non_ascii_metric_alias_is_renamed_with_its_references() -> None:
+    # Live shadow 2026-10-04: a Thai question got a Thai alias, which only names the output column.
+    dataset = {**copy.deepcopy(SOURCE)}
+    raw = {"table": "orders", "steps": [
+        {"type": "aggregate", "group_by": ["region"], "metrics": [
+            {"alias": "จำนวนคำสั่งซื้อ", "op": "count"},
+            {"alias": "ยอดรวม", "op": "sum", "column": "amount"},
+        ]},
+        {"type": "sort", "column": "ยอดรวม", "direction": "desc"},
+    ]}
+    check = check_proposal(raw, dataset, pipeline_id="p")
+    assert check.status == "complete", check.issues
+    aggregate, sort = check.request["nodes"]
+    assert [metric["alias"] for metric in aggregate["metrics"]] == ["count_rows", "sum_amount"]
+    assert sort["column"] == "sum_amount"
+    assert raw["steps"][0]["metrics"][0]["alias"] == "จำนวนคำสั่งซื้อ"  # input is not mutated
+
+
 def test_requests_without_operator_keep_their_fingerprint() -> None:
     parsed = PipelineRequest.model_validate(canary_request())
     legacy = parsed.model_dump(mode="json")

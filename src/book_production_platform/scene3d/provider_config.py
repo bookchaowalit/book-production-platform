@@ -40,7 +40,7 @@ class ProviderConfig(KitProviderConfig):
     schema_version: Literal["scene3d-provider-config.v1"] = "scene3d-provider-config.v1"  # type: ignore[assignment]
     tool_id: str = Field(default="scene3d-v1a", pattern=r"^scene3d-v1a$")
     route: str = Field(default="scene3d.brief", pattern=r"^[A-Za-z0-9_.:/-]{1,64}$")
-    prompt_version: str = Field(default="scene3d-brief.v2", pattern=r"^[A-Za-z0-9_.:/-]{1,64}$")
+    prompt_version: str = Field(default="scene3d-brief.v3", pattern=r"^[A-Za-z0-9_.:/-]{1,64}$")
 
 
 def parse_provider_config(raw: Any) -> ProviderConfig:

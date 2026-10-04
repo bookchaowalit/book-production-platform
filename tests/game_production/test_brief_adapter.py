@@ -135,6 +135,34 @@ def test_unreachable_layout_is_rejected_never_accepted(tmp_path: Path) -> None:
     assert result.game_ir is None
 
 
+def test_layout_mistake_gets_one_targeted_repair_call(tmp_path: Path) -> None:
+    # Live shadow 2026-10-04: a wall landed on a collectible's cell (cell_conflict) on a clear brief.
+    clashing = layout()
+    clashing["entities"].append({"type": "wall", "cell": [1, 1]})
+    transport = ScriptedTransport(clashing, layout(walls=((4, 4),)))
+    result = adapter(tmp_path, transport).propose(BRIEF, job_id="job-repair")
+
+    assert result.status == "complete", result.issues
+    assert result.model_calls == 2
+    repair = transport.payloads[1]["messages"][-1]["content"]
+    assert "own cell" in repair and "CANARY" not in repair
+
+
+def test_layout_repair_keeps_the_concrete_error_when_it_fails_again(tmp_path: Path) -> None:
+    clashing = layout()
+    clashing["entities"].append({"type": "wall", "cell": [1, 1]})
+    result = adapter(tmp_path, ScriptedTransport(clashing, clashing)).propose(BRIEF, job_id="job-repair-twice")
+
+    assert (result.status, result.issue_codes(), result.model_calls) == ("rejected", ["cell_conflict"], 2)
+
+
+def test_brief_fact_mismatch_is_never_repaired(tmp_path: Path) -> None:
+    transport = ScriptedTransport(layout(player=(2, 2)), layout())
+    result = adapter(tmp_path, transport).propose(BRIEF, job_id="job-fact")
+
+    assert (result.status, result.issue_codes(), result.model_calls) == ("rejected", ["position_mismatch"], 1)
+
+
 def test_unreachable_collectible_is_rejected() -> None:
     proposal = layout(count=3, walls=((1, 0), (0, 1)), player=(4, 4))
     proposal["entities"] = [e for e in proposal["entities"] if e["type"] != "collectible"] + [

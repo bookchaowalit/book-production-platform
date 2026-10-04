@@ -71,6 +71,55 @@ _ALIAS = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,62}$")
 Grounder = Callable[[Any, ColumnType, str, str], bool]
 
 
+def _normalize_aliases(steps: list[Any]) -> list[Any]:
+    """Rename metric aliases that are not ASCII identifiers to ``<op>_<column>``.
+
+    An alias only names an output column; it carries no value. A model that
+    names it in the question's language (for example Thai) would otherwise be
+    rejected as ``step_invalid``. Later steps that refer to the old alias are
+    rewritten to the new name. Anything that is not a well-formed aggregate is
+    left untouched for the normal checks to judge.
+    """
+
+    renamed: dict[str, str] = {}
+    taken: set[str] = set()
+    out: list[Any] = []
+    for step in steps:
+        if not isinstance(step, Mapping):
+            out.append(step)
+            continue
+        step = dict(step)
+        if renamed:
+            if isinstance(step.get("column"), str):
+                step["column"] = renamed.get(step["column"], step["column"])
+            for key in ("columns", "group_by"):
+                if isinstance(step.get(key), list):
+                    step[key] = [renamed.get(item, item) if isinstance(item, str) else item for item in step[key]]
+        metrics = step.get("metrics")
+        if isinstance(step.get("type"), str) and step["type"].strip().lower() == "aggregate" and isinstance(metrics, list):
+            new_metrics: list[Any] = []
+            for metric in metrics:
+                if isinstance(metric, Mapping):
+                    metric = dict(metric)
+                    if renamed and isinstance(metric.get("column"), str):
+                        metric["column"] = renamed.get(metric["column"], metric["column"])
+                    alias, op = metric.get("alias"), metric.get("op")
+                    if isinstance(alias, str) and alias and not _ALIAS.fullmatch(alias) and op in {"count", "sum", "avg"}:
+                        column = metric.get("column")
+                        base = f"{op}_{column}" if isinstance(column, str) and _ALIAS.fullmatch(f"{op}_{column}") else f"{op}_rows"
+                        candidate, suffix = base, 2
+                        while candidate in taken:
+                            candidate, suffix = f"{base}_{suffix}", suffix + 1
+                        renamed[alias] = candidate
+                        metric["alias"] = candidate
+                    if isinstance(metric.get("alias"), str):
+                        taken.add(metric["alias"])
+                new_metrics.append(metric)
+            step["metrics"] = new_metrics
+        out.append(step)
+    return out
+
+
 @dataclass
 class ProposalIssue:
     code: str
@@ -181,6 +230,7 @@ def check_proposal(
     steps_raw = raw.get("steps", [])
     if not isinstance(steps_raw, list) or len(steps_raw) > MAX_STEPS:
         return PipelineProposalCheck("rejected", issues=[ProposalIssue("steps_invalid", "steps")])
+    steps_raw = _normalize_aliases(steps_raw)
     steps: list[dict[str, Any]] = []
     for index, step in enumerate(steps_raw):
         path = f"steps[{index}]"

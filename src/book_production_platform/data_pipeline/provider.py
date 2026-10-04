@@ -64,7 +64,9 @@ SYSTEM_PROMPT = (
     '{"type":"filter","column":C,"is_null":true}; {"type":"distinct"} (remove duplicate rows); '
     '{"type":"aggregate","group_by":[C,...],"metrics":[{"alias":"name","op":"count"|"sum"|"avg","column":C}]}; '
     '{"type":"sort","column":C,"direction":"asc"|"desc"}; {"type":"limit","count":N} (only directly after sort, as the last step). '
-    "C is a column key from the schema or an earlier metric alias. Use only the given table and columns. "
+    "C is a column key from the schema or an earlier metric alias. A metric alias is an English snake_case name "
+    "(letters, digits, underscore), even when the question is in another language. Add a select step only when the "
+    "question names the columns to show; otherwise keep every column. Use only the given table and columns. "
     "Never write SQL, never propose changing data, and never compute results. If the table, a column, a filter "
     "value, or a limit is unclear or not stated in the question, put it in missing instead of guessing."
 )

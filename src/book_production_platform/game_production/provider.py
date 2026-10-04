@@ -86,6 +86,27 @@ REPAIR_PROMPT = (
     '{"template":...,"world":{...},"entities":[...],"missing":[...]} following the same rules.'
 )
 
+# Layout mistakes the model can fix without new facts: one targeted repair call
+# (still within the two-call cap) names the problem. Facts the brief states
+# (grid, positions, counts) are never relaxed; the repaired layout passes the
+# same ground_layout checks.
+LAYOUT_REPAIR_HINTS: dict[str, str] = {
+    "cell_conflict": "two entities share one cell; put every entity on its own cell",
+    "out_of_bounds": "an entity is outside the grid; keep every cell inside the stated width and height",
+    "unreachable_goal": "a collectible or the exit is walled off; leave a path of non-wall cells from the player to each of them",
+    "collectible_count_mismatch": "the number of collectibles differs from the brief; use exactly the stated number",
+    "player_count_invalid": "there must be exactly one player",
+    "exit_count_invalid": "there must be exactly one exit",
+}
+
+
+def layout_repair_prompt(code: str) -> str:
+    return (
+        f"Your previous layout is invalid: {LAYOUT_REPAIR_HINTS[code]}. Keep the stated grid size, positions, and counts. "
+        'Reply again with only {"template":...,"world":{...},"entities":[...],"missing":[...]} following the same rules.'
+    )
+
+
 GameBriefStatus = Literal["complete", "needs_input", "rejected"]
 Cell = tuple[int, int]
 
@@ -212,19 +233,40 @@ class GameBriefAdapter:
         early = preflight(brief)
         if early is not None:
             return early
+        layout_errors: dict[int, str] = {}
+        last_parsed: list[dict[str, Any]] = []
+
+        def accept(parsed: dict[str, Any]) -> bool:
+            if not isinstance(parsed.get("entities"), list):
+                return False
+            checked = ground_layout(parsed, brief, scene_id=scene_id)
+            codes = checked.issue_codes()
+            if checked.status == "rejected" and len(codes) == 1 and codes[0] in LAYOUT_REPAIR_HINTS:
+                layout_errors[id(parsed)] = codes[0]
+                last_parsed[:] = [parsed]
+                return False
+            return True
+
+        def repair(parsed: dict[str, Any] | None) -> str:
+            code = layout_errors.get(id(parsed)) if parsed is not None else None
+            return layout_repair_prompt(code) if code else REPAIR_PROMPT
+
         outcome = self.runner.propose(
             job_id=job_id,
             system_prompt=SYSTEM_PROMPT,
             user_content=f"Locale: {locale}\nReturn JSON for this brief.\n<brief>\n{brief}\n</brief>",
             guard_text=brief,
-            repair_prompt=REPAIR_PROMPT,
-            accept=lambda parsed: isinstance(parsed.get("entities"), list),
+            repair_prompt=repair,
+            accept=accept,
         )
         if outcome.status == "abstained":
             return GameBriefResult(
                 status="needs_input", missing=["grid", "collectibles"], issues=[_issue("instruction_like_content", "brief")]
             )
-        if outcome.status != "ok" or outcome.parsed is None:
+        if outcome.status != "ok" and outcome.issue_code == "invalid_model_output" and last_parsed:
+            # Both calls produced a broken layout: report the concrete layout error.
+            result = ground_layout(last_parsed[0], brief, scene_id=scene_id)
+        elif outcome.status != "ok" or outcome.parsed is None:
             result = _rejected(outcome.issue_code or "invalid_model_output", "provider")
         else:
             result = ground_layout(outcome.parsed, brief, scene_id=scene_id)

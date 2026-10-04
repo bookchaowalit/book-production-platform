@@ -40,7 +40,7 @@ class ProviderConfig(KitProviderConfig):
     schema_version: Literal["data-pipeline-provider-config.v1"] = "data-pipeline-provider-config.v1"  # type: ignore[assignment]
     tool_id: str = Field(default="data-pipeline-v1a", pattern=r"^data-pipeline-v1a$")
     route: str = Field(default="data-pipeline.question", pattern=r"^[A-Za-z0-9_.:/-]{1,64}$")
-    prompt_version: str = Field(default="data-pipeline-question.v1", pattern=r"^[A-Za-z0-9_.:/-]{1,64}$")
+    prompt_version: str = Field(default="data-pipeline-question.v2", pattern=r"^[A-Za-z0-9_.:/-]{1,64}$")
 
 
 def parse_provider_config(raw: Any) -> ProviderConfig:
