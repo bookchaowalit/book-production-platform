@@ -29,7 +29,7 @@ from book_production_platform.data_pipeline_ir.validation import (
     build_pipeline_ir,
 )
 from book_production_platform.production_trace import (
-    MANUAL_FILENAME,
+    GUIDE_SIDECARS,
     TRACE_FILENAME,
     TraceRecorder,
     sha256_json,
@@ -64,7 +64,7 @@ ENGINE_VERSION = f"data-pipeline-v1a+sqlite-{sqlite3.sqlite_version}"
 IR_FILENAME = "ir.json"
 # Trace sidecars written after publication; they are not plan artifacts, are
 # not covered by the receipt, and are ignored by the artifact-set checks.
-SIDECAR_NAMES = frozenset({TRACE_FILENAME, MANUAL_FILENAME, IR_FILENAME})
+SIDECAR_NAMES = frozenset({TRACE_FILENAME, *GUIDE_SIDECARS, IR_FILENAME})
 _SIDECAR_TEMP = re.compile(r"^\.(?:trace\.json|MANUAL-STEPS\.md|ir\.json)\.\d+\.tmp$")
 MAX_MANIFEST_BYTES = MAX_ARTIFACT_BYTES
 MAX_RECEIPT_BYTES = 8192

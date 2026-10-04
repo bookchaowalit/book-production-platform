@@ -4,10 +4,12 @@ Stdlib only, so every deterministic engine can import it without extra
 dependencies. See README.md for the contract.
 """
 
+from .ai_manual import AI_MANUAL_FILENAME
 from .guide import GuideLayer, GuideStep, ManualGuide, render_manual_markdown
 from .timecode import frames_to_timecode, seconds_to_timecode
 from .trace import (
     HISTORY_FILENAME,
+    MANUAL_FACTS_FILENAME,
     MANUAL_FILENAME,
     TRACE_FILENAME,
     TRACE_SCHEMA,
@@ -21,7 +23,10 @@ from .trace import (
 )
 
 __all__ = [
+    "AI_MANUAL_FILENAME",
+    "GUIDE_SIDECARS",
     "HISTORY_FILENAME",
+    "MANUAL_FACTS_FILENAME",
     "MANUAL_FILENAME",
     "TRACE_FILENAME",
     "TRACE_SCHEMA",
@@ -39,3 +44,6 @@ __all__ = [
     "sha256_json",
     "verify_trace",
 ]
+
+# Every guide file a job may hold next to its artifacts (deterministic, facts, AI-written).
+GUIDE_SIDECARS = (MANUAL_FILENAME, MANUAL_FACTS_FILENAME, AI_MANUAL_FILENAME)

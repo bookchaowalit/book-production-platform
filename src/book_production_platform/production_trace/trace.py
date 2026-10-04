@@ -32,6 +32,7 @@ TRACE_SCHEMA = "production-trace.v1"
 HISTORY_FILENAME = "history.jsonl"
 TRACE_FILENAME = "trace.json"
 MANUAL_FILENAME = "MANUAL-STEPS.md"
+MANUAL_FACTS_FILENAME = "manual-facts.json"
 _MAX_PARAM_TEXT = 300
 
 
@@ -203,6 +204,18 @@ class TraceRecorder:
             manual = directory / MANUAL_FILENAME
             _atomic_write(manual, render_manual_markdown(guide, trace))
             trace["manual_guide"] = {"file": MANUAL_FILENAME, "program": guide.program, "steps": len(guide.steps), "layers": len(guide.layers)}
+            # The same facts as data, so a guide can be re-explained later for another program.
+            _atomic_write(directory / MANUAL_FACTS_FILENAME, json.dumps({
+                "program": guide.program, "title": guide.title, "summary": guide.summary,
+                "layers": [asdict(layer) for layer in guide.layers], "steps": [asdict(step) for step in guide.steps],
+                "checks": list(guide.checks),
+            }, ensure_ascii=False, indent=2) + "\n")
+            # Optional, job-specific guide written by AI (only with a live config; never fails the job).
+            from .ai_manual import maybe_write_ai_manual
+
+            ai_manual = maybe_write_ai_manual(guide, tool_id=self.tool_id, job_id=self.job_id, job_dir=directory, trace=trace)
+            if ai_manual is not None:
+                trace["ai_manual"] = ai_manual
         _atomic_write(directory / TRACE_FILENAME, json.dumps(trace, ensure_ascii=False, indent=2) + "\n")
         append_history(output_root, trace, trace_path=directory / TRACE_FILENAME)
         return trace

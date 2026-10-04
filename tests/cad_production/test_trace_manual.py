@@ -62,7 +62,7 @@ def test_accepted_job_records_trace_ir_manual_drawings_and_history(tmp_path: Pat
 
     assert result.status == "accepted" and result.trace_job_id is not None
     job_dir = root / ".trace" / "jobs" / result.trace_job_id
-    assert {path.name for path in job_dir.iterdir()} == {"trace.json", "MANUAL-STEPS.md", "ir.json", "drawing.svg", "drawing.dxf"}
+    assert {path.name for path in job_dir.iterdir()} == {"trace.json", "MANUAL-STEPS.md", "manual-facts.json", "ir.json", "drawing.svg", "drawing.dxf"}
     trace = _trace(root, result.trace_job_id)
     assert trace["schema_version"] == "production-trace.v1"
     assert trace["tool_id"] == "cad-v1a" and trace["status"] == "accepted"

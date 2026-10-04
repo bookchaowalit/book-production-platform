@@ -66,7 +66,7 @@ def test_accepted_compose_records_trace_manual_map_and_verifies(tmp_path: Path, 
 
     assert result.status == "accepted" and result.trace_job_id is not None
     job_dir = output_root / ".trace" / "jobs" / result.trace_job_id
-    assert {item.name for item in job_dir.iterdir()} == {"trace.json", "MANUAL-STEPS.md", "ir.json", "level-map.svg", "level-metrics.json"}
+    assert {item.name for item in job_dir.iterdir()} == {"trace.json", "MANUAL-STEPS.md", "manual-facts.json", "ir.json", "level-map.svg", "level-metrics.json"}
     trace = _trace(output_root, result.trace_job_id)
     assert trace["tool_id"] == "game-v1a" and trace["status"] == "accepted"
     assert [step["stage"] for step in trace["steps"]] == [

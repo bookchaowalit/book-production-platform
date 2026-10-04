@@ -27,7 +27,13 @@ from .manual import build_figma_guide, text_lines
 from .qa import contrast_report, run_graphic_qa
 from .render import RenderError, rasterizer, render_png, render_svg
 from .telemetry import BatchTelemetry
-from .templates import TEMPLATE_VERSION, VARIANT_SIZES, TemplateError, compile_template
+from .templates import (
+    TEMPLATE_VERSION,
+    VARIANT_SIZES,
+    TemplateError,
+    compile_template,
+    controls_for,
+)
 
 CONTRACT_VERSION = "graphics.v1a"
 RECIPE_VERSION = "template-batch-v3"
@@ -351,6 +357,7 @@ def _render_batch(
     trace: TraceRecorder,
 ) -> BatchResult:
     accepted_irs: list[tuple[str, GraphicIR]] = []
+    item_controls: dict[str, dict[str, Any]] = {}
     contrast: dict[str, list[dict[str, object]]] = {}
     output_items: list[ItemResult] = []
     bytes_written = 0
@@ -411,6 +418,11 @@ def _render_batch(
             trace.artifact(svg_path, media_type="image/svg+xml")
             trace.artifact(png_path, media_type="image/png")
             accepted_irs.append((prefix, ir))
+            if ir.schema_version == "graphic-ir.v2":
+                try:
+                    item_controls[prefix] = controls_for(raw)
+                except (TemplateError, ValueError):
+                    pass
             contrast[prefix] = report
             claimed_names.add(prefix.casefold())
             accepted += 1
@@ -458,7 +470,7 @@ def _render_batch(
             status=_TRACE_STATUS[result.status],
             job_dir=batch_dir,
             output_root=output_path,
-            guide=build_figma_guide(accepted_irs, batch_id=batch_id) if accepted_irs else None,
+            guide=build_figma_guide(accepted_irs, batch_id=batch_id, controls=item_controls) if accepted_irs else None,
             qa={"status": "passed" if accepted else "failed", "checks": qa_checks},
         )
     except OSError:

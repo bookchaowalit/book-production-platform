@@ -11,8 +11,9 @@ Values are copied from the IR, never recalculated by hand.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import Any
 
 from book_production_platform.graphics_ir import (
     GraphicIR,
@@ -88,28 +89,121 @@ def _minutes(ir: GraphicIR) -> float:
     return total
 
 
-def _add_layered_item(guide: ManualGuide, name: str, ir: GraphicIR) -> None:
-    """graphic-ir.v2 (themes): open the editable SVG; its named groups are the layers."""
+# The Affinity Designer tool that builds each motif by hand.
+_MOTIF_TOOLS = {
+    "rect": "Rectangle Tool (M)",
+    "ellipse": "Ellipse Tool (M)",
+    "line": "Pen Tool (P)",
+    "polygon": "Pen Tool (P)",
+    "glow": "Ellipse Tool + Gradient Tool (radial, fade to 0% opacity)",
+    "text_block": "Frame Text Tool (T)",
+    "display_text": "Artistic Text Tool (T) + Edit ▸ Duplicate for each echo",
+    "image": "File ▸ Place…",
+    "starfield": "Ellipse Tool + Edit ▸ Duplicate (scatter by hand)",
+    "perspective_grid": "Pen Tool (P) lines from the vanishing point + horizontal lines",
+    "striped_sun": "Ellipse Tool + Rectangle Tool + Layer ▸ Geometry ▸ Subtract",
+    "ridge": "Pen Tool (P)",
+    "waves": "Pen Tool (P) with smooth nodes",
+    "blobs": "Pen Tool (P) with smooth nodes",
+    "halftone": "Ellipse Tool + Edit ▸ Duplicate (grid), or Filters ▸ Halftone on a raster layer",
+    "rays": "Pen Tool (P) wedge + Transform ▸ Rotate duplicate",
+    "rings": "Ellipse Tool + Edit ▸ Duplicate",
+    "stripes": "Rectangle Tool + Edit ▸ Duplicate, then clip to the area",
+    "grain": "Layer ▸ New Live Filter Layer ▸ Add Noise",
+    "corner_frame": "Rectangle Tool (border) + Pen Tool (corner ticks)",
+}
+
+
+def _short(value: object) -> str:
+    return _num(value) if isinstance(value, float | int) and not isinstance(value, bool) else str(value)
+
+
+def _bounds(nodes: list[ShapeNode | TextNode | ImageNode]) -> str:
+    if not nodes:
+        return ""
+    left = min(node.x for node in nodes)
+    top = min(node.y for node in nodes)
+    right = max(node.x + node.width for node in nodes)
+    bottom = max(node.y + node.height for node in nodes)
+    return f"X={_num(round(left, 1))}, Y={_num(round(top, 1))}, W={_num(round(right - left, 1))}, H={_num(round(bottom - top, 1))}"
+
+
+def _paint_text(ir: GraphicIR) -> list[tuple[str, str]]:
+    rows = []
+    for paint in ir.paints:
+        stops = ", ".join(
+            f"{_hex(stop.color)} {round(stop.offset * 100)}%" + (f" (opacity {round(stop.opacity * 100)}%)" if stop.opacity != 1 else "")
+            for stop in paint.stops
+        )
+        if paint.paint_type == "linear":
+            shape = f"linear ({_num(round(paint.x1, 2))},{_num(round(paint.y1, 2))}) → ({_num(round(paint.x2, 2))},{_num(round(paint.y2, 2))})"
+        else:
+            shape = f"radial centre ({_num(round(paint.cx, 2))},{_num(round(paint.cy, 2))}) radius {_num(round(paint.r, 2))}"
+        rows.append((paint.paint_id, f"{shape}: {stops}"))
+    return rows
+
+
+def _add_layered_item(guide: ManualGuide, name: str, ir: GraphicIR, controls: Mapping[str, Any] | None = None) -> None:
+    """graphic-ir.v2 (themes): every layer and motif with its exact values, for Affinity Designer."""
 
     canvas = ir.canvas
     section = f"{name} — {canvas.width}×{canvas.height} ({ir.template_ref}, {ir.variant})"
-    fonts = sorted({font_family(node) for node in iter_nodes(list(ir.nodes)) if isinstance(node, TextNode)})
+    leaves = iter_nodes(list(ir.nodes))
+    fonts = sorted({font_family(node) for node in leaves if isinstance(node, TextNode)})
     guide.layer(name, "Document", content=f"{ir.template_ref} · {ir.variant} · {len(ir.nodes)} layers", position=f"W={canvas.width}, H={canvas.height}")
-    for group in ir.nodes:
-        if isinstance(group, GroupNode):
-            texts = [node.node_id for node in iter_nodes(list(group.children)) if isinstance(node, TextNode)]
-            content = f"{len(group.children)} objects" + (f" · text: {', '.join(texts)}" if texts else "")
-            guide.layer(group.label or group.node_id, "Layer (group)", content=content, position="vector, editable")
-    guide.step("ติดตั้งฟอนต์ที่ธีมใช้ก่อนเปิดไฟล์ (ไม่มีจะถูกแทนด้วยฟอนต์อื่น)", tool="Google Fonts / Font Book", value=", ".join(fonts) or "-", section=section)
-    guide.step(f"เปิด `{name}.svg` ใน Affinity Designer/Photo หรือลากเข้า Figma", tool="Affinity: File ▸ Open… · Figma: ลากไฟล์ลง canvas", value=f"{name}.svg", section=section)
-    guide.step("ตรวจว่าเลเยอร์ตรงตามตาราง (group ชื่อเดียวกับใน SVG) และตัวอักษรยังแก้ไขได้", tool="Layers panel", section=section)
-    guide.step("แก้ข้อความ สี หรือ gradient ได้โดยตรง; ตำแหน่งและขนาดมาจาก theme แล้ว", tool="Text tool / Fill panel", section=section)
-    guide.step("Export เป็น PNG ขนาดเดิม", tool="Affinity: File ▸ Export ▸ PNG · Figma: Export ▸ PNG 1x", value=f"{name}.png, {canvas.width}×{canvas.height}", section=section)
+    guide.step("สร้างเอกสารใหม่ขนาดเท่าภาพ", tool="File ▸ New… (Units: Pixels, DPI 72, RGB)", value=f"W={canvas.width}, H={canvas.height}", section=section)
+    guide.step("ติดตั้งและใช้ฟอนต์ของธีม", tool="Google Fonts / Font Book", value=", ".join(fonts) or "-", section=section)
+    for paint_id, text in _paint_text(ir):
+        guide.step(f"เตรียม gradient `{paint_id}` (ใช้ซ้ำใน Fill ของชิ้นที่อ้าง paint:{paint_id})", tool="Gradient Tool (G) / Fill ▸ Gradient", value=text, section=section)
+    groups = {group.node_id: group for group in ir.nodes if isinstance(group, GroupNode)}
+    layers = list(controls.get("layers", [])) if controls else [
+        {"id": group.node_id, "label": group.label, "visible": True, "opacity": group.opacity, "dx": group.offset_x, "dy": group.offset_y, "items": []}
+        for group in groups.values()
+    ]
+    for layer in layers:
+        group = groups.get(str(layer["id"]))
+        if group is None or not layer.get("visible", True):
+            continue
+        extra = []
+        if group.opacity != 1:
+            extra.append(f"opacity {round(group.opacity * 100)}%")
+        if group.offset_x or group.offset_y:
+            extra.append(f"move dx={_num(group.offset_x)}, dy={_num(group.offset_y)}")
+        guide.layer(str(layer.get("label") or layer["id"]), "Layer (group)", content=" · ".join(extra) or f"{len(group.children)} objects", position="")
+        guide.step(f"สร้าง layer `{layer['id']}` (ล่างสุดก่อน)", tool="Layers ▸ Add Layer", value=" · ".join(extra) or "opacity 100%", section=section)
+        children = iter_nodes(list(group.children))
+        item_ids = [str(entry["target"]).split("/", 1)[1] for entry in layer.get("items", [])]
+
+        def owner(node_id: str, ids: list[str] = item_ids) -> str | None:
+            matches = [candidate for candidate in ids if node_id == candidate or node_id.startswith(f"{candidate}-")]
+            return max(matches, key=len) if matches else None
+
+        for item in layer.get("items", []):
+            if not item.get("visible", True):
+                continue
+            item_id = str(item["target"]).split("/", 1)[1]
+            nodes = [node for node in children if owner(node.node_id) == item_id]
+            if not nodes:
+                continue
+            params = " · ".join(f"{key}={_short(value)}" for key, value in item.get("params", {}).items())
+            texts = [node for node in nodes if isinstance(node, TextNode) and not node.node_id.startswith(f"{item_id}-echo")]
+            content = params
+            if texts:
+                content = f"ข้อความ: {' / '.join(text_lines(texts[0]))} · {params}"
+            guide.layer(str(item["target"]), str(item["motif"]), content=content, position=_bounds(nodes))
+            guide.step(
+                f"สร้าง `{item['target']}` ({item['motif']})",
+                tool=_MOTIF_TOOLS.get(str(item["motif"]), "Pen Tool (P)"),
+                target=f"layer `{layer['id']}` · {_bounds(nodes)}",
+                value=content,
+                section=section,
+            )
+    guide.step("Export เป็น PNG ขนาดเดิม และ SVG สำหรับแก้ต่อ", tool="File ▸ Export… ▸ PNG / SVG", value=f"{name}.png, {canvas.width}×{canvas.height}", section=section)
 
 
-def _add_item(guide: ManualGuide, name: str, ir: GraphicIR) -> None:
+def _add_item(guide: ManualGuide, name: str, ir: GraphicIR, controls: Mapping[str, Any] | None = None) -> None:
     if ir.schema_version == "graphic-ir.v2":
-        _add_layered_item(guide, name, ir)
+        _add_layered_item(guide, name, ir, controls)
         return
     canvas = ir.canvas
     section = f"{name} — Frame {canvas.width}×{canvas.height} ({ir.template_ref}, {ir.variant})"
@@ -173,11 +267,22 @@ def _add_item(guide: ManualGuide, name: str, ir: GraphicIR) -> None:
     guide.step("กด Export แล้วบันทึกไฟล์", tool=f"Export {name}", value=f"{name}.png, {name}.svg", section=section)
 
 
-def build_figma_guide(items: Sequence[tuple[str, GraphicIR]], *, batch_id: str) -> ManualGuide:
-    """Translate the accepted items of one batch into numbered Figma steps and a layer map."""
+def build_figma_guide(
+    items: Sequence[tuple[str, GraphicIR]],
+    *,
+    batch_id: str,
+    controls: Mapping[str, Mapping[str, Any]] | None = None,
+) -> ManualGuide:
+    """Translate the accepted items of one batch into numbered steps and a layer map.
 
+    Original templates (graphic-ir.v1) are written for Figma; themed items
+    (graphic-ir.v2) for Affinity Designer 2, with every motif's exact values.
+    """
+
+    layered = [ir.schema_version == "graphic-ir.v2" for _, ir in items]
+    program = "Affinity Designer 2" if all(layered) else ("Affinity Designer 2 + Figma" if any(layered) else "Figma")
     guide = ManualGuide(
-        program="Figma",
+        program=program,
         program_version=FIGMA_VERSION,
         alternatives=["Canva", "Adobe Photoshop"],
         title=f"Graphics batch {batch_id} ({len(items)} ชิ้น)",
@@ -199,8 +304,27 @@ def build_figma_guide(items: Sequence[tuple[str, GraphicIR]], *, batch_id: str) 
             "Line height": "ระยะบรรทัด; เครื่องมือใช้ font size × 1.2 เป็นพิกเซล",
         },
     )
+    if all(layered):
+        guide.program_version = ""
+        guide.alternatives = ["Adobe Illustrator", "Figma", "Inkscape"]
+        guide.summary = (
+            "ทำตามขั้นตอนนี้ใน Affinity Designer 2 จะได้ layer และชิ้นงานตรงกับไฟล์ `.svg` ที่เครื่องมือสร้าง "
+            "ทุกชิ้นบอก motif, เครื่องมือที่ใช้ และค่าจริง (ตำแหน่ง ขนาด สี gradient ฟอนต์); ชิ้นที่สุ่ม (ดาว ลายจุด เกรน) "
+            "ทำตำแหน่งใกล้เคียงได้ ไม่ต้องตรงทุกจุด"
+        )
+        guide.setup = [
+            "Affinity Designer 2 ▸ `File ▸ New…` ใส่ขนาดตามตาราง หน่วย Pixels, DPI 72, Colour Format RGB/8",
+            "ติดตั้งฟอนต์ที่ระบุ (Anton, Sarabun, Playfair Display, Space Mono) ก่อนเปิดงาน",
+            "ค่า X/Y นับจากมุมซ้ายบน; ใช้ Transform panel ใส่ X, Y, W, H",
+            "gradient: เลือกชิ้นงาน ▸ Gradient Tool (G) ▸ Type: Linear/Radial แล้วใส่สีและตำแหน่งแต่ละ stop ตามค่า",
+        ]
+        guide.glossary = {
+            "motif": "ชิ้นส่วนวาดที่เครื่องมือใช้ (เช่น striped_sun = ดวงอาทิตย์ตัดเป็นริ้ว)",
+            "paint:<ชื่อ>": "gradient ที่เตรียมไว้ในขั้นต้น ใช้ซ้ำได้หลายชิ้น",
+            "echo": "สำเนาข้อความด้านหลังหัวข้อ เลื่อนตามค่า dx/dy เพื่อทำเงาสี",
+        }
     for name, ir in items:
-        _add_item(guide, name, ir)
+        _add_item(guide, name, ir, (controls or {}).get(name))
     checks: list[str] = []
     for name, ir in items:
         texts = [node for node in iter_nodes(list(ir.nodes)) if isinstance(node, TextNode)]
