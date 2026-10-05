@@ -1,0 +1,74 @@
+{
+  "schema_version": "graphic-art-style.v1",
+  "style_id": "handmade",
+  "title": "Handmade Kraft",
+  "description": "Kraft paper, ink brown, rust and forest green; handwritten Thai, squiggles and a torn paper strip.",
+  "evidence": [
+    "handmade",
+    "แฮนด์เมด",
+    "craft",
+    "คราฟต์",
+    "kraft",
+    "rustic",
+    "hand-drawn",
+    "วาดมือ"
+  ],
+  "colors": {
+    "bg": "#E3CDA8",
+    "bg2": "#D6BC92",
+    "surface": "#F5ECDC",
+    "ink": "#2B1D12",
+    "accent": "#8E2A22",
+    "accent2": "#2F4F3A",
+    "highlight": "#F5ECDC",
+    "on_accent": "#F5ECDC",
+    "muted": "#8A6E4B"
+  },
+  "fonts": {
+    "display": "builtin:sriracha",
+    "body": "builtin:mitr",
+    "label": "builtin:typewriter"
+  },
+  "text": {
+    "display_weight": "normal"
+  },
+  "hide_decor": false,
+  "decor_opacity": 0.45,
+  "backdrop": [
+    {
+      "motif": "torn_edge",
+      "id": "strip",
+      "y": 0,
+      "height": "H * 0.06",
+      "side": "bottom",
+      "fill": "role.surface",
+      "opacity": 0.9
+    },
+    {
+      "motif": "squiggle",
+      "id": "doodle",
+      "x1": "W * 0.62",
+      "y1": "H * 0.93",
+      "x2": "W * 0.95",
+      "y2": "H * 0.9",
+      "amplitude": "MIN * 0.012",
+      "wavelength": "MIN * 0.06",
+      "stroke": "role.accent2",
+      "stroke_width": "MIN * 0.005"
+    }
+  ],
+  "overlay": [
+    {
+      "motif": "grain",
+      "id": "grain",
+      "color": "role.ink",
+      "opacity": 0.1,
+      "count": "2400 * W * H / 1166400",
+      "size": "MIN * 0.0016"
+    }
+  ],
+  "photo": {
+    "filter": "vintage",
+    "mask": "torn"
+  }
+}

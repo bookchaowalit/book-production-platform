@@ -32,10 +32,21 @@ from book_production_platform.graphics_ir import (
     GraphicRequest,
     GroupNode,
     ImageNode,
+    ImagePlacement,
     LinearGradient,
     RadialGradient,
+    ResolvedImageEffects,
     ShapeNode,
     TextNode,
+)
+
+from .art_styles import (
+    ART_FONTS,
+    ROLES,
+    ArtStyle,
+    ArtStyleError,
+    get_art_style,
+    load_art_styles,
 )
 
 THEME_SCHEMA = "graphic-theme.v1"
@@ -46,7 +57,8 @@ VARIANT_SIZES: dict[str, tuple[int, int]] = {
     "story": (1080, 1920),
     "landscape": (1920, 1080),
 }
-BUILTIN_FONTS = frozenset({"builtin:sans", "builtin:display", "builtin:serif", "builtin:mono", "builtin:thai"})
+BUILTIN_FONTS = frozenset(ART_FONTS)
+DEFAULT_CHAR_WIDTH = 0.55
 MAX_EXPRESSION_CHARS = 400
 
 
@@ -143,6 +155,7 @@ class Theme:
     layers: tuple[dict[str, Any], ...]
     renderer: str
     styles: dict[str, dict[str, Any]] = field(default_factory=dict)
+    roles: dict[str, str] = field(default_factory=dict)
     source: str = ""
 
     @property
@@ -164,7 +177,7 @@ class Theme:
 
 _THEME_KEYS = frozenset({
     "schema_version", "theme_id", "title", "description", "ir_version", "template_version", "variants", "slots",
-    "assets", "evidence", "palette", "paints", "vars", "layers", "renderer", "styles",
+    "assets", "evidence", "palette", "paints", "vars", "layers", "renderer", "styles", "roles",
 })
 
 
@@ -197,6 +210,9 @@ def parse_theme(raw: Mapping[str, Any], *, source: str = "") -> Theme:
     palette = raw.get("palette") or {}
     if not isinstance(palette, Mapping) or not all(isinstance(value, str) for value in palette.values()):
         raise ThemeError(f"theme_palette_invalid:{theme_id}")
+    roles = raw.get("roles") or {}
+    if not isinstance(roles, Mapping) or not set(roles) <= set(palette) or not set(roles.values()) <= set(ROLES):
+        raise ThemeError(f"theme_roles_invalid:{theme_id}")
     return Theme(
         theme_id=theme_id,
         title=str(raw.get("title", theme_id)),
@@ -213,6 +229,7 @@ def parse_theme(raw: Mapping[str, Any], *, source: str = "") -> Theme:
         layers=tuple(dict(layer) for layer in layers),
         renderer=str(raw.get("renderer", "graphics-svg-v2")),
         styles=_parse_styles(raw.get("styles") or {}, palette, theme_id),
+        roles={str(key): str(role) for key, role in roles.items()},
         source=source,
     )
 
@@ -263,6 +280,10 @@ class Context:
     product_image: Callable[[dict[str, Any]], ImageNode | None]
     palette: dict[str, str] = field(default_factory=dict)
     paints: list[LinearGradient | RadialGradient] = field(default_factory=list)
+    art: ArtStyle | None = None
+    role_colors: dict[str, str] = field(default_factory=dict)
+    brand_colors: dict[str, str] = field(default_factory=dict)
+    assumptions: dict[str, str] = field(default_factory=dict)
     _paint_ids: set[str] = field(default_factory=set)
 
     @property
@@ -318,7 +339,12 @@ class Context:
             token = resolved[len("brand."):]
             if token not in ("primary", "accent", "foreground", "background"):
                 raise ThemeError(f"brand_token_unknown:{token}")
-            return str(getattr(self.request.brand, token))
+            return self.brand_colors.get(token) or str(getattr(self.request.brand, token))
+        if resolved.startswith("role."):
+            role = resolved[len("role."):]
+            if role not in self.role_colors:
+                raise ThemeError(f"role_unknown:{role}")
+            return self.role_colors[role]
         if resolved.startswith("paint:"):
             paint_id = resolved[len("paint:"):]
             if paint_id not in self._paint_ids:
@@ -405,6 +431,45 @@ class Context:
             raise ThemeError(f"font_unknown:{font}")
         return font
 
+    def text_role(self, spec: Mapping[str, Any], font_size: float) -> str:
+        """``display`` (titles), ``body``, or ``label`` (mono captions, dates, tags) for art styling."""
+
+        if spec.get("text_role") in ("display", "body", "label"):
+            return str(spec["text_role"])
+        if str(spec.get("font", "")) == "builtin:mono":
+            return "label"
+        if spec.get("motif") == "display_text" or font_size >= self.names["MIN"] * 0.07:
+            return "display"
+        return "body"
+
+    def text_style(self, spec: Mapping[str, Any], font_size: float) -> dict[str, Any]:
+        """Font, weight, case, letter spacing (em), and title shadow for a text item.
+
+        Without an art style (or with a custom font file) this is exactly the theme's own settings.
+        """
+
+        style: dict[str, Any] = {
+            "role": None, "font": self.font(spec), "weight": spec.get("weight", "normal"), "upper": False,
+            "spacing_em": None, "shadow": None,
+        }
+        if self.art is None or style["font"] not in BUILTIN_FONTS:
+            return style
+        role = self.text_role(spec, font_size)
+        text = self.art.text
+        style["role"] = role
+        style["font"] = self.art.fonts[role]
+        if role == "display":
+            style["weight"] = text.get("display_weight", style["weight"])
+            style["upper"] = text.get("display_case") == "upper"
+            style["spacing_em"] = float(text.get("display_letter_spacing", 0))
+            style["shadow"] = text.get("display_shadow")
+        elif role == "body":
+            style["weight"] = text.get("body_weight", "bold" if style["weight"] == "black" else style["weight"])
+        else:
+            style["upper"] = text.get("label_case") == "upper"
+            style["weight"] = "bold" if style["weight"] == "black" else style["weight"]
+        return style
+
 
 class ThemeSlotMissing(ThemeError):
     def __init__(self, slot: str) -> None:
@@ -478,7 +543,32 @@ def _context(theme: Theme, request: GraphicRequest, product_image: Callable[[dic
         for key in design.items:
             if key not in item_keys:
                 raise ThemeError(f"design_item_unknown:{key}")
-    ctx = Context(theme=theme, request=request, names=names, product_image=product_image, palette=palette)
+    # Role colors: from the art style, else derived from the brand (used by photo effects such as duotone).
+    role_colors = {
+        "bg": request.brand.background, "bg2": request.brand.background, "surface": request.brand.background,
+        "ink": request.brand.foreground, "accent": request.brand.primary, "accent2": request.brand.accent,
+        "highlight": request.brand.accent, "on_accent": request.brand.background, "muted": request.brand.foreground,
+    }
+    art: ArtStyle | None = None
+    brand_colors: dict[str, str] = {}
+    if design is not None and design.art_style is not None:
+        try:
+            art = get_art_style(design.art_style)
+        except ArtStyleError as exc:
+            raise ThemeError(str(exc)) from None
+        role_colors = dict(art.colors)
+        if design.keep_brand_colors:
+            role_colors["accent"], role_colors["accent2"] = request.brand.primary, request.brand.accent
+        for key, role in theme.roles.items():
+            palette[key] = role_colors[role]
+        for key, color in design.palette.items():  # explicit palette edits still win
+            palette[key] = color
+        brand_colors = {
+            "primary": role_colors["accent"], "accent": role_colors["accent2"],
+            "foreground": role_colors["ink"], "background": role_colors["bg"],
+        }
+    ctx = Context(theme=theme, request=request, names=names, product_image=product_image, palette=palette,
+                  art=art, role_colors=role_colors, brand_colors=brand_colors)
     for name, value in theme.variables.items():
         if name in names:
             raise ThemeError(f"var_shadows_builtin:{name}")
@@ -519,6 +609,67 @@ def _apply_item_override(ctx: Context, item: Mapping[str, Any], params: Mapping[
     return merged
 
 
+def resolve_effects(ctx: Context, placement_effects: Any | None) -> ResolvedImageEffects:
+    """Concrete photo effects: the art style's photo treatment under ``filter=style``, role colors resolved.
+
+    Fields the placement sets explicitly win over the art style's defaults.
+    ``cutout=ai`` falls back to ``plain`` (recorded in the IR assumptions) when
+    the optional rembg model is not installed.
+    """
+
+    from .image_fx import (
+        ai_cutout_available,  # local import: Pillow work stays out of plain theme compiles
+    )
+
+    explicit = placement_effects.model_dump(exclude_unset=True) if placement_effects is not None else {}
+    values: dict[str, Any] = {}
+    if explicit.get("filter", "style") == "style":
+        values.update(ctx.art.photo if ctx.art is not None else {})
+        values.setdefault("filter", "none")
+        explicit.pop("filter", None)
+    values.update(explicit)
+    if values.get("filter") == "duotone":
+        values.setdefault("duotone_dark", "role.bg" if ctx.art is not None else "role.ink")
+        values.setdefault("duotone_light", "role.highlight" if ctx.art is not None else "role.bg")
+    for key in ("duotone_dark", "duotone_light", "outline_color"):
+        if values.get(key) is not None:
+            values[key] = ctx.solid(values[key], name=key)
+    if values.get("cutout") == "ai" and not ai_cutout_available():
+        values["cutout"] = "plain"
+        ctx.assumptions["cutout"] = "ai_unavailable_used_plain"
+    return ResolvedImageEffects.model_validate(values)
+
+
+def _placement_nodes(ctx: Context, placement: ImagePlacement) -> list[Any]:
+    if placement.asset not in ctx.request.assets:
+        raise ThemeError(f"design_image_asset_unknown:{placement.asset}")
+    width = placement.width * ctx.width
+    height = width if placement.square else placement.height * ctx.height
+    x, y = placement.x * ctx.width, placement.y * ctx.height
+    # Boxes may hang off the canvas (collage bleed); the node box is clamped like every other node.
+    left, top = max(0.0, x), max(0.0, y)
+    node = ctx.product_image({
+        "node_id": f"photo-{placement.id}", "asset": placement.asset, "x": round(left, 2), "y": round(top, 2),
+        "width": round(max(1.0, width - (left - x)), 2), "height": round(max(1.0, height - (top - y)), 2),
+    })
+    if node is None:
+        return []
+    # A box hanging off the top/left edge is clamped like every node; the photo is cropped to the visible part.
+    effects = resolve_effects(ctx, placement.effects)
+    return [node.model_copy(update={"rotation": placement.rotation, "opacity": placement.opacity, "effects": effects})]
+
+
+def _art_items(ctx: Context, items: tuple[dict[str, Any], ...], prefix: str) -> list[Any]:
+    from .motifs import MOTIFS
+
+    nodes: list[Any] = []
+    for item in items:
+        if not _condition_holds(item.get("when"), ctx):
+            continue
+        nodes.extend(MOTIFS[item["motif"]](ctx, {**item, "id": f"{prefix}-{item['id']}"}))
+    return nodes
+
+
 def compile_theme(
     theme: Theme,
     request: GraphicRequest,
@@ -529,13 +680,18 @@ def compile_theme(
 
     ctx = _context(theme, request, product_image)
     design = request.design
+    art = ctx.art
     # A design override always produces layered output so moved or hidden layers stay editable.
     ir_version = "graphic-ir.v2" if design is not None else theme.ir_version
 
     layers: list[GroupNode] = []
     flat: list[TextNode | ShapeNode | ImageNode] = []
+    text_layer_index: int | None = None
     for layer in theme.layers:
         if not _condition_holds(layer.get("when"), ctx):
+            continue
+        is_decor = bool(layer.get("decor", False))
+        if art is not None and is_decor and art.hide_decor:
             continue
         layer_id = str(layer["id"])
         layer_override = design.layers.get(layer_id) if design else None
@@ -556,14 +712,27 @@ def compile_theme(
             motif = MOTIFS.get(item["motif"])
             if motif is None:
                 raise ThemeError(f"motif_unknown:{item['motif']}")
+            if art is not None and item.get("decor") and not is_decor:
+                # A decorative item inside a structural layer follows the art style like a decor layer.
+                if art.hide_decor:
+                    continue
+                children.extend(
+                    node.model_copy(update={"opacity": round(node.opacity * art.decor_opacity, 3)}) if isinstance(node, ShapeNode) else node
+                    for node in motif(ctx, item)
+                )
+                continue
             children.extend(motif(ctx, item))
         if not children:
             continue
         if ir_version == "graphic-ir.v1":
             flat.extend(children)
         else:
+            if text_layer_index is None and any(isinstance(child, TextNode) for child in children):
+                text_layer_index = len(layers)
             clip = [node for node in (MOTIFS[c["motif"]](ctx, c) for c in layer.get("clip", [])) for node in node]
             opacity = ctx.num(layer.get("opacity", 1), name="opacity")
+            if art is not None and is_decor:
+                opacity *= art.decor_opacity
             if layer_override is not None and layer_override.opacity is not None:
                 opacity = layer_override.opacity
             layers.append(GroupNode(
@@ -575,6 +744,39 @@ def compile_theme(
                 clip=[node for node in clip if isinstance(node, ShapeNode)],
                 children=children,
             ))
+
+    if ir_version == "graphic-ir.v2" and design is not None:
+        # Extra layers, bottom to top: theme background, art backdrop, background photos, ...,
+        # photos behind text, text layers, ..., front photos, art overlay.
+        first_above_background = 1 if layers else 0
+        inserts: list[tuple[int, GroupNode]] = []
+        if art is not None:
+            backdrop = _art_items(ctx, art.backdrop, "art-backdrop")
+            if backdrop:
+                inserts.append((first_above_background, GroupNode(node_id="ArtBackdrop", label=f"Art: {art.title}", children=backdrop)))
+        by_z: dict[str, list[Any]] = {"background": [], "behind_text": [], "front": []}
+        for placement in design.images:
+            by_z[placement.z].extend(_placement_nodes(ctx, placement))
+        if by_z["background"]:
+            inserts.append((first_above_background, GroupNode(node_id="PhotosBack", label="Photos (back)", children=by_z["background"])))
+        if by_z["behind_text"]:
+            index = text_layer_index if text_layer_index is not None else len(layers)
+            inserts.append((max(index, first_above_background), GroupNode(node_id="Photos", label="Photos", children=by_z["behind_text"])))
+        # Highest index first; at equal indexes the later entry goes in first so the listed order is kept.
+        for _, index, group in sorted(((order, index, group) for order, (index, group) in enumerate(inserts)),
+                                      key=lambda entry: (entry[1], entry[0]), reverse=True):
+            layers.insert(index, group)
+        if by_z["front"]:
+            layers.append(GroupNode(node_id="PhotosFront", label="Photos (front)", children=by_z["front"]))
+        if art is not None:
+            overlay = _art_items(ctx, art.overlay, "art-overlay")
+            if overlay:
+                layers.append(GroupNode(node_id="ArtOverlay", label=f"Texture: {art.title}", children=overlay))
+
+    assumptions = {"model_calls": "0", "renderer": theme.renderer}
+    if art is not None:
+        assumptions["art_style"] = art.style_id
+    assumptions.update(ctx.assumptions)
     return GraphicIR(
         schema_version=ir_version,  # type: ignore[arg-type]
         request_id=request.request_id,
@@ -584,7 +786,7 @@ def compile_theme(
         nodes=flat if ir_version == "graphic-ir.v1" else layers,  # type: ignore[arg-type]
         paints=ctx.paints,
         source_refs=[f"request:{request.request_id}"],
-        assumptions={"model_calls": "0", "renderer": theme.renderer},
+        assumptions=assumptions,
     )
 
 
@@ -645,6 +847,12 @@ def design_controls(
         "palette": dict(ctx.palette),
         "styles": {name: spec["title"] for name, spec in theme.styles.items()},
         "style": design.style if design else None,
+        "art_styles": {style_id: style.title for style_id, style in load_art_styles().items()},
+        "art_style": design.art_style if design else None,
+        "keep_brand_colors": design.keep_brand_colors if design else False,
+        "images": [placement.model_dump(mode="json", exclude_defaults=True) | {"id": placement.id, "asset": placement.asset}
+                   for placement in (design.images if design else [])],
+        "image_assets": sorted(request.assets),
         "fonts": sorted(BUILTIN_FONTS),
         "slots": {
             name: {"required": bool(spec.get("required", True)), "labels": list(spec.get("labels", [name]))}
@@ -656,6 +864,7 @@ def design_controls(
 
 __all__ = [
     "BUILTIN_FONTS",
+    "DEFAULT_CHAR_WIDTH",
     "EDITABLE_CHOICES",
     "EDITABLE_COLORS",
     "EDITABLE_NUMBERS",
@@ -671,4 +880,5 @@ __all__ = [
     "get_theme",
     "load_themes",
     "parse_theme",
+    "resolve_effects",
 ]

@@ -16,6 +16,8 @@ test = ["httpx>=0.27,<1", "mypy>=1.13,<2", "pytest>=9,<10", "ruff>=0.8,<1"]
 preview = ["resvg-py>=0.2,<1"]
 # Thai word-boundary line breaks in Graphics (PyThaiNLP newmm; no model download).
 thai = ["pythainlp>=5.1,<6"]
+# AI background removal for placed photos (rembg U2-Net on CPU; the model is cached locally, U2NET_HOME).
+cutout = ["rembg[cpu]>=2.0.60,<3"]
 
 [project.scripts]
 book-production = "book_production_platform.cli:main"

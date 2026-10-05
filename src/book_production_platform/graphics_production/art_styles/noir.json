@@ -1,0 +1,69 @@
+{
+  "schema_version": "graphic-art-style.v1",
+  "style_id": "noir",
+  "title": "Film Noir",
+  "description": "Black and white with one blood-red accent, venetian-blind shadows, a heavy vignette and film grain.",
+  "evidence": [
+    "noir",
+    "ฟิล์มนัวร์",
+    "film noir",
+    "นัวร์",
+    "black and white",
+    "ขาวดำ"
+  ],
+  "colors": {
+    "bg": "#0B0B0B",
+    "bg2": "#1C1C1C",
+    "surface": "#161616",
+    "ink": "#F2F2F2",
+    "accent": "#E0283E",
+    "accent2": "#BFBFBF",
+    "highlight": "#FFFFFF",
+    "on_accent": "#FFFFFF",
+    "muted": "#3A3A3A"
+  },
+  "fonts": {
+    "display": "builtin:trirong",
+    "body": "builtin:trirong",
+    "label": "builtin:typewriter"
+  },
+  "text": {
+    "display_weight": "bold",
+    "display_case": "upper",
+    "display_letter_spacing": 0.04,
+    "label_case": "upper"
+  },
+  "hide_decor": true,
+  "decor_opacity": 1.0,
+  "backdrop": [
+    {
+      "motif": "stripes",
+      "id": "blinds",
+      "angle": -20,
+      "band": "MIN * 0.035",
+      "gap": "MIN * 0.05",
+      "color": "role.ink",
+      "opacity": 0.06
+    }
+  ],
+  "overlay": [
+    {
+      "motif": "vignette",
+      "id": "vignette",
+      "color": "#000000",
+      "strength": 0.8
+    },
+    {
+      "motif": "grain",
+      "id": "grain",
+      "color": "role.ink",
+      "opacity": 0.08,
+      "count": "1400 * W * H / 1166400",
+      "size": "MIN * 0.0016"
+    }
+  ],
+  "photo": {
+    "filter": "high_contrast",
+    "saturation": 0.0
+  }
+}

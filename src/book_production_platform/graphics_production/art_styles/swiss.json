@@ -1,0 +1,62 @@
+{
+  "schema_version": "graphic-art-style.v1",
+  "style_id": "swiss",
+  "title": "Swiss Grid",
+  "description": "International style: off-white, black and signal red, tight bold sans and one hard geometric shape.",
+  "evidence": [
+    "swiss style",
+    "swiss design",
+    "สไตล์สวิส",
+    "international style",
+    "bauhaus",
+    "บาวเฮาส์",
+    "modernist"
+  ],
+  "colors": {
+    "bg": "#F2F0EB",
+    "bg2": "#E6E3DB",
+    "surface": "#FFFFFF",
+    "ink": "#111111",
+    "accent": "#D7000F",
+    "accent2": "#111111",
+    "highlight": "#D7000F",
+    "on_accent": "#FFFFFF",
+    "muted": "#9A9A9A"
+  },
+  "fonts": {
+    "display": "builtin:kanit",
+    "body": "builtin:thai",
+    "label": "builtin:mono"
+  },
+  "text": {
+    "display_weight": "black",
+    "display_letter_spacing": -0.02,
+    "label_case": "upper"
+  },
+  "hide_decor": true,
+  "decor_opacity": 1.0,
+  "backdrop": [
+    {
+      "motif": "ellipse",
+      "id": "disc",
+      "cx": "W - MIN * 0.04",
+      "cy": "H - MIN * 0.04",
+      "r": "MIN * 0.2",
+      "fill": "role.accent"
+    },
+    {
+      "motif": "rect",
+      "id": "bar",
+      "x": 0,
+      "y": 0,
+      "width": "MIN * 0.025",
+      "height": "H",
+      "fill": "role.ink"
+    }
+  ],
+  "overlay": [],
+  "photo": {
+    "filter": "grayscale",
+    "contrast": 1.15
+  }
+}

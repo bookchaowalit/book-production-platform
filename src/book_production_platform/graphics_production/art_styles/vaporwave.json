@@ -1,0 +1,78 @@
+{
+  "schema_version": "graphic-art-style.v1",
+  "style_id": "vaporwave",
+  "title": "Vaporwave",
+  "description": "Purple dusk, hot pink and cyan, a neon grid floor and CRT scanlines.",
+  "evidence": [
+    "vaporwave",
+    "เวเปอร์เวฟ",
+    "outrun"
+  ],
+  "colors": {
+    "bg": "#2B1055",
+    "bg2": "#4E1F8C",
+    "surface": "#3A1670",
+    "ink": "#FDF6FF",
+    "accent": "#FF71CE",
+    "accent2": "#01CDFE",
+    "highlight": "#FFFB96",
+    "on_accent": "#2B1055",
+    "muted": "#B967FF"
+  },
+  "fonts": {
+    "display": "builtin:bungee",
+    "body": "builtin:mitr",
+    "label": "builtin:pixel"
+  },
+  "text": {
+    "display_weight": "normal",
+    "display_shadow": {
+      "dx": "MIN * 0.006",
+      "dy": "MIN * 0.006",
+      "color": "role.accent",
+      "opacity": 0.9
+    }
+  },
+  "hide_decor": false,
+  "decor_opacity": 0.4,
+  "backdrop": [
+    {
+      "motif": "glow",
+      "id": "sun",
+      "cx": "W * 0.5",
+      "cy": "H * 0.7",
+      "r": "MIN * 0.45",
+      "color": "role.accent",
+      "strength": 0.5
+    },
+    {
+      "motif": "perspective_grid",
+      "id": "floor",
+      "horizon": "H * 0.74",
+      "floor": "role.bg",
+      "vertical_color": "role.accent2",
+      "horizontal_color": "role.accent",
+      "horizon_color": "role.highlight",
+      "spread": "W * 0.25",
+      "near_spread": "W * 0.4",
+      "verticals": 12,
+      "horizontals": 12,
+      "stroke_width": "MIN * 0.0025"
+    }
+  ],
+  "overlay": [
+    {
+      "motif": "scanlines",
+      "id": "crt",
+      "spacing": "MIN * 0.007",
+      "band": "MIN * 0.002",
+      "color": "#000000",
+      "opacity": 0.18
+    }
+  ],
+  "photo": {
+    "filter": "duotone",
+    "duotone_dark": "role.bg",
+    "duotone_light": "role.accent"
+  }
+}

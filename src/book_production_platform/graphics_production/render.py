@@ -37,7 +37,9 @@ from book_production_platform.graphics_ir import (
     iter_nodes,
 )
 
+from .art_styles import ART_FONTS
 from .assets import AssetReferenceError, validate_local_reference
+from .image_fx import ImageEffectError, process_image
 from .layout import wrap_text
 
 
@@ -53,7 +55,7 @@ def _attr(value: object) -> str:
 
 
 def _lines(node: TextNode) -> tuple[str, ...]:
-    return wrap_text(node.text, node.width, node.font_size)
+    return wrap_text(node.text, node.width, node.font_size, node.char_width)
 
 
 def _image_data(node: ImageNode) -> tuple[str, str]:
@@ -98,14 +100,8 @@ def _font_asset(reference: str, asset_root: str | Path | None) -> tuple[str, str
     return family, mime, css_format, encoded
 
 
-# Font stacks for theme fonts; editors substitute the first installed family.
-BUILTIN_FONT_STACKS: dict[str, str] = {
-    "builtin:sans": "Arial, sans-serif",
-    "builtin:display": "Anton, 'Bebas Neue', Impact, 'Arial Black', Sarabun, sans-serif",
-    "builtin:serif": "'Playfair Display', Georgia, 'Times New Roman', serif",
-    "builtin:mono": "'Space Mono', Menlo, Consolas, 'Courier New', monospace",
-    "builtin:thai": "Sarabun, 'Noto Sans Thai', 'Leelawadee UI', Tahoma, sans-serif",
-}
+# Font stacks for theme and art-style fonts; editors substitute the first installed family.
+BUILTIN_FONT_STACKS: dict[str, str] = {font: stack for font, (stack, _width) in ART_FONTS.items()}
 _WEIGHTS = {"normal": None, "bold": "700", "black": "900"}
 
 
@@ -224,12 +220,35 @@ def render_svg(ir: GraphicIR, *, asset_root: str | Path | None = None, embed_fon
             elif isinstance(node, TextNode):
                 parts.extend(_text(node, families_by_reference[node.font_ref]))
             else:
-                mime, encoded = _image_data(node)
-                parts.append(f'<image id="{_attr(node.node_id)}" x="{_attr(node.x)}" y="{_attr(node.y)}" width="{_attr(node.width)}" height="{_attr(node.height)}" preserveAspectRatio="xMidYMid meet" href="data:{mime};base64,{encoded}" />')
+                parts.append(_image(node))
 
     emit(list(ir.nodes))
     parts.append("</svg>")
     return "".join(parts)
+
+
+def _image(node: ImageNode) -> str:
+    """An ``<image>``; photos with effects are baked to a PNG of exactly the node box."""
+
+    if node.effects is not None:
+        try:
+            data = process_image(node.source_ref, node.effects, node.width, node.height)
+        except ImageEffectError as exc:
+            raise RenderError(f"{exc}:{node.asset_key}") from exc
+        mime, encoded, aspect = "image/png", base64.b64encode(data).decode("ascii"), "none"
+    else:
+        mime, encoded = _image_data(node)
+        aspect = "xMidYMid meet"
+    extra = ""
+    if node.opacity != 1:
+        extra += f' opacity="{_attr(node.opacity)}"'
+    if node.rotation:
+        cx, cy = node.x + node.width / 2, node.y + node.height / 2
+        extra += f' transform="rotate({_attr(node.rotation)} {_attr(round(cx, 2))} {_attr(round(cy, 2))})"'
+    return (
+        f'<image id="{_attr(node.node_id)}" x="{_attr(node.x)}" y="{_attr(node.y)}" width="{_attr(node.width)}" '
+        f'height="{_attr(node.height)}" preserveAspectRatio="{aspect}"{extra} href="data:{mime};base64,{encoded}" />'
+    )
 
 
 def _font_family_name(reference: str, asset_root: str | Path | None) -> str:

@@ -1,0 +1,84 @@
+{
+  "schema_version": "graphic-art-style.v1",
+  "style_id": "arcade_8bit",
+  "title": "8-bit Arcade",
+  "description": "Retro game screen: pixel font, navy night, neon pink and cyan, checker floor and scanlines.",
+  "evidence": [
+    "8-bit",
+    "8bit",
+    "pixel art",
+    "พิกเซล",
+    "arcade",
+    "อาร์เคด",
+    "retro game",
+    "เกมยุคเก่า"
+  ],
+  "colors": {
+    "bg": "#12122B",
+    "bg2": "#24245A",
+    "surface": "#1C1C44",
+    "ink": "#F8F8F8",
+    "accent": "#FF3864",
+    "accent2": "#2DE2E6",
+    "highlight": "#FFD319",
+    "on_accent": "#12122B",
+    "muted": "#3C3C8C"
+  },
+  "fonts": {
+    "display": "builtin:pixel",
+    "body": "builtin:kanit",
+    "label": "builtin:pixel"
+  },
+  "text": {
+    "display_weight": "normal",
+    "display_case": "upper",
+    "display_shadow": {
+      "dx": "MIN * 0.005",
+      "dy": "MIN * 0.005",
+      "color": "role.accent",
+      "opacity": 1
+    }
+  },
+  "hide_decor": false,
+  "decor_opacity": 0.35,
+  "backdrop": [
+    {
+      "motif": "checker",
+      "id": "floor",
+      "x": 0,
+      "y": "H * 0.9",
+      "width": "W",
+      "height": "H * 0.1",
+      "size": "MIN * 0.025",
+      "color": "role.muted",
+      "opacity": 0.8
+    },
+    {
+      "motif": "starfield",
+      "id": "stars",
+      "height": "H * 0.6",
+      "count": 70,
+      "sizes": [
+        "MIN * 0.002",
+        "MIN * 0.003"
+      ],
+      "sparkles": 0,
+      "color": "role.ink"
+    }
+  ],
+  "overlay": [
+    {
+      "motif": "scanlines",
+      "id": "crt",
+      "spacing": "MIN * 0.006",
+      "band": "MIN * 0.002",
+      "color": "#000000",
+      "opacity": 0.2
+    }
+  ],
+  "photo": {
+    "filter": "posterize",
+    "posterize_levels": 4,
+    "saturation": 1.3
+  }
+}

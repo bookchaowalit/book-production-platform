@@ -85,15 +85,94 @@ class ItemOverride(ContractModel):
     params: dict[str, DesignValue] = Field(default_factory=dict, max_length=24)
 
 
+ImageMask = Literal["rect", "rounded", "circle", "ellipse", "arch", "blob", "star", "hexagon", "torn"]
+ImageFilter = Literal[
+    "style", "none", "grayscale", "sepia", "duotone", "posterize", "high_contrast", "blur", "invert", "vintage", "halftone",
+]
+ImageCutout = Literal["none", "plain", "ai"]
+_COLOR_REF = re.compile(r"^(?:#[0-9A-Fa-f]{6}|role\.[a-z0-9_]{1,24}|palette\.[a-z0-9_]{1,32}|brand\.(?:primary|accent|foreground|background))$")
+
+
+def _color_ref(value: str | None) -> str | None:
+    if value is None:
+        return None
+    if not _COLOR_REF.match(value):
+        raise ValueError("color must be #RRGGBB, role.<name>, palette.<name>, or brand.<token>")
+    return value.upper() if value.startswith("#") else value
+
+
+class ImageEffects(ContractModel):
+    """How a placed photo is cropped, cut out, shaped, filtered, and decorated (baked locally with Pillow).
+
+    ``fit=cover`` fills the box and crops around ``focus_x``/``focus_y``;
+    ``contain`` keeps the whole picture. ``cutout`` removes the background:
+    ``plain`` for a plain/studio backdrop (built in), ``ai`` with the optional
+    rembg model (falls back to ``plain`` when it is not installed). ``mask``
+    shapes the picture; ``outline_width`` draws a sticker edge around the
+    visible shape; ``shadow`` adds a soft drop shadow. ``filter=style`` uses the
+    art style's photo treatment (none without an art style).
+    """
+
+    fit: Literal["cover", "contain"] = "cover"
+    focus_x: float = Field(default=0.5, ge=0, le=1)
+    focus_y: float = Field(default=0.5, ge=0, le=1)
+    zoom: float = Field(default=1, ge=1, le=5)
+    cutout: ImageCutout = "none"
+    cutout_tolerance: int = Field(default=28, ge=1, le=120)
+    mask: ImageMask = "rect"
+    corner_radius: float = Field(default=0.08, ge=0, le=0.5)
+    filter: ImageFilter = "style"
+    duotone_dark: str | None = None
+    duotone_light: str | None = None
+    posterize_levels: int = Field(default=4, ge=2, le=8)
+    blur_radius: float = Field(default=6, ge=0, le=60)
+    brightness: float = Field(default=1, ge=0, le=3)
+    contrast: float = Field(default=1, ge=0, le=3)
+    saturation: float = Field(default=1, ge=0, le=3)
+    outline_width: float = Field(default=0, ge=0, le=80)
+    outline_color: str = "#FFFFFF"
+    shadow: float = Field(default=0, ge=0, le=1)
+    flip_x: bool = False
+
+    _validate_colors = field_validator("duotone_dark", "duotone_light", "outline_color")(_color_ref)
+
+
+class ImagePlacement(ContractModel):
+    """A photo placed anywhere on any theme; the box is in canvas fractions so it follows every size.
+
+    ``z``: ``background`` sits just above the theme background, ``behind_text``
+    under the first text layer, ``front`` over everything (stickers, cut-outs).
+    """
+
+    id: str = Field(pattern=r"^[a-z][a-z0-9_-]{0,31}$")
+    asset: str = Field(min_length=1, max_length=64)
+    x: float = Field(default=0.1, ge=-0.5, le=1.5)
+    y: float = Field(default=0.1, ge=-0.5, le=1.5)
+    width: float = Field(default=0.5, gt=0, le=2)
+    height: float = Field(default=0.5, gt=0, le=2)
+    square: bool = False
+    rotation: float = Field(default=0, ge=-180, le=180)
+    opacity: float = Field(default=1, ge=0, le=1)
+    z: Literal["background", "behind_text", "front"] = "behind_text"
+    effects: ImageEffects = Field(default_factory=ImageEffects)
+
+
 class DesignOverrides(ContractModel):
     """Changes applied on top of a theme without editing the theme file.
 
     ``style`` picks one of the theme's style presets; ``palette`` replaces
     palette colors; ``layers`` and ``items`` (keyed ``"Layer/item"``) adjust
-    individual parts. Every key is checked against the theme when compiled.
+    individual parts. ``art_style`` re-skins any theme with an art style pack
+    (colors, fonts, texture and decoration layers, photo treatment);
+    ``keep_brand_colors`` keeps the brand's primary/accent as its accents.
+    ``images`` places photos (collage, cut-outs, stickers). Every key is checked
+    against the theme when compiled.
     """
 
     style: str | None = Field(default=None, max_length=48)
+    art_style: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_]{1,47}$")
+    keep_brand_colors: bool = False
+    images: list[ImagePlacement] = Field(default_factory=list, max_length=12)
     palette: dict[str, str] = Field(default_factory=dict, max_length=32)
     layers: dict[str, LayerOverride] = Field(default_factory=dict, max_length=32)
     items: dict[str, ItemOverride] = Field(default_factory=dict, max_length=96)
@@ -102,6 +181,14 @@ class DesignOverrides(ContractModel):
     @classmethod
     def _palette_colors(cls, value: dict[str, str]) -> dict[str, str]:
         return {name: _hex_color(color) for name, color in value.items()}
+
+    @field_validator("images")
+    @classmethod
+    def _unique_image_ids(cls, value: list[ImagePlacement]) -> list[ImagePlacement]:
+        ids = [placement.id for placement in value]
+        if len(ids) != len(set(ids)):
+            raise ValueError("image placement ids must be unique")
+        return value
 
 
 class GraphicRequest(ContractModel):
@@ -142,6 +229,8 @@ class TextNode(NodeBase):
     stroke: str | None = None
     stroke_width: float = Field(default=0, ge=0, le=32)
     opacity: float = Field(default=1, ge=0, le=1)
+    # Average character advance in em used to wrap lines (wider for display fonts and letter spacing).
+    char_width: float = Field(default=0.55, gt=0.2, le=2)
 
     _validate_color = field_validator("color")(_hex_or_paint)
     _validate_stroke = field_validator("stroke")(_hex_or_paint)
@@ -177,11 +266,31 @@ class ShapeNode(NodeBase):
         return self
 
 
+def _optional_hex(value: str | None) -> str | None:
+    return None if value is None else _hex_color(value)
+
+
+class ResolvedImageEffects(ImageEffects):
+    """``ImageEffects`` with every color resolved to ``#RRGGBB`` and ``filter`` never ``style``."""
+
+    _validate_colors = field_validator("duotone_dark", "duotone_light", "outline_color")(_optional_hex)
+
+    @model_validator(mode="after")
+    def _filter_resolved(self) -> ResolvedImageEffects:
+        if self.filter == "style":
+            raise ValueError("resolved image effects need a concrete filter")
+        return self
+
+
 class ImageNode(NodeBase):
     node_type: Literal["image"] = "image"
     asset_key: str
     source_ref: str
     preserve_aspect: bool = True
+    # v2: rotation about the box centre, opacity, and baked photo effects.
+    rotation: float = Field(default=0, ge=-180, le=180)
+    opacity: float = Field(default=1, ge=0, le=1)
+    effects: ResolvedImageEffects | None = None
 
 
 class GroupNode(ContractModel):
@@ -245,7 +354,7 @@ class GraphicIR(ContractModel):
     @model_validator(mode="after")
     def _version_matches_features(self) -> GraphicIR:
         if self.schema_version == "graphic-ir.v1" and (self.paints or any(_uses_v2(node) for node in self.nodes)):
-            raise ValueError("graphic-ir.v1 cannot use groups, paths, ellipses, paints, or styled text; use graphic-ir.v2")
+            raise ValueError("graphic-ir.v1 cannot use groups, paths, ellipses, paints, styled text, or image effects; use graphic-ir.v2")
         known = {paint.paint_id for paint in self.paints}
         for ref in _paint_refs(self.nodes):
             if ref not in known:
@@ -273,10 +382,12 @@ def _uses_v2(node: TextNode | ShapeNode | ImageNode | GroupNode) -> bool:
             node.kind in ("ellipse", "path") or node.rx != 0 or node.opacity != 1 or node.stroke_opacity != 1
             or node.fill.startswith("paint:") or node.fill == "none" or bool(node.stroke and node.stroke.startswith("paint:"))
         )
+    if isinstance(node, ImageNode):
+        return node.rotation != 0 or node.opacity != 1 or node.effects is not None
     if isinstance(node, TextNode):
         return (
             node.font_weight != "normal" or node.letter_spacing != 0 or node.stroke is not None or node.opacity != 1
-            or node.color.startswith("paint:")
+            or node.color.startswith("paint:") or node.char_width != 0.55
         )
     return False
 

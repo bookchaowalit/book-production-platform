@@ -1,0 +1,54 @@
+{
+  "schema_version": "graphic-art-style.v1",
+  "style_id": "minimal",
+  "title": "Minimal",
+  "description": "Quiet off-white, black type, one thin rule and lots of space; theme decoration removed.",
+  "evidence": [
+    "minimal",
+    "minimalist",
+    "มินิมอล",
+    "มินิมัล",
+    "เรียบง่าย",
+    "เรียบหรู"
+  ],
+  "colors": {
+    "bg": "#FAFAF7",
+    "bg2": "#F0EFEA",
+    "surface": "#FFFFFF",
+    "ink": "#111111",
+    "accent": "#111111",
+    "accent2": "#5F5F5A",
+    "highlight": "#E8E6DF",
+    "on_accent": "#FFFFFF",
+    "muted": "#BDBDB6"
+  },
+  "fonts": {
+    "display": "builtin:kanit",
+    "body": "builtin:thai",
+    "label": "builtin:mono"
+  },
+  "text": {
+    "display_weight": "bold",
+    "display_letter_spacing": -0.01,
+    "label_case": "upper"
+  },
+  "hide_decor": true,
+  "decor_opacity": 1.0,
+  "backdrop": [
+    {
+      "motif": "line",
+      "id": "rule",
+      "x1": "MIN * 0.08",
+      "y1": "H - MIN * 0.08",
+      "x2": "MIN * 0.2",
+      "y2": "H - MIN * 0.08",
+      "stroke": "role.ink",
+      "stroke_width": "MIN * 0.004"
+    }
+  ],
+  "overlay": [],
+  "photo": {
+    "filter": "none",
+    "saturation": 0.85
+  }
+}

@@ -1,7 +1,7 @@
 # คู่มือ Graphics: ทำภาพ ปรับดีไซน์ และสร้างธีมเอง
 
-คู่มือนี้พาทำตั้งแต่สร้างภาพจากธีมที่มีอยู่ ปรับดีไซน์เอง ให้ AI ปรับตามคำสั่ง
-นำเข้า Affinity ไปจนถึงสร้างธีมใหม่ ทุกคำสั่งในคู่มือทดสอบกับเครื่องมือจริงแล้ว
+คู่มือนี้พาทำตั้งแต่สร้างภาพจากธีมที่มีอยู่ ปรับดีไซน์เอง ให้ AI ปรับตามคำสั่ง เปลี่ยนลุคด้วย art style
+ใส่รูปและตัดแปะ นำเข้า Affinity ไปจนถึงสร้างธีมใหม่ ทุกคำสั่งในคู่มือทดสอบกับเครื่องมือจริงแล้ว
 รายละเอียดเชิงเทคนิคดูได้ที่ [README](../README.md) หัวข้อ Graphics
 
 ## 1. ภาพรวม: ระบบมี 3 ชั้น
@@ -10,11 +10,14 @@
 |---|---|---|---|
 | **Motif** | ชิ้นส่วนวาดที่ใช้ซ้ำได้ เช่น ทุ่งดาว กริด ดวงอาทิตย์ข้อความ ปุ่ม | `src/book_production_platform/graphics_production/motifs.py` | นักพัฒนา (เขียน Python) |
 | **Theme** | หน้าตาหนึ่งแบบ: ใช้ motif อะไร วางตรงไหน สีอะไร มีช่องข้อความอะไร | `src/book_production_platform/graphics_production/themes/*.json` | ใครก็ได้ (เขียน JSON) |
-| **Design override** | ปรับงานชิ้นหนึ่งโดยไม่แก้ theme: สลับ style ซ่อน/เลื่อน layer เปลี่ยนค่า | ในไฟล์ request ของงาน (`design`) | คน หรือ AI ตามคำสั่ง |
+| **Art style** | "ลุค" ที่ใช้ได้กับทุกธีม: สี ฟอนต์ texture ของตกแต่ง และการแต่งรูป (retro, minimal, jazz, dystopia ...) | `src/book_production_platform/graphics_production/art_styles/*.json` + คลัง style ที่ AI สร้าง | ใครก็ได้ หรือให้ AI สร้างจากคำบรรยาย |
+| **Design override** | ปรับงานชิ้นหนึ่งโดยไม่แก้ theme: เลือก art style สลับ style ซ่อน/เลื่อน layer เปลี่ยนค่า ใส่รูป | ในไฟล์ request ของงาน (`design`) | คน หรือ AI ตามคำสั่ง |
 
 - ทำหน้าตาใหม่ = เขียน theme ใหม่ (ไม่ต้องเขียนโค้ด)
 - ปรับงานชิ้นเดียว = ใส่ design override (ไม่ต้องแก้ theme)
 - อยากได้ชิ้นส่วนวาดแบบใหม่ที่ยังไม่มี = เพิ่ม motif หนึ่งตัว แล้วทุก theme ใช้ได้
+- อยากได้ลุคอื่น (เรโทร มินิมอล แจ๊ส ดิสโทเปีย หรืออะไรก็ได้) = เลือก art style (ข้อ 5A) ธีมเดิม ข้อความเดิม เปลี่ยนแค่ "หน้าตา"
+- อยากใส่รูปลูกค้า ตัดพื้นหลัง ทำสติกเกอร์ ตัดแปะ = ใส่ `images` (ข้อ 5B)
 
 ## 2. เตรียมเครื่อง (ครั้งเดียว)
 
@@ -24,8 +27,10 @@
    source /home/bookchaowalit/solo-empire/.runtime/venv-platform/bin/activate
    ```
 
-2. ติดตั้งฟอนต์ที่ธีมใช้ (จาก Google Fonts) ไม่งั้น Affinity และภาพ PNG จะใช้ฟอนต์อื่นแทน:
-   **Anton** (หัวข้อใหญ่), **Sarabun** (ไทย), **Playfair Display** (serif), **Space Mono** (ตัวพิมพ์ดีด)
+2. ติดตั้งฟอนต์ที่ธีมใช้ (จาก Google Fonts, ใบอนุญาต OFL ใช้งานเชิงพาณิชย์ได้) ไม่งั้น Affinity และภาพ PNG จะใช้ฟอนต์อื่นแทน:
+   **Sarabun, Kanit, Mitr, Chakra Petch, Trirong, Itim, Sriracha** (ไทย) และ **Anton, Bungee, Limelight,
+   Monoton, Press Start 2P, Special Elite, Playfair Display, Space Mono** (ลาติน) ชุดนี้อยู่ใน
+   `/home/bookchaowalit/solo-empire/.runtime/fonts` แล้ว ดับเบิลคลิกติดตั้งในเครื่องที่ใช้ Affinity
 3. ตัวทำภาพ PNG: ถ้ามี Chrome/Edge ระบบใช้ให้เอง ถ้าไม่มีจะใช้ `resvg-py`
    (`pip install .[preview]`) ถ้าฟอนต์อยู่นอกโฟลเดอร์ระบบ ให้บอกที่อยู่:
 
@@ -42,9 +47,9 @@
 book-production graphics themes
 ```
 
-ธีมตอนนี้: `synthwave`, `bold_editorial`, `soft_gradient` และของเดิม `quote_card`,
-`product_card`, `announcement` ขนาด: `square` 1080×1080, `portrait` 1080×1350,
-`story` 1080×1920, `landscape` 1920×1080 (ธีมเดิม 3 ตัวไม่มี landscape)
+ธีมตอนนี้: `synthwave`, `bold_editorial`, `soft_gradient`, `menu_board`, `promo_sale`,
+`grand_opening` และของเดิม `quote_card`, `product_card`, `announcement` ขนาด: `square` 1080×1080,
+`portrait` 1080×1350, `story` 1080×1920, `landscape` 1920×1080 (ธีมเดิม 3 ตัวไม่มี landscape)
 
 สร้างภาพ (ใส่ข้อความด้วย `--set ช่อง=ข้อความ` ได้หลายครั้ง, `--variant all` = ทุกขนาด):
 
@@ -166,6 +171,99 @@ book-production graphics edit-shadow \
   --split tests/graphics/fixtures/eval_gfx_edit24_split.json --output edit-shadow.json
 ```
 
+## 5A. เปลี่ยนลุคทั้งงานด้วย art style
+
+ธีมคือ "วางอะไรตรงไหน" ส่วน art style คือ "หน้าตาเป็นแบบไหน" ใช้ art style ไหนกับธีมไหนก็ได้
+ดูรายการ:
+
+```bash
+book-production graphics styles
+```
+
+มีให้ 18 แบบ: `retro` (ยุค 70), `minimal`, `jazz`, `dystopia`, `vaporwave`, `art_deco`, `grunge`,
+`swiss`, `memphis`, `y2k`, `pop_art`, `noir`, `cyberpunk`, `risograph`, `luxury`, `kawaii`,
+`handmade`, `arcade_8bit`
+
+art style หนึ่งชุดเปลี่ยน:
+
+- **สี** ตามหน้าที่ (พื้น การ์ด ตัวหนังสือ สีเน้น ปุ่ม) ทุกธีมจับคู่สีของตัวเองกับหน้าที่ไว้แล้ว
+  ระบบตรวจ contrast ของตัวหนังสือตามเกณฑ์ WCAG ทุก style จึงไม่มีทางได้ตัวหนังสือที่อ่านไม่ออก
+- **ฟอนต์** หัวข้อ เนื้อหา และป้ายเล็ก (มีฟอนต์ไทยรองรับทุกชุด)
+- **ลักษณะหัวข้อ** น้ำหนัก ตัวพิมพ์ใหญ่ ระยะตัวอักษร เงาเยื้อง
+- **ของตกแต่งและ texture** เช่น โน้ตดนตรี กรอบอาร์ตเดโค แถบเตือน scanline รอยขีดข่วน
+  ทุกอย่างเป็น layer แยก (`ArtBackdrop`, `ArtOverlay`) จึงซ่อนหรือแก้ใน Affinity ได้
+- **การแต่งรูป** ค่าเริ่มต้นของรูปที่ใส่ (เช่น jazz ทำ duotone, noir ทำขาวดำ, kawaii ใส่ขอบสติกเกอร์)
+- บาง style (minimal, luxury, swiss, noir) ซ่อนของตกแต่งเดิมของธีม บาง style แค่ทำให้จางลง
+
+ใช้ตอนสร้าง:
+
+```bash
+book-production graphics make --theme promo_sale --variant all \
+  --set headline=ฉลองหน้าหนาว --set discount=-20% --set cta=แวะมาเลย \
+  --art-style jazz --output work --idempotency-key jazz-1
+```
+
+`--keep-brand-colors` ใช้สีแบรนด์ของลูกค้าเป็นสีเน้นแทนสีของ style
+ใช้กับงานที่ทำไว้แล้ว: patch `{"art_style": "noir"}` หรือสั่ง AI ว่า "เปลี่ยนเป็นแนวฟิล์มนัวร์"
+เอาออก: `{"art_style": "none"}`
+
+**อยากได้ลุคที่ยังไม่มี** ("งานวัดไทย ไฟกระพริบ", "ฝนตกโตเกียว lo-fi") ให้ AI ออกแบบ style ใหม่จากคำบรรยาย
+AI เลือกสี ฟอนต์ และของตกแต่งจากชิ้นส่วนที่ระบบมีอยู่ ไม่ได้เขียนโค้ดหรือวาดเอง จากนั้นระบบตรวจ contrast
+และลองทำภาพจริง 3 แบบก่อนเก็บเข้าคลัง ถ้าไม่ผ่านจะให้ AI แก้หนึ่งรอบ ถ้ายังไม่ผ่านจะไม่บันทึก:
+
+```bash
+export GRAPHICS_PRODUCTION_STYLE_DIR=/home/bookchaowalit/solo-empire/.runtime/graphics-styles
+book-production graphics style-create --description "งานวัดไทย ไฟกระพริบ สีสด" \
+  --job-id style-temple-1 --output style-preview \
+  --provider-config /home/bookchaowalit/solo-empire/.runtime/provider-configs/graphics-art-style.json
+```
+
+style ที่ได้จะอยู่ในคลังและใช้แบบเดียวกับ style ในตัว ถ้าส่ง `--style-provider-config` ให้คำสั่ง `edit`
+แล้วสั่งลุคที่ยังไม่มี ระบบจะสร้าง style ให้ก่อน แล้วใช้กับงานนั้นทันที
+(config ต้องเป็น `"mode": "live"` เหมือนข้อ 5)
+
+ถ้าลูกค้าเขียนลุคไว้ในบรีฟ เช่น "อยากได้แนวมินิมอล" คำสั่ง `graphics brief` จะใส่ art style ให้เองจากคำในบรีฟ
+(ไม่ได้ให้ AI เดา)
+
+## 5B. ใส่รูป ตัดพื้นหลัง ทำสติกเกอร์ ตัดแปะ
+
+ใส่รูปได้ทุกธีม ได้หลายรูป (สูงสุด 12) ตำแหน่งและขนาดเป็น**สัดส่วนของภาพ** (0–1 นับจากมุมซ้ายบน)
+จึงใช้ค่าเดียวกันได้ทุกขนาด:
+
+```bash
+book-production graphics make --theme grand_opening --variant portrait \
+  --set shop=คลินิกสัตว์หางกระดิก --set "headline=เปิดสาขาใหม่แล้ว!" --set "date=เสาร์ 12 ธันวาคม 2026" \
+  --art-style kawaii --photo corgi=photos/corgi.jpg \
+  --place '{"id":"corgi","asset":"corgi","x":0.6,"y":0.6,"width":0.42,"height":0.4,"z":"front","rotation":-6,
+            "effects":{"cutout":"ai","fit":"contain","outline_width":16,"shadow":0.6}}' \
+  --output work --idempotency-key vet-1
+```
+
+ค่าของแต่ละรูป:
+
+| ค่า | ความหมาย |
+|---|---|
+| `x`, `y`, `width`, `height` | กรอบรูป (สัดส่วน 0–1) `square: true` ให้สูงเท่ากว้าง |
+| `z` | `background` (ทับพื้นหลัง), `behind_text` (ใต้ตัวหนังสือ, ค่าเริ่มต้น), `front` (บนสุด แบบสติกเกอร์) |
+| `rotation`, `opacity` | หมุน (องศา) และความโปร่งใส |
+| `effects.fit` | `cover` เต็มกรอบ (ครอปตาม `focus_x`/`focus_y`, ซูมด้วย `zoom`) หรือ `contain` เห็นทั้งรูป |
+| `effects.cutout` | ลบพื้นหลัง: `ai` (คน สัตว์ สินค้า, ใช้โมเดลในเครื่อง) หรือ `plain` (รูปพื้นขาว/สีเรียบ) |
+| `effects.mask` | รูปทรง: `rect rounded circle ellipse arch blob star hexagon torn` (`torn` = ขอบกระดาษฉีก) |
+| `effects.filter` | `style` (ตาม art style), `none grayscale sepia duotone posterize high_contrast blur invert vintage halftone` |
+| `effects.outline_width`, `outline_color` | ขอบสติกเกอร์รอบรูปทรงที่เห็น |
+| `effects.shadow` | เงา 0–1 |
+| `effects.brightness`, `contrast`, `saturation`, `flip_x` | ปรับแสงสี กลับซ้ายขวา |
+
+สีใน effects ใส่ได้ทั้ง `#RRGGBB` และสีตามหน้าที่ของ art style เช่น `role.accent`
+
+สั่ง AI ได้เหมือนกัน เช่น "เอารูปหมาไปไว้มุมขวาล่าง ตัดพื้นหลังออก ใส่ขอบขาว", "ทำรูปแมวเป็นวงกลมแล้วเอียงนิดหน่อย",
+"ให้รูปพื้นหลังเป็นขาวดำจาง ๆ" ถ้ารูป `front` บังตัวหนังสือเกิน 15% ระบบจะถามกลับ (`photo_covers_text`) แทนการทำต่อ
+
+การตัดพื้นหลังแบบ `ai` ต้องติดตั้งครั้งเดียว (`pip install .[cutout]`) และโหลดโมเดลมาเก็บไว้ในเครื่อง
+(`U2NET_HOME=/home/bookchaowalit/solo-empire/.runtime/u2net`) ถ้าไม่มีจะใช้ `plain` แทนและบันทึกไว้ใน trace
+รูปที่แต่งแล้วฝังใน SVG เป็น PNG ขนาดเท่ากรอบ ถ้าจะแก้ต่อใน Affinity ให้ใช้รูปต้นฉบับ
+โดยทำตามขั้นตอนใน `MANUAL-STEPS.md` (มีขั้นตอนลบพื้นหลัง ครอป มาสก์ ฟิลเตอร์ ขอบ และเงาของแต่ละรูป)
+
 ## 6. นำเข้า Affinity และส่งลูกค้า
 
 1. Affinity Designer/Photo: `File ▸ Open…` เลือกไฟล์ `.svg`
@@ -264,9 +362,29 @@ book-production graphics edit-shadow \
 | `stripes` | ลายเส้นเฉียง | `x y width height band gap angle color opacity` |
 | `grain` | เกรนผิวกระดาษ | `count size color opacity` |
 | `corner_frame` | กรอบมุม + เส้นขอบ | `inset length color stroke_width border border_width` |
+| `scanlines` | เส้นจอ CRT | `spacing band color opacity` |
+| `checker` | ตารางหมากรุก | `x y width height size color opacity` |
+| `dots` | ลายจุด | `spacing radius stagger color opacity` |
+| `confetti_shapes` | สามเหลี่ยม วง เส้นหยัก กากบาท (Memphis) | `count size colors avoid_center` |
+| `squiggle` | เส้นหยักวาดมือ | `x1 y1 x2 y2 amplitude wavelength stroke stroke_width` |
+| `zigzag` | เส้นซิกแซก | `y amplitude step stroke stroke_width` |
+| `arcs` | ครึ่งวงซ้อน (พัดอาร์ตเดโค/พระอาทิตย์ขึ้น) | `cx cy radius step count stroke` |
+| `deco_frame` | กรอบคู่มุมขั้นบันได | `inset gap length color stroke_width` |
+| `distress` | รอยหมึกกระเด็นและรอยขีด (grunge) | `count size color opacity` |
+| `notes` | โน้ตดนตรี | `x y width height count size color` |
+| `glitch_bars` | แถบ glitch สองสี | `count colors max_height opacity` |
+| `barcode` | บาร์โค้ดตกแต่ง | `x y width height color` |
+| `vignette` | ขอบมืด | `color strength` |
+| `torn_edge` | แถบกระดาษฉีก | `y height side amplitude fill` |
 
 ฟอนต์ใน `font`: `request` (ฟอนต์ของงาน), `builtin:sans`, `builtin:display` (Anton),
-`builtin:thai` (Sarabun), `builtin:serif` (Playfair Display), `builtin:mono` (Space Mono)
+`builtin:thai` (Sarabun), `builtin:serif` (Playfair Display), `builtin:mono` (Space Mono),
+`builtin:kanit`, `builtin:mitr`, `builtin:chakra` (Chakra Petch), `builtin:trirong`, `builtin:itim`,
+`builtin:sriracha`, `builtin:anton`, `builtin:bungee`, `builtin:limelight`, `builtin:monoton`,
+`builtin:pixel` (Press Start 2P), `builtin:typewriter` (Special Elite)
+
+ธีมใหม่ที่อยากให้ art style ใช้ได้: ใส่ `"roles": {"ชื่อสีใน palette": "bg|bg2|surface|ink|accent|accent2|highlight|on_accent|muted"}`
+และติด `"decor": true` ที่ layer หรือ item ที่เป็นของตกแต่ง (style แบบ minimal จะซ่อนให้)
 
 `fill` / `stroke` / `color` ของ `rect`, `ellipse`, `polygon`, `ridge`, `line` และข้อความ ใส่เป็น gradient ในตัวก็ได้:
 `"fill": {"type": "linear", "angle": 90, "stops": [...]}`
@@ -314,4 +432,10 @@ book-production graphics make --theme sale_burst --variant all \
 | `instruction_unclear` / `unsupported_request` | AI ไม่แน่ใจว่าส่วนไหน หรือทำไม่ได้ | บอกให้ชัดขึ้น (ข้อ 5) |
 | `shadow_mode_only` | config ของ AI ยังไม่เปิดใช้จริง | เจ้าของเปลี่ยนเป็น `"mode": "live"` |
 | `browser_not_found` | ไม่มีตัวทำ PNG | ติดตั้ง Chrome/Edge หรือ `resvg-py` |
-| ฟอนต์ไม่ตรง | ยังไม่ได้ติดตั้งฟอนต์ | ติดตั้ง Anton, Sarabun, Playfair Display, Space Mono |
+| `art_style_unknown:<id>` | ไม่มี art style ชื่อนี้ | ดู `graphics styles` หรือสร้างด้วย `style-create` |
+| `art_style_low_contrast` | style ที่ออกแบบทำให้ตัวหนังสืออ่านยาก | ปรับสี ink/bg (ระบบไม่ยอมบันทึก) |
+| `art_style_needs_designer` | สั่งลุคที่ยังไม่มี แต่ไม่ได้ส่ง `--style-provider-config` | ส่ง config หรือรัน `style-create` ก่อน |
+| `design_image_asset_unknown:<key>` | `asset` ของรูปไม่อยู่ใน `assets` | ใส่ `--photo key=path` ให้ตรงชื่อ |
+| `photo_covers_text` | รูป `front` บังตัวหนังสือ | ย่อ/เลื่อนรูป หรือใช้ `z: behind_text` |
+| `image_effects_need_raster_image` | ใส่ effects กับไฟล์ SVG | ใช้ PNG/JPG แทน |
+| ฟอนต์ไม่ตรง | ยังไม่ได้ติดตั้งฟอนต์ | ติดตั้งฟอนต์ทั้งหมดในข้อ 2 |

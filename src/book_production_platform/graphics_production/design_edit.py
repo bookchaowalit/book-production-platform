@@ -38,9 +38,12 @@ from book_production_platform.graphics_ir import (
     DesignOverrides,
     GraphicRequest,
     GroupNode,
+    ImageNode,
     TextNode,
 )
 
+from .art_style_ai import ArtStyleDesigner
+from .art_styles import load_art_styles
 from .layout import LayoutError
 from .provider_config import ProviderConfig, ProviderConfigError, parse_provider_config
 from .templates import TemplateError, compile_template, controls_for
@@ -48,7 +51,12 @@ from .themes import ThemeError, get_theme
 
 EDIT_ADAPTER_VERSION = "graphics-design-edit.v1"
 MAX_INSTRUCTION_CHARS = 1_500
-_CHANGE_KEYS = frozenset({"style", "palette", "layers", "items", "content", "missing", "unsupported"})
+_CHANGE_KEYS = frozenset({
+    "style", "palette", "layers", "items", "content", "missing", "unsupported",
+    "art_style", "new_art_style", "keep_brand_colors", "images",
+})
+# Share of a text box a front photo may cover before the edit asks the person first.
+MAX_TEXT_COVER = 0.15
 _EXTRA_GUARD = re.compile(
     r"\.\./|\.\.\\|<\s*script|javascript:|file:/|https?://|url\s*\(|\bon[a-z]+\s*=",
     re.IGNORECASE,
@@ -69,7 +77,11 @@ SYSTEM_PROMPT = (
     "slot with the words people use for it (in English and Thai), so map the instruction's word to its slot. "
     "Change only what the instruction asks for and nothing else. Screen directions: y grows downward, x grows to the right. "
     "If the instruction does not say which part to change, or how, list it in missing. "
-    "If it asks for something the controls cannot do (new shapes, images, effects not listed), list it in unsupported."
+    'art_style: an id from art_styles when the instruction names a look ("แนวมินิมอล" = minimal), "none" removes it, null keeps. '
+    "new_art_style: only if no listed style fits, a short description of the look (a designer builds it, so do not also list "
+    "the look in unsupported); else null. keep_brand_colors: bool or null. "
+    'images: {photo id: fields | null} adds (needs "asset"), changes, or removes photos; see photo_fields. '
+    "If it asks for something the controls cannot do (new shapes or effects not listed), list it in unsupported."
 )
 REPAIR_PROMPT = (
     "Your previous reply was not the required JSON object. Reply again with only "
@@ -123,6 +135,32 @@ def merge_design(current: Mapping[str, Any] | None, change: Mapping[str, Any]) -
     merged: dict[str, Any] = json.loads(json.dumps(current or {}))
     if change.get("style") is not None:
         merged["style"] = change["style"]
+    if change.get("art_style") is not None:
+        if change["art_style"] in ("none", ""):
+            merged.pop("art_style", None)
+        else:
+            merged["art_style"] = change["art_style"]
+    if change.get("keep_brand_colors") is not None:
+        merged["keep_brand_colors"] = bool(change["keep_brand_colors"])
+    if change.get("images"):
+        placements = {placement["id"]: placement for placement in merged.get("images", [])}
+        order = [placement["id"] for placement in merged.get("images", [])]
+        for image_id, values in change["images"].items():
+            if values is None:
+                placements.pop(image_id, None)
+                order = [item for item in order if item != image_id]
+                continue
+            entry = placements.setdefault(image_id, {"id": image_id})
+            if image_id not in order:
+                order.append(image_id)
+            for key, value in values.items():
+                if key == "effects" and isinstance(value, dict):
+                    entry.setdefault("effects", {}).update(value)
+                elif key != "id":
+                    entry[key] = value
+        merged["images"] = [placements[image_id] for image_id in order if image_id in placements]
+        if not merged["images"]:
+            merged.pop("images")
     if change.get("palette"):
         merged.setdefault("palette", {}).update(change["palette"])
     for layer_id, values in (change.get("layers") or {}).items():
@@ -144,6 +182,11 @@ def _changed_targets(change: Mapping[str, Any]) -> list[str]:
     changed += [f"layer:{layer_id}" for layer_id in change.get("layers") or {}]
     changed += [f"item:{target}" for target in change.get("items") or {}]
     changed += [f"content:{slot}" for slot in change.get("content") or {}]
+    if change.get("art_style") is not None:
+        changed.append(f"art_style:{change['art_style']}")
+    if change.get("keep_brand_colors") is not None:
+        changed.append(f"keep_brand_colors:{bool(change['keep_brand_colors'])}")
+    changed += [f"image:{image_id}" for image_id in change.get("images") or {}]
     return changed
 
 
@@ -161,6 +204,34 @@ def _outside_canvas(ir_nodes: list[Any], width: float, height: float, dx: float 
             if x < -1 or y < -1 or x + node.width > width + 1 or y + node.height > height + 1:
                 outside.append(node.node_id)
     return outside
+
+
+def _covered_text(ir_nodes: list[Any]) -> list[str]:
+    """Text nodes a front photo covers by more than :data:`MAX_TEXT_COVER` of their box."""
+
+    texts: list[tuple[str, float, float, float, float]] = []
+    photos: list[tuple[float, float, float, float]] = []
+
+    def walk(nodes: list[Any], dx: float, dy: float, front: bool) -> None:
+        for node in nodes:
+            if isinstance(node, GroupNode):
+                walk(list(node.children), dx + node.offset_x, dy + node.offset_y, front or node.node_id == "PhotosFront")
+            elif isinstance(node, TextNode):
+                texts.append((node.node_id, node.x + dx, node.y + dy, node.width, node.height))
+            elif isinstance(node, ImageNode) and front:
+                photos.append((node.x + dx, node.y + dy, node.width, node.height))
+
+    walk(ir_nodes, 0, 0, False)
+    covered = []
+    for node_id, x, y, width, height in texts:
+        area = max(width * height, 1)
+        overlap = sum(
+            max(0.0, min(x + width, px + pw) - max(x, px)) * max(0.0, min(y + height, py + ph) - max(y, py))
+            for px, py, pw, ph in photos
+        )
+        if overlap / area > MAX_TEXT_COVER:
+            covered.append(node_id)
+    return covered
 
 
 def apply_change(
@@ -191,11 +262,23 @@ def apply_change(
             missing=["instruction"],
             issues=[_issue("instruction_unclear", "change", "say which part to change and how")],
         )
-    for key, kind in (("palette", dict), ("layers", dict), ("items", dict), ("content", dict)):
+    for key, kind in (("palette", dict), ("layers", dict), ("items", dict), ("content", dict), ("images", dict)):
         if change.get(key) is not None and not isinstance(change.get(key), kind):
             return DesignEditResult("rejected", issues=[_issue("change_fields_invalid", key, f"{key} must be an object")])
     if change.get("style") is not None and not isinstance(change.get("style"), str):
         return DesignEditResult("rejected", issues=[_issue("change_fields_invalid", "style", "style must be a style id or null")])
+    if change.get("art_style") is not None and not isinstance(change.get("art_style"), str):
+        return DesignEditResult("rejected", issues=[_issue("change_fields_invalid", "art_style", "art_style must be an art style id, none, or null")])
+    if change.get("keep_brand_colors") is not None and not isinstance(change.get("keep_brand_colors"), bool):
+        return DesignEditResult("rejected", issues=[_issue("change_fields_invalid", "keep_brand_colors", "keep_brand_colors must be true, false, or null")])
+    if change.get("new_art_style"):
+        return DesignEditResult(
+            "needs_input", missing=["art_style"],
+            issues=[_issue("art_style_needs_designer", "new_art_style", "this look needs a new art style; run the style designer first")],
+        )
+    for image_id, values in (change.get("images") or {}).items():
+        if values is not None and not isinstance(values, dict):
+            return DesignEditResult("rejected", issues=[_issue("change_fields_invalid", f"images.{image_id}", "a photo change must be an object or null")])
 
     try:
         base = GraphicRequest.model_validate(dict(request))
@@ -252,7 +335,31 @@ def apply_change(
             missing=[f"node.{node_id}" for node_id in outside],
             issues=[_issue("out_of_canvas", f"node.{node_id}", "the edit moves text outside the canvas") for node_id in outside],
         )
+    covered = _covered_text(list(ir.nodes))
+    if covered:
+        return DesignEditResult(
+            "needs_input",
+            missing=[f"node.{node_id}" for node_id in covered],
+            issues=[_issue("photo_covers_text", f"node.{node_id}", "a front photo covers this text; move or shrink the photo, or put it behind the text")
+                    for node_id in covered],
+        )
     return DesignEditResult("complete", request=edited, changed=changed)
+
+
+PHOTO_FIELDS = (
+    "x, y, width, height: canvas fractions 0..1 from the top-left; square: bool; rotation: degrees; opacity; "
+    "z: background|behind_text|front (keep front photos off the text); effects: {fit: cover|contain, focus_x, focus_y, zoom, "
+    "cutout: none|plain|ai (remove background; ai for people/animals/objects, plain for studio shots), "
+    "mask: rect|rounded|circle|ellipse|arch|blob|star|hexagon|torn, filter: style|none|grayscale|sepia|duotone|posterize|"
+    "high_contrast|blur|invert|vintage|halftone, outline_width: px sticker edge, outline_color, shadow 0..1, flip_x, "
+    "brightness, contrast, saturation}"
+)
+
+
+def _art_style_menu() -> list[str]:
+    """Art style ids (descriptive names such as retro, jazz, kawaii; the model maps a look onto one)."""
+
+    return sorted(load_art_styles())
 
 
 def _model_view(controls: Mapping[str, Any]) -> dict[str, Any]:
@@ -264,6 +371,11 @@ def _model_view(controls: Mapping[str, Any]) -> dict[str, Any]:
         "styles": controls["styles"],
         "current_style": controls["style"],
         "palette": controls["palette"],
+        "art_styles": _art_style_menu(),
+        "current_art_style": controls["art_style"],
+        "keep_brand_colors": controls["keep_brand_colors"],
+        **({"images": controls["images"], "image_assets": controls["image_assets"], "photo_fields": PHOTO_FIELDS}
+           if controls["image_assets"] else {}),
         "fonts": controls["fonts"],
         "slots": {name: spec["labels"] for name, spec in controls["slots"].items()},
         "layers": [
@@ -293,7 +405,9 @@ class DesignEditor:
         ledger_root: str | Path | None = None,
         transport: GatewayTransport | None = None,
         clock: Callable[[], float] | None = None,
+        style_designer: ArtStyleDesigner | None = None,
     ) -> None:
+        self.style_designer = style_designer
         if provider_config is None:
             raise EditorNotConfigured("provider_not_configured: a design-edit provider configuration is required")
         try:
@@ -343,9 +457,31 @@ class DesignEditor:
         elif outcome.status != "ok" or outcome.parsed is None:
             result = DesignEditResult("rejected", issues=[_issue(outcome.issue_code or "invalid_model_output", "provider", "the gateway call did not complete")])
         else:
-            result = apply_change(request, outcome.parsed, instruction=instruction)
-        result.model_calls = outcome.model_calls
-        result.input_tokens, result.output_tokens = outcome.input_tokens, outcome.output_tokens
+            change = dict(outcome.parsed)
+            description = change.get("new_art_style")
+            style_calls = style_in = style_out = 0
+            if isinstance(description, str) and description.strip() and self.style_designer is not None:
+                # A look no listed style matches: the art style designer creates it (its own call budget).
+                designed = self.style_designer.design(description, job_id=f"{job_id}-style", locale=locale)
+                style_calls, style_in, style_out = designed.model_calls, designed.input_tokens, designed.output_tokens
+                if designed.status == "complete" and designed.style is not None:
+                    change["art_style"], change["new_art_style"] = designed.style.style_id, None
+                    # The designer covers the look; anything else the model could not map is reported, not dropped.
+                    leftover = _strings(change.pop("unsupported", None))
+                    result = apply_change(request, change, instruction=instruction)
+                    if result.status == "complete":
+                        result.changed.append(f"new_art_style:{designed.style.style_id}")
+                        if leftover:
+                            result.issues.append(_issue("partly_unsupported", "change",
+                                                        f"applied the new look; {len(leftover)} other part(s) of the request were not possible"))
+                else:
+                    result = DesignEditResult(designed.status, missing=["art_style"], issues=designed.issues)
+            else:
+                result = apply_change(request, change, instruction=instruction)
+            result.model_calls, result.input_tokens, result.output_tokens = style_calls, style_in, style_out
+        result.model_calls += outcome.model_calls
+        result.input_tokens += outcome.input_tokens
+        result.output_tokens += outcome.output_tokens
         return result
 
 

@@ -1,0 +1,82 @@
+{
+  "schema_version": "graphic-art-style.v1",
+  "style_id": "risograph",
+  "title": "Risograph Zine",
+  "description": "Two-ink riso print: cream paper, blue and fluorescent pink, halftone and slightly rough grain.",
+  "evidence": [
+    "risograph",
+    "riso",
+    "ริโซ",
+    "zine",
+    "ซีน",
+    "screen print"
+  ],
+  "colors": {
+    "bg": "#F6F1E7",
+    "bg2": "#EDE5D5",
+    "surface": "#FFFDF8",
+    "ink": "#1D3B8B",
+    "accent": "#D42A82",
+    "accent2": "#0B7A47",
+    "highlight": "#FFE800",
+    "on_accent": "#FFFFFF",
+    "muted": "#8FA3D9"
+  },
+  "fonts": {
+    "display": "builtin:mitr",
+    "body": "builtin:thai",
+    "label": "builtin:typewriter"
+  },
+  "text": {
+    "display_weight": "bold",
+    "display_shadow": {
+      "dx": "MIN * 0.005",
+      "dy": "MIN * 0.004",
+      "color": "role.accent",
+      "opacity": 0.75
+    }
+  },
+  "hide_decor": false,
+  "decor_opacity": 0.4,
+  "backdrop": [
+    {
+      "motif": "halftone",
+      "id": "pink-dots",
+      "x": "W * 0.45",
+      "y": 0,
+      "width": "W * 0.55",
+      "height": "H * 0.5",
+      "spacing": "MIN * 0.022",
+      "max_radius": "MIN * 0.009",
+      "direction": 225,
+      "color": "role.accent",
+      "opacity": 0.45
+    },
+    {
+      "motif": "blobs",
+      "id": "ink",
+      "count": 2,
+      "min_radius": "MIN * 0.12",
+      "max_radius": "MIN * 0.22",
+      "colors": [
+        "role.muted"
+      ],
+      "opacity": 0.35
+    }
+  ],
+  "overlay": [
+    {
+      "motif": "grain",
+      "id": "grain",
+      "color": "role.ink",
+      "opacity": 0.1,
+      "count": "2200 * W * H / 1166400",
+      "size": "MIN * 0.0016"
+    }
+  ],
+  "photo": {
+    "filter": "duotone",
+    "duotone_dark": "role.ink",
+    "duotone_light": "role.bg"
+  }
+}

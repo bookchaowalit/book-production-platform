@@ -4,7 +4,9 @@ The model may only *propose* a Graphics batch: for each item a template id
 from the fixed registry, a variant, a brand-kit reference, and text copied
 from the brief into the template's slots. It never chooses colors, images,
 fonts, canvas sizes, or layout; the brand kit resolves token refs to colors
-and the deterministic template engine does all layout.
+and the deterministic template engine does all layout. When the brief itself
+names a look ("แนว jazz", "อยากได้มินิมอล"), the matching art style pack is
+attached deterministically (:func:`brief_art_style`), never by the model.
 
 Fail-closed rules:
 
@@ -65,6 +67,7 @@ from book_production_platform.graphics_ir import (
     validate_request,
 )
 
+from .art_styles import load_art_styles
 from .layout import LayoutError, visible_length
 from .provider_config import ProviderConfig, ProviderConfigError, parse_provider_config
 from .templates import VARIANT_SIZES, TemplateError, compile_template
@@ -306,6 +309,30 @@ def style_or_asset_requested(brief: str, copied: list[str]) -> bool:
     return bool(_STYLE_OR_ASSET_REQUEST.search(remaining))
 
 
+def brief_art_style(brief: str, copied: list[str]) -> str | None:
+    """The art style a brief names outside its copied slot texts ("แนว jazz", "อยากได้มินิมอล"), else ``None``.
+
+    The style with the most evidence words wins; ties go to the one named first.
+    """
+
+    remaining = _without_references(brief)
+    for value in sorted(copied, key=len, reverse=True):
+        if value:
+            remaining = remaining.replace(value, " ")
+    lowered = remaining.lower()
+    best: tuple[int, int, str] | None = None
+    for style_id, style in load_art_styles().items():
+        hits = [word for word in style.evidence if evidence_present((word,), remaining)]
+        if not hits:
+            continue
+        positions = [position for position in (lowered.find(word.lower()) for word in hits) if position >= 0]
+        first = min(positions, default=len(lowered))
+        key = (-len(hits), first, style_id)
+        if best is None or key < best:
+            best = key
+    return best[2] if best else None
+
+
 def build_request(request_id: str, template_id: str, variant: str, brand: BrandTokens, content: Mapping[str, str]) -> dict[str, Any]:
     """Build one ``graphic-request.v1`` item; canvas and colors come from registries only."""
 
@@ -533,6 +560,17 @@ def ground_proposal(
         templates.append(template_id)
         variants.append(variant)
 
+    art_style = brief_art_style(brief, copied)
+    if art_style is not None:
+        styled = [{**item, "design": {"art_style": art_style}} for item in items]
+        try:
+            for item in styled:
+                compile_template(GraphicRequest.model_validate(item))
+        except LayoutError:
+            issues.append(_issue("text_overflow", "brief", f"a slot text does not fit in the {art_style} art style; shorten it"))
+            missing.append("brief")
+        else:
+            items = styled
     if style_or_asset_requested(brief, copied):
         issues.append(_issue("style_or_asset_request", "brief", "the brief asks for images, files, fonts, or colors the templates do not take"))
         missing.append("brief")

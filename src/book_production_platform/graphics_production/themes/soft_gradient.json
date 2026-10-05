@@ -78,6 +78,11 @@
     "b": "brand.accent",
     "light": "#FFFFFF"
   },
+  "roles": {
+    "a": "bg",
+    "b": "bg2",
+    "light": "ink"
+  },
   "paints": [
     {
       "paint_id": "bg",
@@ -164,7 +169,8 @@
           "color": "palette.light",
           "strength": 0.35
         }
-      ]
+      ],
+      "decor": true
     },
     {
       "id": "Waves",
@@ -182,7 +188,8 @@
           ],
           "opacity": 0.18
         }
-      ]
+      ],
+      "decor": true
     },
     {
       "id": "Type",

@@ -1,0 +1,87 @@
+{
+  "schema_version": "graphic-art-style.v1",
+  "style_id": "jazz",
+  "title": "Jazz Club",
+  "description": "Midnight navy, brass gold and brick red, deco lettering, drifting notes and a smoky vignette.",
+  "evidence": [
+    "jazz",
+    "แจ๊ส",
+    "แจ๊ซ",
+    "blues",
+    "บลูส์",
+    "saxophone",
+    "แซกโซโฟน",
+    "speakeasy"
+  ],
+  "colors": {
+    "bg": "#0E1420",
+    "bg2": "#1C2638",
+    "surface": "#18202E",
+    "ink": "#F3E9D2",
+    "accent": "#D4A24C",
+    "accent2": "#D9694F",
+    "highlight": "#E9C46A",
+    "on_accent": "#0E1420",
+    "muted": "#5B6B82"
+  },
+  "fonts": {
+    "display": "builtin:limelight",
+    "body": "builtin:trirong",
+    "label": "builtin:typewriter"
+  },
+  "text": {
+    "display_weight": "normal",
+    "display_case": "upper",
+    "display_letter_spacing": 0.06,
+    "label_case": "upper"
+  },
+  "hide_decor": false,
+  "decor_opacity": 0.35,
+  "backdrop": [
+    {
+      "motif": "arcs",
+      "id": "fan",
+      "cx": "W * 0.5",
+      "cy": "H",
+      "radius": "MIN * 0.18",
+      "step": "MIN * 0.06",
+      "count": 6,
+      "stroke": "role.accent",
+      "stroke_width": "MIN * 0.004",
+      "opacity": 0.35
+    },
+    {
+      "motif": "notes",
+      "id": "notes",
+      "x": "W * 0.84",
+      "y": "H * 0.5",
+      "width": "W * 0.12",
+      "height": "H * 0.25",
+      "count": 4,
+      "size": "MIN * 0.04",
+      "color": "role.accent",
+      "opacity": 0.4
+    }
+  ],
+  "overlay": [
+    {
+      "motif": "vignette",
+      "id": "smoke",
+      "color": "#000000",
+      "strength": 0.55
+    },
+    {
+      "motif": "grain",
+      "id": "grain",
+      "color": "role.ink",
+      "opacity": 0.05,
+      "count": "1400 * W * H / 1166400",
+      "size": "MIN * 0.0016"
+    }
+  ],
+  "photo": {
+    "filter": "duotone",
+    "duotone_dark": "role.bg",
+    "duotone_light": "role.highlight"
+  }
+}

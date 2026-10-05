@@ -25,6 +25,7 @@ from book_production_platform.graphics_ir import (
 )
 from book_production_platform.production_trace import ManualGuide
 
+from .art_styles import ART_FONTS
 from .layout import wrap_text
 from .qa import contrast_report
 
@@ -44,10 +45,9 @@ def _hex(value: str) -> str:
 
 # Theme font stacks: the family to install and pick in an editor.
 THEME_FONT_FAMILIES = {
-    "builtin:display": "Anton",
-    "builtin:serif": "Playfair Display",
-    "builtin:mono": "Space Mono",
-    "builtin:thai": "Sarabun",
+    font: stack.split(",")[0].strip().strip("'")
+    for font, (stack, _width) in ART_FONTS.items()
+    if font != "builtin:sans"
 }
 
 
@@ -64,7 +64,7 @@ def font_family(node: TextNode) -> str:
 def text_lines(node: TextNode) -> tuple[str, ...]:
     """The exact lines the renderer writes as ``<tspan>`` elements."""
 
-    return wrap_text(node.text, node.width, node.font_size)
+    return wrap_text(node.text, node.width, node.font_size, node.char_width)
 
 
 def line_height_px(node: TextNode) -> float:
@@ -111,6 +111,42 @@ _MOTIF_TOOLS = {
     "stripes": "Rectangle Tool + Edit ▸ Duplicate, then clip to the area",
     "grain": "Layer ▸ New Live Filter Layer ▸ Add Noise",
     "corner_frame": "Rectangle Tool (border) + Pen Tool (corner ticks)",
+    "scanlines": "Rectangle Tool thin bar + Edit ▸ Duplicate (Ctrl/Cmd+J) down the page",
+    "checker": "Rectangle Tool square + Duplicate in a grid (or a Pattern fill)",
+    "dots": "Ellipse Tool + Duplicate in a staggered grid",
+    "confetti_shapes": "Triangle / Ellipse / Pen Tool shapes scattered by hand",
+    "squiggle": "Pen Tool (P) wave, or Vector Brush",
+    "zigzag": "Pen Tool (P) with sharp nodes",
+    "arcs": "Ellipse Tool rings cut in half (Layer ▸ Geometry ▸ Subtract a rectangle)",
+    "deco_frame": "Pen Tool (P) stepped-corner outline, duplicated inward",
+    "distress": "Grunge brushes on a pixel layer, or Pen Tool splats",
+    "notes": "Ellipse Tool note heads + Pen Tool stems",
+    "glitch_bars": "Rectangle Tool thin bars in two colors",
+    "barcode": "Rectangle Tool bars of 1-3 widths",
+    "vignette": "Rectangle full canvas + Gradient Tool (radial, clear centre → color edges)",
+    "torn_edge": "Pen Tool (P) jagged edge, or a torn-paper brush",
+}
+_MASK_TOOLS = {
+    "rect": "no mask",
+    "rounded": "Rectangle Tool with corner radius, then drag the photo onto it to clip",
+    "circle": "Ellipse Tool (hold Shift) as a clipping shape",
+    "ellipse": "Ellipse Tool as a clipping shape",
+    "arch": "Rectangle + Ellipse ▸ Layer ▸ Geometry ▸ Add, used as a clipping shape",
+    "blob": "Pen Tool smooth shape as a clipping shape",
+    "star": "Star Tool (5 points, inner radius 45%) as a clipping shape",
+    "hexagon": "Polygon Tool (6 sides) as a clipping shape",
+    "torn": "Pen Tool jagged rectangle as a clipping shape",
+}
+_FILTER_TOOLS = {
+    "grayscale": "Adjustment ▸ Black & White",
+    "sepia": "Adjustment ▸ Black & White + Recolor (warm brown)",
+    "duotone": "Adjustment ▸ Gradient Map (dark → light)",
+    "posterize": "Adjustment ▸ Posterize",
+    "high_contrast": "Adjustment ▸ Levels + Brightness/Contrast",
+    "blur": "Live Filter ▸ Gaussian Blur",
+    "invert": "Adjustment ▸ Invert",
+    "vintage": "Adjustment ▸ HSL (lower saturation) + Recolor warm at 40% + vignette",
+    "halftone": "Live Filter ▸ Halftone (Photo persona)",
 }
 
 
@@ -155,14 +191,19 @@ def _add_layered_item(guide: ManualGuide, name: str, ir: GraphicIR, controls: Ma
     guide.step("ติดตั้งและใช้ฟอนต์ของธีม", tool="Google Fonts / Font Book", value=", ".join(fonts) or "-", section=section)
     for paint_id, text in _paint_text(ir):
         guide.step(f"เตรียม gradient `{paint_id}` (ใช้ซ้ำใน Fill ของชิ้นที่อ้าง paint:{paint_id})", tool="Gradient Tool (G) / Fill ▸ Gradient", value=text, section=section)
+    art = ir.assumptions.get("art_style")
+    if art:
+        guide.step(f"ใช้ art style `{art}` (สี ฟอนต์ texture ตามด้านล่างถูกแทนค่าไว้แล้ว)", tool="-", value=art, section=section)
     groups = {group.node_id: group for group in ir.nodes if isinstance(group, GroupNode)}
-    layers = list(controls.get("layers", [])) if controls else [
-        {"id": group.node_id, "label": group.label, "visible": True, "opacity": group.opacity, "dx": group.offset_x, "dy": group.offset_y, "items": []}
-        for group in groups.values()
-    ]
-    for layer in layers:
-        group = groups.get(str(layer["id"]))
-        if group is None or not layer.get("visible", True):
+    theme_layers = {str(layer["id"]): layer for layer in (controls.get("layers", []) if controls else [])}
+    for group in groups.values():
+        layer = theme_layers.get(group.node_id)
+        if layer is None:
+            if controls and group.node_id not in _EXTRA_GROUPS:
+                continue  # a theme layer hidden by the design
+            _add_extra_group(guide, group, section)
+            continue
+        if not layer.get("visible", True):
             continue
         extra = []
         if group.opacity != 1:
@@ -199,6 +240,61 @@ def _add_layered_item(guide: ManualGuide, name: str, ir: GraphicIR, controls: Ma
                 section=section,
             )
     guide.step("Export เป็น PNG ขนาดเดิม และ SVG สำหรับแก้ต่อ", tool="File ▸ Export… ▸ PNG / SVG", value=f"{name}.png, {canvas.width}×{canvas.height}", section=section)
+
+
+_EXTRA_GROUPS = {"ArtBackdrop", "ArtOverlay", "PhotosBack", "Photos", "PhotosFront"}
+
+
+def _photo_steps(node: ImageNode) -> list[tuple[str, str, str]]:
+    """(step, tool, value) to rebuild one treated photo by hand."""
+
+    effects = node.effects
+    image_name = Path(node.source_ref).name
+    steps = [("วางรูป", "File ▸ Place…", f"{image_name} · {_box(node)}")]
+    if effects is None:
+        return steps
+    if effects.cutout != "none":
+        steps.append(("ลบพื้นหลัง (ตัดเฉพาะตัวแบบ)",
+                      "Photo persona ▸ Select ▸ Select Subject (หรือ Selection Brush + Refine) ▸ Layer ▸ New Mask from selection",
+                      "ai: ตัวแบบ (คน/สัตว์/ของ)" if effects.cutout == "ai" else f"plain: พื้นสีเรียบ tolerance {effects.cutout_tolerance}"))
+    crop = "Fill (crop)" if effects.fit == "cover" else "Fit (ไม่ crop)"
+    steps.append(("ครอบรูปให้เต็มกรอบ", "Crop Tool / Place ▸ Fill", f"{crop} · focus {round(effects.focus_x * 100)}%,{round(effects.focus_y * 100)}% · zoom {_num(effects.zoom)}"))
+    adjust = [f"{label} {_num(value)}" for label, value in (("brightness", effects.brightness), ("contrast", effects.contrast), ("saturation", effects.saturation)) if value != 1]
+    if adjust:
+        steps.append(("ปรับแสงสี", "Adjustment ▸ Brightness/Contrast + HSL", " · ".join(adjust)))
+    if effects.filter not in ("none", "style"):
+        colors = f" · {effects.duotone_dark} → {effects.duotone_light}" if effects.filter in ("duotone", "halftone") and effects.duotone_dark else ""
+        steps.append((f"ใส่ฟิลเตอร์ {effects.filter}", _FILTER_TOOLS.get(effects.filter, "Adjustment"), f"{effects.filter}{colors}"))
+    if effects.mask != "rect":
+        steps.append((f"ตัดรูปเป็นรูปทรง {effects.mask}", _MASK_TOOLS[effects.mask], f"corner radius {round(effects.corner_radius * 100)}%" if effects.mask == "rounded" else effects.mask))
+    if effects.outline_width:
+        steps.append(("ใส่ขอบสติกเกอร์", "Layer ▸ Layer Effects ▸ Outline (Outside)", f"{_num(effects.outline_width)} px · {effects.outline_color}"))
+    if effects.shadow:
+        steps.append(("ใส่เงา", "Layer ▸ Layer Effects ▸ Outer Shadow", f"opacity {round(effects.shadow * 55)}% · ระยะ ~2% ของด้านสั้น"))
+    if node.rotation:
+        steps.append(("หมุนรูป", "Transform panel ▸ R", f"{_num(node.rotation)}°"))
+    if node.opacity != 1:
+        steps.append(("ตั้งความโปร่งใส", "Layers panel ▸ Opacity", f"{round(node.opacity * 100)}%"))
+    return steps
+
+
+def _add_extra_group(guide: ManualGuide, group: GroupNode, section: str) -> None:
+    """Layers added by the design (art style decoration, placed photos) that are not theme layers."""
+
+    extra = f"opacity {round(group.opacity * 100)}%" if group.opacity != 1 else f"{len(group.children)} objects"
+    guide.layer(str(group.label or group.node_id), "Layer (group)", content=extra, position="")
+    guide.step(f"สร้าง layer `{group.node_id}`", tool="Layers ▸ Add Layer", value=extra, section=section)
+    for node in iter_nodes(list(group.children)):
+        if isinstance(node, ImageNode):
+            guide.layer(node.node_id, "Photo", content=Path(node.source_ref).name, position=_box(node))
+            for step, tool, value in _photo_steps(node):
+                guide.step(f"{step} `{node.node_id}`", tool=tool, target=f"layer `{group.node_id}`", value=value, section=section)
+        elif isinstance(node, ShapeNode):
+            motif = next((key for key in sorted(_MOTIF_TOOLS, key=len, reverse=True) if f"-{key.replace('_', '-')}" in node.node_id or key in node.node_id), "")
+            fill = node.fill if node.fill != "none" else (node.stroke or "-")
+            guide.layer(node.node_id, "Shape", content=f"{_hex(fill) if fill.startswith('#') else fill} · opacity {round(node.opacity * 100)}%", position=_box(node))
+            guide.step(f"วาด `{node.node_id}`", tool=_MOTIF_TOOLS.get(motif, "Pen Tool (P)"), target=f"layer `{group.node_id}` · {_box(node)}",
+                       value=f"{_hex(fill) if fill.startswith('#') else fill} · opacity {round(node.opacity * 100)}%", section=section)
 
 
 def _add_item(guide: ManualGuide, name: str, ir: GraphicIR, controls: Mapping[str, Any] | None = None) -> None:

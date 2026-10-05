@@ -1,0 +1,95 @@
+{
+  "schema_version": "graphic-art-style.v1",
+  "style_id": "retro",
+  "title": "Retro 70s",
+  "description": "Warm cream, burnt orange and teal with sunset arcs and soft film grain.",
+  "evidence": [
+    "retro",
+    "70s",
+    "seventies",
+    "vintage",
+    "ย้อนยุค",
+    "เรโทร",
+    "วินเทจ",
+    "ยุค 70"
+  ],
+  "colors": {
+    "bg": "#F4E3C1",
+    "bg2": "#EBCB97",
+    "surface": "#FFF4DE",
+    "ink": "#3A1F0F",
+    "accent": "#B8441A",
+    "accent2": "#1F6B5A",
+    "highlight": "#F2A93B",
+    "on_accent": "#FFF4DE",
+    "muted": "#C77B3B"
+  },
+  "fonts": {
+    "display": "builtin:bungee",
+    "body": "builtin:mitr",
+    "label": "builtin:typewriter"
+  },
+  "text": {
+    "display_weight": "black",
+    "display_shadow": {
+      "dx": "MIN * 0.007",
+      "dy": "MIN * 0.007",
+      "color": "role.highlight",
+      "opacity": 1
+    }
+  },
+  "hide_decor": false,
+  "decor_opacity": 0.5,
+  "backdrop": [
+    {
+      "motif": "arcs",
+      "id": "arc-a",
+      "cx": "W * 0.86",
+      "cy": "H",
+      "radius": "MIN * 0.1",
+      "step": "MIN * 0.045",
+      "count": 4,
+      "stroke": "role.accent",
+      "stroke_width": "MIN * 0.03",
+      "opacity": 0.9
+    },
+    {
+      "motif": "arcs",
+      "id": "arc-b",
+      "cx": "W * 0.86",
+      "cy": "H",
+      "radius": "MIN * 0.122",
+      "step": "MIN * 0.045",
+      "count": 4,
+      "stroke": "role.highlight",
+      "stroke_width": "MIN * 0.012",
+      "opacity": 0.9
+    },
+    {
+      "motif": "stripes",
+      "id": "bands",
+      "x": 0,
+      "y": "H * 0.965",
+      "width": "W",
+      "height": "H * 0.035",
+      "angle": 0,
+      "band": "H * 0.008",
+      "gap": "H * 0.004",
+      "color": "role.accent2",
+      "opacity": 0.85
+    }
+  ],
+  "overlay": [
+    {
+      "motif": "grain",
+      "id": "grain",
+      "color": "role.ink",
+      "opacity": 0.07,
+      "count": "1400 * W * H / 1166400",
+      "size": "MIN * 0.0016"
+    }
+  ],
+  "photo": {
+    "filter": "vintage"
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "schema_version": "graphic-art-style.v1",
+  "style_id": "memphis",
+  "title": "Memphis",
+  "description": "Playful 80s Memphis: cream, candy pink, cobalt and yellow with squiggles, triangles and dots.",
+  "evidence": [
+    "memphis",
+    "เมมฟิส"
+  ],
+  "colors": {
+    "bg": "#FFF8E7",
+    "bg2": "#FFE8EF",
+    "surface": "#FFFFFF",
+    "ink": "#1B1B3A",
+    "accent": "#D6336C",
+    "accent2": "#1F6FB2",
+    "highlight": "#FFD23F",
+    "on_accent": "#FFFFFF",
+    "muted": "#7B61FF"
+  },
+  "fonts": {
+    "display": "builtin:bungee",
+    "body": "builtin:mitr",
+    "label": "builtin:mono"
+  },
+  "text": {
+    "display_weight": "normal",
+    "display_shadow": {
+      "dx": "MIN * 0.006",
+      "dy": "MIN * 0.006",
+      "color": "role.highlight",
+      "opacity": 1
+    }
+  },
+  "hide_decor": false,
+  "decor_opacity": 0.5,
+  "backdrop": [
+    {
+      "motif": "dots",
+      "id": "dots",
+      "spacing": "MIN * 0.05",
+      "radius": "MIN * 0.004",
+      "color": "role.ink",
+      "opacity": 0.12
+    },
+    {
+      "motif": "confetti_shapes",
+      "id": "bits",
+      "count": 26,
+      "size": "MIN * 0.035",
+      "colors": [
+        "role.accent",
+        "role.accent2",
+        "role.highlight",
+        "role.muted",
+        "role.ink"
+      ],
+      "avoid_center": 0.62
+    },
+    {
+      "motif": "zigzag",
+      "id": "zig",
+      "y": "H - MIN * 0.04",
+      "amplitude": "MIN * 0.012",
+      "step": "MIN * 0.03",
+      "stroke": "role.accent2",
+      "stroke_width": "MIN * 0.006"
+    }
+  ],
+  "overlay": [],
+  "photo": {
+    "filter": "none",
+    "saturation": 1.25,
+    "mask": "blob",
+    "outline_width": 12,
+    "outline_color": "role.ink"
+  }
+}

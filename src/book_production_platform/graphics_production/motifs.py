@@ -19,8 +19,9 @@ from typing import Any
 
 from book_production_platform.graphics_ir import ImageNode, ShapeNode, TextNode
 
+from .art_styles import ART_FONTS
 from .layout import LayoutError, fit_text
-from .themes import Context, ThemeError
+from .themes import DEFAULT_CHAR_WIDTH, Context, ThemeError, resolve_effects
 
 Node = TextNode | ShapeNode | ImageNode
 Motif = Callable[[Context, Mapping[str, Any]], list[Any]]
@@ -203,8 +204,21 @@ def glow(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
 # --- text ---------------------------------------------------------------------------------------
 
 
+def _char_width(text: str, font: str, spacing_em: float) -> float:
+    """Average advance (em) for wrapping: Thai falls back to a Thai face (~0.55 em), Latin uses the font's width."""
+
+    visible = [char for char in text if not char.isspace()]
+    thai = sum(1 for char in visible if "\u0e00" <= char <= "\u0e7f") / max(len(visible), 1)
+    latin = ART_FONTS.get(font, ("", DEFAULT_CHAR_WIDTH))[1]
+    return round(min(max(DEFAULT_CHAR_WIDTH * thai + latin * (1 - thai) + spacing_em, 0.3), 2.0), 3)
+
+
 def text_block(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
-    """Text fitted into a box (font shrinks to ``min_font_size``; overflow is reported, never cut)."""
+    """Text fitted into a box (font shrinks to ``min_font_size``; overflow is reported, never cut).
+
+    With an art style the font, weight, case, letter spacing, and title shadow
+    come from the style (see :meth:`Context.text_style`).
+    """
 
     node_id = str(spec.get("node_id") or _id(spec))
     value = ctx.text(spec)
@@ -215,6 +229,12 @@ def text_block(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
     overflow = str(spec.get("overflow", "reject"))
     font_size = ctx.num(spec["font_size"], name="font_size")
     max_lines = int(ctx.opt_num(spec, "max_lines", 8))
+    style = ctx.text_style(spec, font_size)
+    if style["upper"]:
+        value = value.upper()
+    styled = style["role"] is not None
+    spacing_em = style["spacing_em"] or 0.0
+    char_width = _char_width(value, style["font"], spacing_em) if styled else DEFAULT_CHAR_WIDTH
     try:
         layout = fit_text(
             value,
@@ -224,12 +244,16 @@ def text_block(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
             min_font_size=ctx.opt_num(spec, "min_font_size", font_size),
             max_lines=max_lines,
             overflow_policy=overflow,
+            char_width=char_width,
         )
     except LayoutError as exc:
         exc.node_id = node_id
         raise
     stroke = ctx.color(spec["stroke"], name="stroke") if spec.get("stroke") else None
-    return [TextNode(
+    letter_spacing = ctx.opt_num(spec, "letter_spacing", 0)
+    if styled and style["spacing_em"] is not None:
+        letter_spacing = round(spacing_em * layout.font_size, 2)
+    node = TextNode(
         node_id=node_id,
         x=ctx.num(spec["x"], name="x"),
         y=ctx.num(spec["y"], name="y"),
@@ -237,26 +261,43 @@ def text_block(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
         height=height,
         text=value,
         font_size=layout.font_size,
-        font_ref=ctx.font(spec),
+        font_ref=style["font"],
         color=_paint_param(ctx, spec, "color", "#111111", node_id),
         align=spec.get("align", "left"),
         overflow_policy=overflow,  # type: ignore[arg-type]
         max_lines=max_lines,
-        font_weight=spec.get("weight", "normal"),
-        letter_spacing=ctx.opt_num(spec, "letter_spacing", 0),
+        font_weight=style["weight"],
+        letter_spacing=letter_spacing,
         stroke=stroke,
         stroke_width=ctx.opt_num(spec, "stroke_width", 0 if stroke is None else 1),
         opacity=ctx.opt_num(spec, "opacity", 1),
-    )]
+        char_width=char_width,
+    )
+    shadow = style["shadow"]
+    if not shadow:
+        return [node]
+    echo = node.model_copy(update={
+        "node_id": f"{node_id}-shadow",
+        "x": max(0.0, node.x + ctx.num(shadow.get("dx", "MIN * 0.006"), name="dx")),
+        "y": max(0.0, node.y + ctx.num(shadow.get("dy", "MIN * 0.006"), name="dy")),
+        "color": ctx.solid(shadow.get("color", "role.accent"), name="shadow"),
+        "stroke": None,
+        "stroke_width": 0,
+        "opacity": float(shadow.get("opacity", 1)),
+    })
+    return [echo, node]
 
 
 def display_text(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
-    """A title with offset echo copies behind it (``shadows``: list of ``{dx, dy, color, opacity}``)."""
+    """A title with offset echo copies behind it (``shadows``: list of ``{dx, dy, color, opacity}``).
+
+    Under an art style the style's title shadow replaces the theme's echoes.
+    """
 
     node_id = _id(spec)
     main = text_block(ctx, {**spec, "node_id": node_id})
-    if not main:
-        return []
+    if not main or ctx.art is not None:
+        return main
     echoes: list[Any] = []
     base = main[0]
     for index, shadow in enumerate(spec.get("shadows", []), start=1):
@@ -285,6 +326,8 @@ def image(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
         "width": ctx.num(spec["width"], name="width"),
         "height": ctx.num(spec["height"], name="height"),
     })
+    if node is not None and ctx.art is not None and ctx.art.photo:
+        node = node.model_copy(update={"effects": resolve_effects(ctx, None)})
     return [node] if node else []
 
 
@@ -671,6 +714,349 @@ def corner_frame(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
     return nodes
 
 
+# --- art-style vocabulary (used by art style packs; any theme may use them too) -----------------
+
+
+def _region(ctx: Context, spec: Mapping[str, Any]) -> tuple[float, float, float, float]:
+    x0, y0 = ctx.num(spec.get("x", 0), name="x"), ctx.num(spec.get("y", 0), name="y")
+    return x0, y0, ctx.num(spec.get("width", "W"), name="width"), ctx.num(spec.get("height", "H"), name="height")
+
+
+def _one(node: ShapeNode | None) -> list[Any]:
+    return [node] if node else []
+
+
+def scanlines(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
+    """Thin horizontal lines every ``spacing`` px (CRT / screen-print texture)."""
+
+    item_id = _id(spec)
+    x0, y0, width, height = _region(ctx, spec)
+    spacing = max(ctx.opt_num(spec, "spacing", 6), 2)
+    band = max(ctx.opt_num(spec, "band", 1.5), 0.2)
+    if height / spacing > 4000:
+        raise ThemeError(f"scanlines_too_dense:{item_id}")
+    parts, y = [], y0
+    while y < y0 + height:
+        parts.append(f"M{_fmt(x0)} {_fmt(y)} h{_fmt(width)} v{_fmt(band)} h{_fmt(-width)} Z")
+        y += spacing
+    return _one(_path_node(ctx, item_id, " ".join(parts), [(x0, y0), (x0 + width, y0 + height)],
+                           fill=ctx.color(spec.get("color", "#000000")), opacity=ctx.opt_num(spec, "opacity", 0.12)))
+
+
+def checker(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
+    """A checkerboard of ``size`` px squares (retro diner, racing, Y2K)."""
+
+    item_id = _id(spec)
+    x0, y0, width, height = _region(ctx, spec)
+    size = max(ctx.opt_num(spec, "size", 60), 6)
+    columns, rows = math.ceil(width / size), math.ceil(height / size)
+    if columns * rows > 20000:
+        raise ThemeError(f"checker_too_dense:{item_id}")
+    parts = []
+    for row in range(rows):
+        for column in range(row % 2, columns, 2):
+            x, y = x0 + column * size, y0 + row * size
+            w, h = min(size, x0 + width - x), min(size, y0 + height - y)
+            parts.append(f"M{_fmt(x)} {_fmt(y)} h{_fmt(w)} v{_fmt(h)} h{_fmt(-w)} Z")
+    return _one(_path_node(ctx, item_id, " ".join(parts), [(x0, y0), (x0 + width, y0 + height)],
+                           fill=ctx.color(spec.get("color", "#000000")), opacity=ctx.opt_num(spec, "opacity", 1)))
+
+
+def dots(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
+    """An even polka-dot grid (``spacing``, ``radius``; ``stagger`` offsets every other row)."""
+
+    item_id = _id(spec)
+    x0, y0, width, height = _region(ctx, spec)
+    spacing = max(ctx.opt_num(spec, "spacing", 40), 4)
+    radius = ctx.opt_num(spec, "radius", spacing * 0.12)
+    columns, rows = int(width / spacing) + 1, int(height / spacing) + 1
+    if columns * rows > 20000:
+        raise ThemeError(f"dots_too_dense:{item_id}")
+    stagger = bool(spec.get("stagger", True))
+    parts = [
+        _ellipse_path(x0 + column * spacing + (spacing / 2 if stagger and row % 2 else 0), y0 + row * spacing, radius, radius)
+        for row in range(rows) for column in range(columns)
+    ]
+    return _one(_path_node(ctx, item_id, " ".join(parts), [(x0, y0), (x0 + width, y0 + height)],
+                           fill=ctx.color(spec.get("color", "#000000")), opacity=ctx.opt_num(spec, "opacity", 0.2)))
+
+
+def confetti_shapes(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
+    """Scattered geometric bits — triangles, rings, squiggles, crosses (Memphis, kids, party).
+
+    ``colors`` cycle per shape kind; ``size`` is the typical shape size;
+    ``avoid_center`` keeps the middle (where text sits) clear.
+    """
+
+    item_id = _id(spec)
+    rng = ctx.rng(item_id)
+    x0, y0, width, height = _region(ctx, spec)
+    size = ctx.opt_num(spec, "size", ctx.names["MIN"] * 0.04)
+    stroke_width = ctx.opt_num(spec, "stroke_width", size * 0.18)
+    colors = [ctx.solid(color) for color in spec.get("colors", ["#000000"])] or ["#000000"]
+    avoid = ctx.opt_num(spec, "avoid_center", 0)
+    kinds = ("triangle", "ring", "squiggle", "cross", "dot")
+    buckets: dict[str, list[str]] = {kind: [] for kind in kinds}
+    count = _count(ctx, spec, "count", 26, cap=400)
+    placed = 0
+    attempts = 0
+    while placed < count and attempts < count * 20:
+        attempts += 1
+        cx, cy = x0 + rng.random() * width, y0 + rng.random() * height
+        if avoid and abs(cx - ctx.width / 2) < ctx.width * avoid / 2 and abs(cy - ctx.height / 2) < ctx.height * avoid / 2:
+            continue
+        placed += 1
+        kind = kinds[rng.randrange(len(kinds))]
+        s = size * (0.6 + rng.random() * 0.8)
+        turn = rng.random() * math.tau
+        if kind == "triangle":
+            pts = [(cx + s * math.cos(turn + k * math.tau / 3), cy + s * math.sin(turn + k * math.tau / 3)) for k in range(3)]
+            buckets[kind].append(_polyline(pts, closed=True))
+        elif kind == "ring":
+            buckets[kind].append(_ellipse_path(cx, cy, s * 0.7, s * 0.7))
+        elif kind == "squiggle":
+            pts = [(cx - s * 1.4 + i * s * 0.35, cy + (s * 0.35 if i % 2 else -s * 0.35)) for i in range(9)]
+            cos_t, sin_t = math.cos(turn), math.sin(turn)
+            pts = [(cx + (px - cx) * cos_t - (py - cy) * sin_t, cy + (px - cx) * sin_t + (py - cy) * cos_t) for px, py in pts]
+            buckets[kind].append(_polyline(pts))
+        elif kind == "cross":
+            a = s * 0.6
+            buckets[kind].append(f"M{_fmt(cx - a)} {_fmt(cy)} L{_fmt(cx + a)} {_fmt(cy)} M{_fmt(cx)} {_fmt(cy - a)} L{_fmt(cx)} {_fmt(cy + a)}")
+        else:
+            buckets[kind].append(_ellipse_path(cx, cy, s * 0.3, s * 0.3))
+    nodes: list[Any] = []
+    opacity = ctx.opt_num(spec, "opacity", 1)
+    for index, kind in enumerate(kinds):
+        if not buckets[kind]:
+            continue
+        color = colors[index % len(colors)]
+        filled = kind in ("triangle", "dot")
+        nodes += _one(_path_node(
+            ctx, f"{item_id}-{kind}", " ".join(buckets[kind]), [(x0, y0), (x0 + width, y0 + height)],
+            fill=color if filled else "none", stroke=None if filled else color,
+            stroke_width=0 if filled else stroke_width, opacity=opacity,
+        ))
+    return nodes
+
+
+def squiggle(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
+    """A hand-drawn wavy stroke from (x1, y1) to (x2, y2) (``amplitude``, ``wavelength``)."""
+
+    item_id = _id(spec)
+    x1, y1 = ctx.num(spec["x1"], name="x1"), ctx.num(spec["y1"], name="y1")
+    x2, y2 = ctx.num(spec["x2"], name="x2"), ctx.num(spec["y2"], name="y2")
+    amplitude = ctx.opt_num(spec, "amplitude", 12)
+    wavelength = max(ctx.opt_num(spec, "wavelength", 60), 8)
+    length = math.hypot(x2 - x1, y2 - y1) or 1
+    ux, uy = (x2 - x1) / length, (y2 - y1) / length
+    steps = max(8, min(int(length / wavelength * 12), 1200))
+    pts = []
+    for i in range(steps + 1):
+        t = length * i / steps
+        offset = amplitude * math.sin(t / wavelength * math.tau)
+        pts.append((x1 + ux * t - uy * offset, y1 + uy * t + ux * offset))
+    return _one(_path_node(ctx, item_id, _polyline(pts), pts, stroke=ctx.color(spec.get("stroke", "#000000")),
+                           stroke_width=ctx.opt_num(spec, "stroke_width", 6), opacity=ctx.opt_num(spec, "opacity", 1)))
+
+
+def zigzag(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
+    """A horizontal zigzag band at ``y`` (``amplitude``, ``step``) — 80s/Memphis trim."""
+
+    item_id = _id(spec)
+    x0 = ctx.num(spec.get("x", 0), name="x")
+    width = ctx.num(spec.get("width", "W"), name="width")
+    y = ctx.num(spec["y"], name="y")
+    amplitude, step = ctx.opt_num(spec, "amplitude", 14), max(ctx.opt_num(spec, "step", 28), 4)
+    count = min(int(width / step) + 1, 2000)
+    pts = [(x0 + i * step, y + (amplitude if i % 2 else -amplitude)) for i in range(count + 1)]
+    return _one(_path_node(ctx, item_id, _polyline(pts), pts, stroke=ctx.color(spec.get("stroke", "#000000")),
+                           stroke_width=ctx.opt_num(spec, "stroke_width", 5), opacity=ctx.opt_num(spec, "opacity", 1)))
+
+
+def arcs(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
+    """Concentric half-rings rising from (cx, cy) — Art Deco fan / sunrise (``count``, ``radius``, ``step``)."""
+
+    item_id = _id(spec)
+    cx, cy = ctx.num(spec["cx"], name="cx"), ctx.num(spec["cy"], name="cy")
+    radius, step = ctx.num(spec.get("radius", "MIN * 0.1"), name="radius"), ctx.num(spec.get("step", "MIN * 0.05"), name="step")
+    count = _count(ctx, spec, "count", 6, cap=80)
+    up = ctx.opt_num(spec, "direction", -1) < 0
+    parts = []
+    sweep = 1 if up else 0
+    for i in range(count):
+        r = radius + i * step
+        parts.append(f"M{_fmt(cx - r)} {_fmt(cy)} A{_fmt(r)} {_fmt(r)} 0 0 {sweep} {_fmt(cx + r)} {_fmt(cy)}")
+    outer = radius + step * max(count - 1, 0)
+    return _one(_path_node(ctx, item_id, " ".join(parts), [(cx - outer, cy - outer), (cx + outer, cy + outer)],
+                           stroke=ctx.color(spec.get("stroke", "#000000")), stroke_width=ctx.opt_num(spec, "stroke_width", 3),
+                           opacity=ctx.opt_num(spec, "opacity", 1)))
+
+
+def deco_frame(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
+    """A double inset border with stepped corners (Art Deco, luxury, certificates)."""
+
+    item_id = _id(spec)
+    inset = ctx.num(spec.get("inset", "MIN * 0.04"), name="inset")
+    gap = ctx.opt_num(spec, "gap", ctx.names["MIN"] * 0.014)
+    notch = ctx.opt_num(spec, "length", ctx.names["MIN"] * 0.05)
+    w, h = ctx.width, ctx.height
+    parts = []
+    for k, d in enumerate((inset, inset + gap)):
+        n = notch if k == 0 else notch * 0.6
+        pts = [(d + n, d), (w - d - n, d), (w - d - n, d + n * 0.4), (w - d - n * 0.4, d + n * 0.4), (w - d - n * 0.4, d + n),
+               (w - d, d + n), (w - d, h - d - n), (w - d - n * 0.4, h - d - n), (w - d - n * 0.4, h - d - n * 0.4),
+               (w - d - n, h - d - n * 0.4), (w - d - n, h - d), (d + n, h - d), (d + n, h - d - n * 0.4),
+               (d + n * 0.4, h - d - n * 0.4), (d + n * 0.4, h - d - n), (d, h - d - n), (d, d + n), (d + n * 0.4, d + n),
+               (d + n * 0.4, d + n * 0.4), (d + n, d + n * 0.4)]
+        parts.append(_polyline(pts, closed=True))
+    return _one(_path_node(ctx, item_id, " ".join(parts), [(inset, inset), (w - inset, h - inset)],
+                           stroke=ctx.color(spec.get("color", "#C9A227")), stroke_width=ctx.opt_num(spec, "stroke_width", 3),
+                           opacity=ctx.opt_num(spec, "opacity", 1)))
+
+
+def distress(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
+    """Grunge wear: ink splats and scratches scattered over a region (``count``, ``size``)."""
+
+    item_id = _id(spec)
+    rng = ctx.rng(item_id)
+    x0, y0, width, height = _region(ctx, spec)
+    size = ctx.opt_num(spec, "size", ctx.names["MIN"] * 0.012)
+    splats, scratches = [], []
+    for _ in range(_count(ctx, spec, "count", 160, cap=3000)):
+        cx, cy = x0 + rng.random() * width, y0 + rng.random() * height
+        if rng.random() < 0.7:
+            r = size * (0.2 + rng.random() ** 3 * 1.6)
+            pts = [(cx + r * (0.6 + rng.random() * 0.6) * math.cos(a), cy + r * (0.6 + rng.random() * 0.6) * math.sin(a))
+                   for a in (k * math.tau / 7 for k in range(7))]
+            splats.append(_polyline(pts, closed=True))
+        else:
+            length, turn = size * (2 + rng.random() * 8), rng.random() * math.pi
+            scratches.append(f"M{_fmt(cx)} {_fmt(cy)} L{_fmt(cx + length * math.cos(turn))} {_fmt(cy + length * math.sin(turn))}")
+    color = ctx.color(spec.get("color", "#000000"))
+    opacity = ctx.opt_num(spec, "opacity", 0.35)
+    box = [(x0, y0), (x0 + width, y0 + height)]
+    return [
+        *_one(_path_node(ctx, f"{item_id}-splats", " ".join(splats), box, fill=color, opacity=opacity) if splats else None),
+        *_one(_path_node(ctx, f"{item_id}-scratches", " ".join(scratches), box, stroke=color,
+                         stroke_width=max(size * 0.12, 0.6), opacity=opacity) if scratches else None),
+    ]
+
+
+def notes(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
+    """Scattered music notes (eighth notes and beamed pairs) — jazz, live music, karaoke."""
+
+    item_id = _id(spec)
+    rng = ctx.rng(item_id)
+    x0, y0, width, height = _region(ctx, spec)
+    size = ctx.opt_num(spec, "size", ctx.names["MIN"] * 0.05)
+    heads, stems = [], []
+    for _ in range(_count(ctx, spec, "count", 8, cap=200)):
+        s = size * (0.7 + rng.random() * 0.6)
+        x, y = x0 + rng.random() * width, y0 + rng.random() * height
+        rx, ry = s * 0.32, s * 0.22
+        beamed = rng.random() < 0.4
+        for k in range(2 if beamed else 1):
+            hx = x + k * s * 0.9
+            hy = y + (k * s * 0.15)
+            heads.append(_ellipse_path(hx, hy, rx, ry))
+            stems.append(f"M{_fmt(hx + rx * 0.9)} {_fmt(hy)} L{_fmt(hx + rx * 0.9)} {_fmt(hy - s * 1.1 + k * s * 0.15)}")
+        if beamed:
+            stems.append(f"M{_fmt(x + rx * 0.9)} {_fmt(y - s * 1.1)} L{_fmt(x + s * 0.9 + rx * 0.9)} {_fmt(y - s * 0.95)}")
+        else:
+            stems.append(f"M{_fmt(x + rx * 0.9)} {_fmt(y - s * 1.1)} Q{_fmt(x + s * 0.7)} {_fmt(y - s * 0.8)} {_fmt(x + s * 0.55)} {_fmt(y - s * 0.4)}")
+    color = ctx.color(spec.get("color", "#000000"))
+    opacity = ctx.opt_num(spec, "opacity", 0.8)
+    box = [(x0 - size, y0 - size * 1.2), (x0 + width + size, y0 + height + size)]
+    return [
+        *_one(_path_node(ctx, f"{item_id}-heads", " ".join(heads), box, fill=color, opacity=opacity) if heads else None),
+        *_one(_path_node(ctx, f"{item_id}-stems", " ".join(stems), box, stroke=color, stroke_width=max(size * 0.07, 1),
+                         opacity=opacity) if stems else None),
+    ]
+
+
+def glitch_bars(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
+    """Offset horizontal slices in two ``colors`` (digital glitch, cyberpunk, dystopia)."""
+
+    item_id = _id(spec)
+    rng = ctx.rng(item_id)
+    x0, y0, width, height = _region(ctx, spec)
+    colors = [ctx.solid(color) for color in spec.get("colors", ["#FF0055", "#00E5FF"])] or ["#FF0055"]
+    max_height = ctx.opt_num(spec, "max_height", ctx.height * 0.012)
+    buckets: list[list[str]] = [[] for _ in colors]
+    for i in range(_count(ctx, spec, "count", 22, cap=600)):
+        y = y0 + rng.random() * height
+        h = max(1.0, rng.random() * max_height)
+        x = x0 + rng.random() * width * 0.7
+        w = width * (0.08 + rng.random() * 0.45)
+        w = min(w, x0 + width - x)
+        buckets[i % len(colors)].append(f"M{_fmt(x)} {_fmt(y)} h{_fmt(w)} v{_fmt(h)} h{_fmt(-w)} Z")
+    opacity = ctx.opt_num(spec, "opacity", 0.55)
+    return [
+        node for index, parts in enumerate(buckets) if parts
+        for node in _one(_path_node(ctx, f"{item_id}-{index + 1}", " ".join(parts), [(x0, y0), (x0 + width, y0 + height)],
+                                    fill=colors[index], opacity=opacity))
+    ]
+
+
+def barcode(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
+    """A decorative (not scannable) barcode block — dystopian ID, streetwear tags, tickets."""
+
+    item_id = _id(spec)
+    rng = ctx.rng(item_id)
+    x0, y0 = ctx.num(spec["x"], name="x"), ctx.num(spec["y"], name="y")
+    width, height = ctx.num(spec["width"], name="width"), ctx.num(spec["height"], name="height")
+    parts, x = [], x0
+    unit = max(width / 90, 0.6)
+    while x < x0 + width - unit:
+        bar = unit * rng.choice((1, 1, 2, 3))
+        bar = min(bar, x0 + width - x)
+        parts.append(f"M{_fmt(x)} {_fmt(y0)} h{_fmt(bar)} v{_fmt(height)} h{_fmt(-bar)} Z")
+        x += bar + unit * rng.choice((1, 1, 2))
+    return _one(_path_node(ctx, item_id, " ".join(parts), [(x0, y0), (x0 + width, y0 + height)],
+                           fill=ctx.color(spec.get("color", "#000000")), opacity=ctx.opt_num(spec, "opacity", 1)))
+
+
+def vignette(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
+    """Darkened (or tinted) edges fading to clear in the middle (noir, film, moody)."""
+
+    item_id = _id(spec)
+    color = ctx.solid(spec.get("color", "#000000"), name="color")
+    strength = ctx.opt_num(spec, "strength", 0.55)
+    paint = ctx.add_paint({
+        "paint_id": f"{item_id}-vignette",
+        "type": "radial",
+        "r": 0.75,
+        "stops": [
+            {"offset": 0, "color": color, "opacity": 0},
+            {"offset": 0.6, "color": color, "opacity": strength * 0.25},
+            {"offset": 1, "color": color, "opacity": strength},
+        ],
+    })
+    return rect(ctx, {"id": item_id, "fill": paint})
+
+
+def torn_edge(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
+    """A paper strip with a ripped edge (``y``, ``height``; ``side``: top or bottom) — collage, zine, scrapbook."""
+
+    item_id = _id(spec)
+    rng = ctx.rng(item_id)
+    y = ctx.num(spec["y"], name="y")
+    band = ctx.num(spec.get("height", "H * 0.1"), name="height")
+    rough = ctx.opt_num(spec, "amplitude", ctx.names["MIN"] * 0.012)
+    step = max(ctx.opt_num(spec, "step", ctx.names["MIN"] * 0.018), 3)
+    top = str(spec.get("side", "top")) == "top"
+    edge_y = y if top else y + band
+    pts = [(0.0, edge_y)]
+    x = 0.0
+    while x < ctx.width:
+        x = min(x + step * (0.5 + rng.random()), ctx.width)
+        pts.append((x, edge_y + (rng.random() - 0.5) * 2 * rough))
+    other = y + band if top else y
+    poly = [*pts, (ctx.width, other), (0.0, other)]
+    return _one(_path_node(ctx, item_id, _polyline(poly, closed=True), poly,
+                           fill=ctx.color(spec.get("fill", "#FFFFFF")), opacity=ctx.opt_num(spec, "opacity", 1)))
+
+
 MOTIFS: dict[str, Motif] = {
     "rect": rect,
     "ellipse": ellipse,
@@ -692,6 +1078,23 @@ MOTIFS: dict[str, Motif] = {
     "stripes": stripes,
     "grain": grain,
     "corner_frame": corner_frame,
+    "scanlines": scanlines,
+    "checker": checker,
+    "dots": dots,
+    "confetti_shapes": confetti_shapes,
+    "squiggle": squiggle,
+    "zigzag": zigzag,
+    "arcs": arcs,
+    "deco_frame": deco_frame,
+    "distress": distress,
+    "notes": notes,
+    "glitch_bars": glitch_bars,
+    "barcode": barcode,
+    "vignette": vignette,
+    "torn_edge": torn_edge,
 }
 
-__all__ = ["MOTIFS", "Motif"]
+# Motifs that only decorate (no text, no photos): what art style packs may use.
+DECOR_MOTIFS = frozenset(set(MOTIFS) - {"text_block", "display_text", "image"})
+
+__all__ = ["DECOR_MOTIFS", "MOTIFS", "Motif"]

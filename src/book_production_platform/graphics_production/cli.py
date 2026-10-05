@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -126,6 +127,12 @@ def _parser() -> argparse.ArgumentParser:
     make.add_argument("--theme", required=True, help="template/theme id (see the themes command)")
     make.add_argument("--variant", action="append", default=None, help="square, portrait, story, landscape, or all; repeatable")
     make.add_argument("--set", dest="slots", action="append", default=[], metavar="SLOT=TEXT", help="slot text; repeatable")
+    make.add_argument("--art-style", default=None, help="art style pack id (see the styles command), e.g. retro, minimal, jazz")
+    make.add_argument("--keep-brand-colors", action="store_true", help="with --art-style: keep the brand colors as accents")
+    make.add_argument("--photo", action="append", default=[], metavar="KEY=PATH", help="a local photo to place; repeatable")
+    make.add_argument("--place", action="append", default=[], metavar="JSON",
+                      help='photo placement JSON, e.g. \'{"id":"dog","asset":"dog","x":0.55,"y":0.55,"width":0.4,"height":0.4,'
+                           '"z":"front","effects":{"cutout":"ai","fit":"contain","outline_width":12}}\'; repeatable')
     make.add_argument("--primary", default="#14213D", help="brand primary color")
     make.add_argument("--accent", default="#FCA311", help="brand accent color")
     make.add_argument("--output", required=True, help="local output directory")
@@ -141,6 +148,17 @@ def _parser() -> argparse.ArgumentParser:
     edit.add_argument("--locale", default="th-TH")
     edit.add_argument("--provider-config", default=None, help="graphics design-edit provider config JSON (no secrets)")
     edit.add_argument("--budget-root", default=".runtime/graphics-design-edit-ai-budget", help="persistent AI cost ledger directory")
+    edit.add_argument("--style-provider-config", default=None,
+                      help="art-style designer provider config JSON; lets the editor create a new look on request")
+    edit.add_argument("--style-budget-root", default=".runtime/graphics-art-style-ai-budget")
+    commands.add_parser("styles", help="list the art style packs (built-in and the style library)")
+    style_create = commands.add_parser("style-create", help="design a new art style pack from a description via the AI gateway (mode=live only)")
+    style_create.add_argument("--description", required=True, help="the look, in any words (e.g. 'งานวัดไทย ไฟกระพริบ สีสด')")
+    style_create.add_argument("--job-id", required=True)
+    style_create.add_argument("--locale", default="th-TH")
+    style_create.add_argument("--provider-config", required=True, help="art-style provider config JSON (no secrets)")
+    style_create.add_argument("--budget-root", default=".runtime/graphics-art-style-ai-budget")
+    style_create.add_argument("--output", default=None, help="optional directory for a preview batch in the new style")
     edit_shadow = commands.add_parser("edit-shadow", help="shadow-evaluate the AI design editor; never renders or uses results")
     edit_shadow.add_argument("--provider-config", required=True)
     edit_shadow.add_argument("--cases", action="append", required=True)
@@ -168,16 +186,35 @@ def _make_items(args: argparse.Namespace) -> list[dict[str, Any]]:
         if not separator or slot not in theme.slots:
             raise ValueError(f"unknown slot {slot!r}; {args.theme} takes: {', '.join(theme.slots)}")
         content[slot] = text
+    design: dict[str, Any] = {}
+    if args.art_style:
+        design["art_style"] = args.art_style
+        design["keep_brand_colors"] = bool(args.keep_brand_colors)
+    photos: dict[str, Path] = {}
+    for entry in args.photo:
+        key, separator, path = entry.partition("=")
+        if not separator or not key or not Path(path).is_file():
+            raise ValueError(f"--photo needs KEY=PATH to an existing file: {entry!r}")
+        photos[key] = Path(path).resolve()
+    if args.place:
+        design["images"] = [json.loads(place) for place in args.place]
+    extra: dict[str, Any] = {}
+    if photos:
+        root = Path(os.path.commonpath([str(path.parent) for path in photos.values()]))
+        extra = {"asset_root": str(root), "assets": {key: path.relative_to(root).as_posix() for key, path in photos.items()}}
     items = []
     for variant in variants:
         if variant not in theme.variants:
             raise ValueError(f"{args.theme} does not come in {variant}; sizes: {', '.join(theme.variants)}")
         width, height = VARIANT_SIZES[variant]
-        items.append({
+        item: dict[str, Any] = {
             "request_id": f"{args.theme}-{variant}", "template_id": args.theme, "variant": variant,
             "canvas": {"width": width, "height": height}, "brand": {"primary": args.primary, "accent": args.accent},
-            "content": content,
-        })
+            "content": content, **extra,
+        }
+        if design:
+            item["design"] = design
+        items.append(item)
     return items
 
 
@@ -202,7 +239,15 @@ def _run_edit(args: argparse.Namespace) -> int:
     else:
         try:
             config = load_provider_config(args.provider_config) if args.provider_config else None
-            editor = DesignEditor(provider_config=config, ledger_root=args.budget_root)
+            designer = None
+            if args.style_provider_config:
+                from .art_style_ai import ArtStyleDesigner
+
+                designer = ArtStyleDesigner(provider_config=load_provider_config(args.style_provider_config),
+                                            ledger_root=args.style_budget_root)
+                if designer.mode != "live":
+                    designer = None  # a shadow-mode designer never creates styles for real jobs
+            editor = DesignEditor(provider_config=config, ledger_root=args.budget_root, style_designer=designer)
         except (EditorNotConfigured, ProviderConfigError) as exc:
             print(f"provider_not_configured: {exc}", file=sys.stderr)
             return 2
@@ -248,8 +293,45 @@ def _run_edit_shadow(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_style_create(args: argparse.Namespace) -> int:
+    from .art_style_ai import ArtStyleDesigner, StyleDesignerNotConfigured
+
+    try:
+        designer = ArtStyleDesigner(provider_config=load_provider_config(args.provider_config), ledger_root=args.budget_root)
+    except (StyleDesignerNotConfigured, ProviderConfigError) as exc:
+        print(f"provider_not_configured: {exc}", file=sys.stderr)
+        return 2
+    if designer.mode != "live":
+        print("shadow_mode_only: the art-style config is in shadow mode; get owner approval before mode=live", file=sys.stderr)
+        return 2
+    result = designer.design(args.description, job_id=args.job_id, locale=args.locale)
+    summary = result.to_dict()
+    if result.status == "complete" and result.style is not None and args.output:
+        from .art_style_ai import SAMPLE_REQUESTS
+        from .themes import VARIANT_SIZES
+
+        items = []
+        for index, sample in enumerate(SAMPLE_REQUESTS):
+            width, height = VARIANT_SIZES[sample["variant"]]
+            items.append({"request_id": f"{result.style.style_id}-preview-{index + 1}", "template_id": sample["template_id"],
+                          "variant": sample["variant"], "canvas": {"width": width, "height": height},
+                          "brand": {"primary": "#3B2A20", "accent": "#C9772E"}, "content": sample["content"],
+                          "design": {"art_style": result.style.style_id}})
+        batch = run_batch(items, args.output, f"style-{args.job_id}")
+        summary["preview"] = {"status": batch.status, "manifest": str(batch.manifest_path) if batch.manifest_path else None}
+    print(json.dumps(summary, ensure_ascii=False, default=str, indent=2))
+    return 0 if result.status == "complete" else 4 if result.status == "needs_input" else 2
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
+    if args.command == "styles":
+        from .art_styles import load_art_styles
+
+        print(json.dumps([style.summary() for style in load_art_styles().values()], ensure_ascii=False, indent=2))
+        return 0
+    if args.command == "style-create":
+        return _run_style_create(args)
     if args.command == "controls":
         from .templates import TemplateError, controls_for
 
@@ -273,7 +355,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         try:
             make_items = _make_items(args)
-        except (ValueError, ThemeError) as exc:
+        except (ValueError, ThemeError, json.JSONDecodeError) as exc:
             print(f"input error: {exc}", file=sys.stderr)
             return 2
         try:

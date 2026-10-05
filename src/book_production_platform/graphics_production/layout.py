@@ -153,7 +153,7 @@ def _split_long_word(word: str, max_chars: int) -> list[str]:
     return pieces
 
 
-def wrap_text(text: str, width: float, font_size: float) -> tuple[str, ...]:
+def wrap_text(text: str, width: float, font_size: float, char_width: float = 0.55) -> tuple[str, ...]:
     """Wrap by a conservative width estimate, preferring spaces and never splitting a Thai cluster.
 
     Lines break at whitespace first; a word longer than one line is split at Thai
@@ -162,7 +162,7 @@ def wrap_text(text: str, width: float, font_size: float) -> tuple[str, ...]:
     non-space character of the input is kept in order.
     """
 
-    max_chars = max(1, int(width / max(font_size * 0.55, 1)))
+    max_chars = max(1, int(width / max(font_size * char_width, 1)))
     lines: list[str] = []
     for paragraph in text.splitlines() or [""]:
         words = paragraph.split()
@@ -197,18 +197,19 @@ def fit_text(
     max_lines: int,
     line_height: float = 1.2,
     overflow_policy: str = "reject",
+    char_width: float = 0.55,
 ) -> TextLayout:
     """Reduce font size within a fixed bound; never silently truncate text."""
 
     candidate = font_size
     while candidate >= min_font_size:
-        lines = wrap_text(text, width, candidate)
+        lines = wrap_text(text, width, candidate, char_width)
         if len(lines) <= max_lines and len(lines) * candidate * line_height <= height:
             return TextLayout(lines=lines, font_size=round(candidate, 2))
         candidate -= 1
-    if overflow_policy == "wrap" and len(wrap_text(text, width, min_font_size)) <= max_lines:
-        return TextLayout(lines=wrap_text(text, width, min_font_size), font_size=round(min_font_size, 2))
-    line_chars = max(1, int(width / max(min_font_size * 0.55, 1)))
+    if overflow_policy == "wrap" and len(wrap_text(text, width, min_font_size, char_width)) <= max_lines:
+        return TextLayout(lines=wrap_text(text, width, min_font_size, char_width), font_size=round(min_font_size, 2))
+    line_chars = max(1, int(width / max(min_font_size * char_width, 1)))
     fitting_lines = max_lines if overflow_policy == "wrap" else min(max_lines, int(height / (min_font_size * line_height)))
     raise LayoutError(
         "text_does_not_fit", max_lines=max(1, fitting_lines), line_chars=line_chars, length=visible_length(text)

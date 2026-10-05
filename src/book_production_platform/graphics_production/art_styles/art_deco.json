@@ -1,0 +1,79 @@
+{
+  "schema_version": "graphic-art-style.v1",
+  "style_id": "art_deco",
+  "title": "Art Deco",
+  "description": "Black and brass with a stepped double frame, fan arcs and spaced capitals — Gatsby glamour.",
+  "evidence": [
+    "art deco",
+    "อาร์ตเดโค",
+    "อาร์ต เดโค",
+    "gatsby",
+    "แกตส์บี",
+    "1920s",
+    "ยุค 20"
+  ],
+  "colors": {
+    "bg": "#101820",
+    "bg2": "#1B2733",
+    "surface": "#16212C",
+    "ink": "#F5EBD7",
+    "accent": "#C9A227",
+    "accent2": "#E8D8A8",
+    "highlight": "#C9A227",
+    "on_accent": "#101820",
+    "muted": "#6C5A2E"
+  },
+  "fonts": {
+    "display": "builtin:limelight",
+    "body": "builtin:trirong",
+    "label": "builtin:trirong"
+  },
+  "text": {
+    "display_weight": "normal",
+    "display_case": "upper",
+    "display_letter_spacing": 0.1,
+    "label_case": "upper"
+  },
+  "hide_decor": true,
+  "decor_opacity": 1.0,
+  "backdrop": [
+    {
+      "motif": "rays",
+      "id": "sunburst",
+      "cx": "W * 0.5",
+      "cy": "H * 1.02",
+      "inner": "MIN * 0.08",
+      "outer": "MAX",
+      "count": 36,
+      "color": "role.accent",
+      "opacity": 0.08
+    },
+    {
+      "motif": "arcs",
+      "id": "fan",
+      "cx": "W * 0.5",
+      "cy": "H - MIN * 0.06",
+      "radius": "MIN * 0.06",
+      "step": "MIN * 0.03",
+      "count": 5,
+      "stroke": "role.accent",
+      "stroke_width": "MIN * 0.003",
+      "opacity": 0.8
+    },
+    {
+      "motif": "deco_frame",
+      "id": "frame",
+      "inset": "MIN * 0.035",
+      "gap": "MIN * 0.012",
+      "length": "MIN * 0.06",
+      "color": "role.accent",
+      "stroke_width": "MIN * 0.0028"
+    }
+  ],
+  "overlay": [],
+  "photo": {
+    "filter": "duotone",
+    "duotone_dark": "role.bg",
+    "duotone_light": "role.accent2"
+  }
+}

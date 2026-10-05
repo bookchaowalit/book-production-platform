@@ -1,0 +1,58 @@
+{
+  "schema_version": "graphic-art-style.v1",
+  "style_id": "luxury",
+  "title": "Luxury",
+  "description": "Ivory, ink and bronze; Thai serif, airy spacing and a hairline frame. Calm and premium.",
+  "evidence": [
+    "luxury",
+    "ลักชัวรี",
+    "ลักชูรี่",
+    "elegant",
+    "หรูหรา",
+    "high-end"
+  ],
+  "colors": {
+    "bg": "#F7F3EC",
+    "bg2": "#EFE8DC",
+    "surface": "#FFFFFF",
+    "ink": "#1C1A17",
+    "accent": "#7A5A22",
+    "accent2": "#1C1A17",
+    "highlight": "#C9A961",
+    "on_accent": "#FFFFFF",
+    "muted": "#CDBF9F"
+  },
+  "fonts": {
+    "display": "builtin:trirong",
+    "body": "builtin:trirong",
+    "label": "builtin:trirong"
+  },
+  "text": {
+    "display_weight": "normal",
+    "display_letter_spacing": 0.03,
+    "label_case": "upper"
+  },
+  "hide_decor": true,
+  "decor_opacity": 1.0,
+  "backdrop": [
+    {
+      "motif": "rect",
+      "id": "hairline",
+      "x": "MIN * 0.04",
+      "y": "MIN * 0.04",
+      "width": "W - MIN * 0.08",
+      "height": "H - MIN * 0.08",
+      "fill": "none",
+      "stroke": "role.accent",
+      "stroke_width": "MIN * 0.0018",
+      "stroke_opacity": 0.8
+    }
+  ],
+  "overlay": [],
+  "photo": {
+    "filter": "none",
+    "saturation": 0.8,
+    "contrast": 0.95,
+    "brightness": 1.04
+  }
+}

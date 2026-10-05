@@ -1,0 +1,79 @@
+{
+  "schema_version": "graphic-art-style.v1",
+  "style_id": "cyberpunk",
+  "title": "Cyberpunk",
+  "description": "Night city: deep indigo, neon magenta and cyan, glitch slices, HUD corners and scanlines.",
+  "evidence": [
+    "cyberpunk",
+    "ไซเบอร์พังก์",
+    "ไซเบอร์พังค์",
+    "neon city",
+    "sci-fi",
+    "ไซไฟ"
+  ],
+  "colors": {
+    "bg": "#070914",
+    "bg2": "#13163A",
+    "surface": "#0F1230",
+    "ink": "#E8F6FF",
+    "accent": "#FF2A6D",
+    "accent2": "#05D9E8",
+    "highlight": "#F9F002",
+    "on_accent": "#070914",
+    "muted": "#3B3F8C"
+  },
+  "fonts": {
+    "display": "builtin:chakra",
+    "body": "builtin:chakra",
+    "label": "builtin:mono"
+  },
+  "text": {
+    "display_weight": "bold",
+    "display_case": "upper",
+    "display_letter_spacing": 0.04,
+    "label_case": "upper",
+    "display_shadow": {
+      "dx": "MIN * -0.004",
+      "dy": "0",
+      "color": "role.accent2",
+      "opacity": 0.8
+    }
+  },
+  "hide_decor": false,
+  "decor_opacity": 0.35,
+  "backdrop": [
+    {
+      "motif": "glitch_bars",
+      "id": "glitch",
+      "count": 26,
+      "colors": [
+        "role.accent",
+        "role.accent2"
+      ],
+      "opacity": 0.35
+    },
+    {
+      "motif": "corner_frame",
+      "id": "hud",
+      "inset": "MIN * 0.04",
+      "length": "MIN * 0.07",
+      "color": "role.accent2",
+      "stroke_width": "MIN * 0.004"
+    }
+  ],
+  "overlay": [
+    {
+      "motif": "scanlines",
+      "id": "scan",
+      "spacing": "MIN * 0.005",
+      "band": "MIN * 0.0015",
+      "color": "#000000",
+      "opacity": 0.25
+    }
+  ],
+  "photo": {
+    "filter": "duotone",
+    "duotone_dark": "role.bg",
+    "duotone_light": "role.accent2"
+  }
+}

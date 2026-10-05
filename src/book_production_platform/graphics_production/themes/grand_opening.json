@@ -100,7 +100,19 @@
     "ink": "#2A1A12",
     "gold": "#E8A317",
     "pink": "#F25F7A",
-    "teal": "#2BB3A3"
+    "teal": "#2BB3A3",
+    "card": "#FFFFFF",
+    "on_pink": "#FFFFFF"
+  },
+  "roles": {
+    "bg_top": "bg",
+    "bg_bottom": "bg2",
+    "ink": "ink",
+    "gold": "highlight",
+    "pink": "accent",
+    "teal": "accent2",
+    "card": "surface",
+    "on_pink": "on_accent"
   },
   "paints": [
     {
@@ -152,7 +164,8 @@
           "count": 36,
           "outer": "MAX",
           "color": "palette.gold",
-          "opacity": 0.12
+          "opacity": 0.12,
+          "decor": true
         }
       ]
     },
@@ -197,7 +210,8 @@
           "sparkle_size": "12 * S",
           "color": "palette.teal"
         }
-      ]
+      ],
+      "decor": true
     },
     {
       "id": "Title",
@@ -256,7 +270,7 @@
           "width": "W * 0.76",
           "height": "MIN * 0.24",
           "rx": "MIN * 0.03",
-          "fill": "#FFFFFF",
+          "fill": "palette.card",
           "opacity": 0.85
         },
         {
@@ -338,7 +352,7 @@
           "font": "builtin:thai",
           "weight": "bold",
           "align": "center",
-          "color": "#FFFFFF"
+          "color": "palette.on_pink"
         }
       ]
     }

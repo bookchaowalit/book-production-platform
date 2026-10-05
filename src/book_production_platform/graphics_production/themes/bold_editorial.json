@@ -83,6 +83,12 @@
     "accent": "brand.accent",
     "accent2": "brand.primary"
   },
+  "roles": {
+    "paper": "bg",
+    "ink": "ink",
+    "accent": "accent",
+    "accent2": "accent2"
+  },
   "vars": {
     "S": "MIN / 1080",
     "M": "MIN * 0.07",
@@ -174,7 +180,8 @@
           "height": "4 * S",
           "fill": "palette.ink"
         }
-      ]
+      ],
+      "decor": true
     },
     {
       "id": "Type",

@@ -1,0 +1,103 @@
+{
+  "schema_version": "graphic-art-style.v1",
+  "style_id": "dystopia",
+  "title": "Dystopia",
+  "description": "Concrete black, hazard yellow and warning red; propaganda caps, barcode, glitch and scanlines.",
+  "evidence": [
+    "dystopia",
+    "dystopian",
+    "distopia",
+    "ดิสโทเปีย",
+    "ดิสโตเปีย",
+    "apocalypse",
+    "post-apocalyptic",
+    "วันสิ้นโลก",
+    "propaganda",
+    "dark future"
+  ],
+  "colors": {
+    "bg": "#0D0D0D",
+    "bg2": "#1F1F1F",
+    "surface": "#1A1A1A",
+    "ink": "#E6E6E1",
+    "accent": "#FF3B1F",
+    "accent2": "#C9C9C2",
+    "highlight": "#FFD000",
+    "on_accent": "#0D0D0D",
+    "muted": "#4A4A4A"
+  },
+  "fonts": {
+    "display": "builtin:anton",
+    "body": "builtin:chakra",
+    "label": "builtin:mono"
+  },
+  "text": {
+    "display_weight": "normal",
+    "display_case": "upper",
+    "display_letter_spacing": 0.03,
+    "label_case": "upper"
+  },
+  "hide_decor": false,
+  "decor_opacity": 0.3,
+  "backdrop": [
+    {
+      "motif": "stripes",
+      "id": "hazard",
+      "x": 0,
+      "y": "H * 0.955",
+      "width": "W",
+      "height": "H * 0.045",
+      "angle": 45,
+      "band": "MIN * 0.03",
+      "gap": "MIN * 0.03",
+      "color": "role.highlight",
+      "opacity": 0.95
+    },
+    {
+      "motif": "barcode",
+      "id": "id-code",
+      "x": "W - MIN * 0.3",
+      "y": "MIN * 0.05",
+      "width": "MIN * 0.24",
+      "height": "MIN * 0.05",
+      "color": "role.ink",
+      "opacity": 0.55
+    },
+    {
+      "motif": "glitch_bars",
+      "id": "glitch",
+      "x": 0,
+      "y": "H * 0.05",
+      "width": "W",
+      "height": "H * 0.85",
+      "count": 18,
+      "colors": [
+        "role.accent",
+        "role.ink"
+      ],
+      "opacity": 0.22
+    }
+  ],
+  "overlay": [
+    {
+      "motif": "scanlines",
+      "id": "scan",
+      "spacing": "MIN * 0.006",
+      "band": "MIN * 0.0016",
+      "color": "#000000",
+      "opacity": 0.28
+    },
+    {
+      "motif": "distress",
+      "id": "wear",
+      "count": 140,
+      "color": "role.ink",
+      "opacity": 0.12
+    }
+  ],
+  "photo": {
+    "filter": "high_contrast",
+    "saturation": 0.0,
+    "contrast": 1.2
+  }
+}

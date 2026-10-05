@@ -1,0 +1,75 @@
+{
+  "schema_version": "graphic-art-style.v1",
+  "style_id": "kawaii",
+  "title": "Kawaii",
+  "description": "Soft pink and mint, round hand-drawn Thai type, polka dots, sparkles and sticker-style photos.",
+  "evidence": [
+    "kawaii",
+    "คาวาอี้",
+    "คาวาอิ",
+    "cute",
+    "น่ารัก",
+    "มุ้งมิ้ง"
+  ],
+  "colors": {
+    "bg": "#FFF0F5",
+    "bg2": "#FFE0EC",
+    "surface": "#FFFFFF",
+    "ink": "#4A2C40",
+    "accent": "#C2185B",
+    "accent2": "#2E7D6B",
+    "highlight": "#FFD6E7",
+    "on_accent": "#FFFFFF",
+    "muted": "#F7A8C4"
+  },
+  "fonts": {
+    "display": "builtin:itim",
+    "body": "builtin:itim",
+    "label": "builtin:sriracha"
+  },
+  "text": {
+    "display_weight": "normal"
+  },
+  "hide_decor": false,
+  "decor_opacity": 0.5,
+  "backdrop": [
+    {
+      "motif": "dots",
+      "id": "polka",
+      "spacing": "MIN * 0.07",
+      "radius": "MIN * 0.008",
+      "color": "role.muted",
+      "opacity": 0.45
+    },
+    {
+      "motif": "starfield",
+      "id": "sparkle",
+      "count": 0,
+      "sparkles": 6,
+      "sparkle_size": "MIN * 0.022",
+      "color": "role.accent"
+    },
+    {
+      "motif": "blobs",
+      "id": "clouds",
+      "count": 3,
+      "min_radius": "MIN * 0.08",
+      "max_radius": "MIN * 0.16",
+      "colors": [
+        "role.surface"
+      ],
+      "opacity": 0.7
+    }
+  ],
+  "overlay": [],
+  "photo": {
+    "filter": "none",
+    "saturation": 1.1,
+    "brightness": 1.05,
+    "mask": "rounded",
+    "corner_radius": 0.25,
+    "outline_width": 14,
+    "outline_color": "role.surface",
+    "shadow": 0.4
+  }
+}

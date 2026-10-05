@@ -37,6 +37,8 @@ def config(**overrides: Any) -> dict[str, Any]:
         "token_env": "GRAPHICS_TEST_TOKEN",
         "route": "graphics.design_edit",
         "prompt_version": "graphics-edit.v2",
+        # The controls now carry art styles and photo fields; the live config budgets 24k tokens.
+        "max_token_budget": 6144,
         "rate_card": {"version": "test", "input_usd_per_1k": "0.001", "output_usd_per_1k": "0.002"},
         "caps": {"per_job_usd": "0.05", "per_day_usd": "5.00", "per_month_usd": "50.00"},
         "approval": {"approved_by": "test-owner", "approved_on": "2026-10-04"},

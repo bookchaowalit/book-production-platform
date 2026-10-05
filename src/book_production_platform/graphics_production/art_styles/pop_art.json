@@ -1,0 +1,73 @@
+{
+  "schema_version": "graphic-art-style.v1",
+  "style_id": "pop_art",
+  "title": "Pop Art",
+  "description": "Lichtenstein comic: yellow, red, blue, black outlines, halftone dots and a hard offset shadow.",
+  "evidence": [
+    "pop art",
+    "ป๊อปอาร์ต",
+    "ป๊อป อาร์ต",
+    "comic",
+    "คอมิก",
+    "lichtenstein",
+    "warhol",
+    "halftone"
+  ],
+  "colors": {
+    "bg": "#FFE600",
+    "bg2": "#FFF27A",
+    "surface": "#FFFFFF",
+    "ink": "#111111",
+    "accent": "#C8001E",
+    "accent2": "#0047A0",
+    "highlight": "#FFFFFF",
+    "on_accent": "#FFFFFF",
+    "muted": "#111111"
+  },
+  "fonts": {
+    "display": "builtin:bungee",
+    "body": "builtin:kanit",
+    "label": "builtin:mono"
+  },
+  "text": {
+    "display_weight": "normal",
+    "display_case": "upper",
+    "display_shadow": {
+      "dx": "MIN * 0.009",
+      "dy": "MIN * 0.009",
+      "color": "role.accent",
+      "opacity": 1
+    }
+  },
+  "hide_decor": false,
+  "decor_opacity": 0.35,
+  "backdrop": [
+    {
+      "motif": "rays",
+      "id": "burst",
+      "cx": "W * 0.5",
+      "cy": "H * 0.45",
+      "outer": "MAX",
+      "count": 28,
+      "color": "role.surface",
+      "opacity": 0.35
+    },
+    {
+      "motif": "halftone",
+      "id": "dots",
+      "spacing": "MIN * 0.03",
+      "max_radius": "MIN * 0.012",
+      "direction": 135,
+      "color": "role.accent",
+      "opacity": 0.35
+    }
+  ],
+  "overlay": [],
+  "photo": {
+    "filter": "halftone",
+    "duotone_dark": "role.ink",
+    "duotone_light": "role.bg",
+    "outline_width": 10,
+    "outline_color": "role.ink"
+  }
+}

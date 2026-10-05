@@ -18,8 +18,13 @@
     "night": "#05010F", "dusk": "#1A0638", "plum": "#5B0F6B", "pink": "#FF2E88", "cyan": "#22E4FF",
     "magenta": "#FF4FD8", "gold": "#FFF35C", "ink": "#FFE7FB",
     "sun_mid": "#FF9A3C", "floor_top": "#2A0640", "floor_bottom": "#07010F", "mount_top": "#3B0D5C",
-    "mount_bottom": "#12031F", "horizon": "#FF9BE3", "chrome_light": "#7FD8FF", "chrome_dark": "#1B1F5E", "chrome_warm": "#FF7AD9"
+    "mount_bottom": "#12031F", "horizon": "#FF9BE3", "chrome_light": "#7FD8FF", "chrome_dark": "#1B1F5E", "chrome_warm": "#FF7AD9",
+    "chrome_top": "#E9FBFF", "chrome_bottom": "#FFF2FB", "white": "#FFFFFF"
   },
+  "roles": {"night": "bg", "dusk": "bg2", "plum": "bg2", "pink": "accent", "cyan": "accent2", "magenta": "accent", "gold": "highlight",
+            "ink": "ink", "sun_mid": "highlight", "floor_top": "bg2", "floor_bottom": "bg", "mount_top": "bg2", "mount_bottom": "bg",
+            "horizon": "highlight", "chrome_light": "highlight", "chrome_dark": "bg2", "chrome_warm": "accent",
+            "chrome_top": "highlight", "chrome_bottom": "highlight", "white": "ink"},
   "paints": [
     {"paint_id": "sky", "type": "linear", "stops": [
       {"offset": 0, "color": "palette.night"}, {"offset": 0.45, "color": "palette.dusk"},
@@ -30,8 +35,8 @@
     {"paint_id": "grid", "type": "linear", "stops": [
       {"offset": 0, "color": "palette.magenta", "opacity": 0.35}, {"offset": 1, "color": "palette.cyan"}]},
     {"paint_id": "chrome", "type": "linear", "stops": [
-      {"offset": 0, "color": "#E9FBFF"}, {"offset": 0.46, "color": "palette.chrome_light"}, {"offset": 0.5, "color": "palette.chrome_dark"},
-      {"offset": 0.56, "color": "palette.chrome_warm"}, {"offset": 1, "color": "#FFF2FB"}]},
+      {"offset": 0, "color": "palette.chrome_top"}, {"offset": 0.46, "color": "palette.chrome_light"}, {"offset": 0.5, "color": "palette.chrome_dark"},
+      {"offset": 0.56, "color": "palette.chrome_warm"}, {"offset": 1, "color": "palette.chrome_bottom"}]},
     {"paint_id": "mount", "type": "linear", "stops": [{"offset": 0, "color": "palette.mount_top"}, {"offset": 1, "color": "palette.mount_bottom"}]},
     {"paint_id": "haze", "type": "linear", "stops": [
       {"offset": 0, "color": "palette.pink", "opacity": 0}, {"offset": 1, "color": "palette.pink", "opacity": 0.45}]}
@@ -48,15 +53,15 @@
   },
   "layers": [
     {"id": "Background", "items": [{"motif": "rect", "id": "sky", "fill": "paint:sky"}]},
-    {"id": "Stars", "items": [
-      {"motif": "starfield", "id": "stars", "height": "HZ - 240 * S", "count": "120 * W * H / 1458000", "sparkles": 3,
+    {"id": "Stars", "decor": true, "items": [
+      {"motif": "starfield", "id": "stars", "color": "palette.white", "height": "HZ - 240 * S", "count": "120 * W * H / 1458000", "sparkles": 3,
        "sparkle_size": "14 * S"}]},
-    {"id": "Sun", "items": [
+    {"id": "Sun", "decor": true, "items": [
       {"motif": "glow", "id": "sun-glow", "cx": "CX", "cy": "SUN_Y", "r": "SUN_R * 1.9", "color": "palette.pink"},
       {"motif": "striped_sun", "id": "sun", "cx": "CX", "cy": "SUN_Y", "r": "SUN_R", "cut_y": "HZ",
        "slat_start": "SUN_Y - SUN_R * 0.53", "fill": "paint:sun", "first_gap": "5 * S", "first_band": "24 * S",
        "gap_growth": "3.4 * S", "band_shrink": "2.2 * S", "min_band": "10 * S"}]},
-    {"id": "Mountains", "items": [
+    {"id": "Mountains", "decor": true, "items": [
       {"motif": "ridge", "id": "mountains-left", "base": "HZ", "fill": "paint:mount", "stroke": "palette.magenta",
        "points": [[0, "HZ - 60 * S"], ["W * 0.065", "HZ - 80 * S"], ["W * 0.139", "HZ - 48 * S"], ["W * 0.222", "HZ - 160 * S"],
                   ["W * 0.306", "HZ - 70 * S"], ["W * 0.361", "HZ - 100 * S"], ["W * 0.398", "HZ"]]},
@@ -64,21 +69,21 @@
        "points": [["W * 0.602", "HZ"], ["W * 0.648", "HZ - 90 * S"], ["W * 0.722", "HZ - 55 * S"], ["W * 0.815", "HZ - 170 * S"],
                   ["W * 0.889", "HZ - 90 * S"], ["W * 0.944", "HZ - 125 * S"], ["W", "HZ - 70 * S"]]},
       {"motif": "rect", "id": "haze", "y": "HZ - 140 * S", "height": "140 * S", "fill": "paint:haze"}]},
-    {"id": "Grid", "items": [
+    {"id": "Grid", "decor": true, "items": [
       {"motif": "perspective_grid", "id": "grid", "horizon": "HZ", "floor": "paint:floor", "vertical_color": "paint:grid",
        "horizontal_color": "palette.cyan", "horizon_color": "palette.horizon", "spread": "W * 0.25", "near_spread": "W * 0.37",
        "verticals": 14, "horizontals": 17, "stroke_width": "2 * S"}]},
     {"id": "Title", "items": [
       {"motif": "display_text", "id": "headline", "slot": "headline", "x": "W * 0.04", "y": "TOP", "width": "W * 0.92",
        "height": "T1 * 1.25", "font_size": "T1", "min_font_size": "T1 * 0.45", "max_lines": 1, "font": "builtin:display",
-       "weight": "black", "letter_spacing": "6 * S", "align": "center", "color": "paint:chrome", "stroke": "#FFFFFF",
+       "weight": "black", "letter_spacing": "6 * S", "align": "center", "color": "paint:chrome", "stroke": "palette.white",
        "stroke_width": "2 * S",
        "shadows": [{"dx": "10 * S", "dy": "12 * S", "color": "palette.pink", "opacity": 0.9},
                    {"dx": "5 * S", "dy": "6 * S", "color": "palette.cyan", "opacity": 0.9}]},
       {"motif": "display_text", "id": "headline2", "slot": "headline2", "x": "W * 0.04", "y": "TOP + T1 * 1.02",
        "width": "W * 0.92", "height": "T2 * 1.25", "font_size": "T2", "min_font_size": "T2 * 0.45", "max_lines": 1,
        "font": "builtin:display", "weight": "black", "letter_spacing": "10 * S", "align": "center", "color": "paint:chrome",
-       "stroke": "#FFFFFF", "stroke_width": "2 * S",
+       "stroke": "palette.white", "stroke_width": "2 * S",
        "shadows": [{"dx": "10 * S", "dy": "12 * S", "color": "palette.pink", "opacity": 0.9},
                    {"dx": "5 * S", "dy": "6 * S", "color": "palette.cyan", "opacity": 0.9}]}]},
     {"id": "Subtitle", "items": [
@@ -94,9 +99,9 @@
        "max_lines": 1, "font": "builtin:mono", "letter_spacing": "8 * S", "align": "center", "color": "palette.cyan"}]},
     {"id": "Frame", "items": [
       {"motif": "corner_frame", "id": "frame", "inset": "28 * S", "length": "60 * S", "color": "palette.magenta",
-       "stroke_width": "5 * S", "border": "#FFFFFF", "border_width": "2 * S"},
+       "stroke_width": "5 * S", "border": "palette.white", "border_width": "2 * S"},
       {"motif": "text_block", "id": "footer", "slot": "footer", "x": "W * 0.5", "y": "H - 72 * S", "width": "W * 0.45",
        "height": "24 * S", "font_size": "16 * S", "min_font_size": "11 * S", "max_lines": 1, "font": "builtin:mono",
-       "letter_spacing": "4 * S", "align": "right", "color": "#FFFFFF", "opacity": 0.75}]}
+       "letter_spacing": "4 * S", "align": "right", "color": "palette.white", "opacity": 0.75}]}
   ]
 }

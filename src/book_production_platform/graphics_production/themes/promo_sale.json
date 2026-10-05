@@ -91,7 +91,14 @@
   "palette": {
     "bg": "#E11D48",
     "accent": "#FACC15",
-    "ink": "#FFFFFF"
+    "ink": "#FFFFFF",
+    "shadow": "#000000"
+  },
+  "roles": {
+    "bg": "bg",
+    "accent": "accent",
+    "ink": "ink",
+    "shadow": "muted"
   },
   "vars": {
     "S": "MIN / 1080",
@@ -127,7 +134,8 @@
           "count": 28,
           "outer": "MAX",
           "color": "palette.accent",
-          "opacity": 0.18
+          "opacity": 0.18,
+          "decor": true
         }
       ]
     },
@@ -169,7 +177,7 @@
             {
               "dx": "8 * S",
               "dy": "10 * S",
-              "color": "#000000",
+              "color": "palette.shadow",
               "opacity": 0.35
             }
           ]

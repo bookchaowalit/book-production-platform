@@ -1,0 +1,85 @@
+{
+  "schema_version": "graphic-art-style.v1",
+  "style_id": "y2k",
+  "title": "Y2K",
+  "description": "Icy periwinkle, electric violet and hot pink with sparkles, bubbles and techno type.",
+  "evidence": [
+    "y2k",
+    "ยุค 2000",
+    "2000s",
+    "millennium"
+  ],
+  "colors": {
+    "bg": "#E9F1FF",
+    "bg2": "#D6E4FF",
+    "surface": "#FFFFFF",
+    "ink": "#101A3A",
+    "accent": "#5B3DF5",
+    "accent2": "#D61F7F",
+    "highlight": "#9AD9FF",
+    "on_accent": "#FFFFFF",
+    "muted": "#9BB1FF"
+  },
+  "fonts": {
+    "display": "builtin:chakra",
+    "body": "builtin:kanit",
+    "label": "builtin:pixel"
+  },
+  "text": {
+    "display_weight": "bold",
+    "display_case": "upper",
+    "display_letter_spacing": 0.02
+  },
+  "hide_decor": false,
+  "decor_opacity": 0.6,
+  "backdrop": [
+    {
+      "motif": "glow",
+      "id": "bubble-a",
+      "cx": "W * 0.85",
+      "cy": "H * 0.15",
+      "r": "MIN * 0.35",
+      "color": "role.accent2",
+      "strength": 0.35
+    },
+    {
+      "motif": "glow",
+      "id": "bubble-b",
+      "cx": "W * 0.1",
+      "cy": "H * 0.9",
+      "r": "MIN * 0.4",
+      "color": "role.accent",
+      "strength": 0.3
+    },
+    {
+      "motif": "rings",
+      "id": "orbit",
+      "cx": "W * 0.85",
+      "cy": "H * 0.15",
+      "radius": "MIN * 0.1",
+      "step": "MIN * 0.05",
+      "count": 4,
+      "stroke": "role.accent",
+      "stroke_width": "MIN * 0.002",
+      "opacity": 0.5
+    },
+    {
+      "motif": "starfield",
+      "id": "sparkle",
+      "count": 0,
+      "sparkles": 7,
+      "sparkle_size": "MIN * 0.025",
+      "color": "role.accent"
+    }
+  ],
+  "overlay": [],
+  "photo": {
+    "filter": "none",
+    "saturation": 1.2,
+    "mask": "rounded",
+    "corner_radius": 0.2,
+    "outline_width": 8,
+    "outline_color": "role.surface",
+    "shadow": 0.6
+  }
+}

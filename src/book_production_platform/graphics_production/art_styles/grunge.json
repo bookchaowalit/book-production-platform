@@ -1,0 +1,76 @@
+{
+  "schema_version": "graphic-art-style.v1",
+  "style_id": "grunge",
+  "title": "Grunge",
+  "description": "Dirty charcoal, rust and bone, ripped paper edges, ink splats and heavy grain.",
+  "evidence": [
+    "grunge",
+    "กรันจ์",
+    "punk",
+    "พังก์",
+    "distressed"
+  ],
+  "colors": {
+    "bg": "#1A1A17",
+    "bg2": "#2A2A25",
+    "surface": "#24241F",
+    "ink": "#EDE6D6",
+    "accent": "#E0552F",
+    "accent2": "#C9B79C",
+    "highlight": "#E8D44D",
+    "on_accent": "#1A1A17",
+    "muted": "#5E5A4F"
+  },
+  "fonts": {
+    "display": "builtin:anton",
+    "body": "builtin:kanit",
+    "label": "builtin:typewriter"
+  },
+  "text": {
+    "display_weight": "normal",
+    "display_case": "upper",
+    "display_letter_spacing": 0.02
+  },
+  "hide_decor": false,
+  "decor_opacity": 0.35,
+  "backdrop": [
+    {
+      "motif": "torn_edge",
+      "id": "rip",
+      "y": "H * 0.9",
+      "height": "H * 0.1",
+      "side": "top",
+      "fill": "role.accent2",
+      "opacity": 0.95
+    },
+    {
+      "motif": "distress",
+      "id": "splats",
+      "count": 220,
+      "size": "MIN * 0.02",
+      "color": "role.accent",
+      "opacity": 0.18
+    }
+  ],
+  "overlay": [
+    {
+      "motif": "grain",
+      "id": "grain",
+      "color": "role.ink",
+      "opacity": 0.12,
+      "count": "2600 * W * H / 1166400",
+      "size": "MIN * 0.0016"
+    },
+    {
+      "motif": "distress",
+      "id": "scratches",
+      "count": 120,
+      "color": "role.ink",
+      "opacity": 0.14
+    }
+  ],
+  "photo": {
+    "filter": "high_contrast",
+    "saturation": 0.35
+  }
+}
