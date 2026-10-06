@@ -78,8 +78,10 @@ SYSTEM_PROMPT = (
     "Change only what the instruction asks for and nothing else. Screen directions: y grows downward, x grows to the right. "
     "If the instruction does not say which part to change, or how, list it in missing. "
     'art_style: an id from art_styles when the instruction names a look ("แนวมินิมอล" = minimal), "none" removes it, null keeps. '
-    "new_art_style: only if no listed style fits, a short description of the look (a designer builds it, so do not also list "
-    "the look in unsupported); else null. keep_brand_colors: bool or null. "
+    "new_art_style: when the instruction asks for a look, vibe, mood, era, festival, or theme that no art_styles id fits, "
+    "a short description of that look; a designer builds a whole new style from it (colors, fonts, decorations), so for such a "
+    "request do not edit palette or items yourself and do not list the look in unsupported. Else null. "
+    "keep_brand_colors: bool or null. "
     'images: {photo id: fields | null} adds (needs "asset"), changes, or removes photos; see photo_fields. '
     "If it asks for something the controls cannot do (new shapes or effects not listed), list it in unsupported."
 )
@@ -105,6 +107,8 @@ class DesignEditResult:
     model_calls: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
+    # Calls made by the art style designer (its own job and call budget), included in model_calls.
+    style_model_calls: int = 0
     adapter_version: str = EDIT_ADAPTER_VERSION
 
     @property
@@ -119,6 +123,7 @@ class DesignEditResult:
             "missing": list(self.missing),
             "issues": [dict(issue) for issue in self.issues],
             "model_calls": self.model_calls,
+            "style_model_calls": self.style_model_calls,
             "input_tokens": self.input_tokens,
             "output_tokens": self.output_tokens,
             "adapter_version": self.adapter_version,
@@ -284,6 +289,15 @@ def apply_change(
         base = GraphicRequest.model_validate(dict(request))
     except ValidationError:
         return DesignEditResult("rejected", issues=[_issue("request_invalid", "request", "the base request is not a valid graphic request")])
+    style_name = change.get("style")
+    if isinstance(style_name, str) and change.get("art_style") is None:
+        # A look named in the theme-preset field ("style": "minimal") means the art style of that name.
+        try:
+            theme_styles = get_theme(base.template_id).styles
+        except ThemeError:
+            theme_styles = {}
+        if style_name not in theme_styles and style_name in load_art_styles():
+            change = {**change, "style": None, "art_style": style_name}
 
     content_change = {str(slot): str(text) for slot, text in (change.get("content") or {}).items()}
     try:
@@ -348,7 +362,8 @@ def apply_change(
 
 PHOTO_FIELDS = (
     "x, y, width, height: canvas fractions 0..1 from the top-left; square: bool; rotation: degrees; opacity; "
-    "z: background|behind_text|front (keep front photos off the text); effects: {fit: cover|contain, focus_x, focus_y, zoom, "
+    "z: background (behind everything; use it for a photo that serves as the background, faded = opacity 0.2-0.5) | "
+    "behind_text | front (stickers; keep them off the text); effects: {fit: cover|contain, focus_x, focus_y, zoom, "
     "cutout: none|plain|ai (remove background; ai for people/animals/objects, plain for studio shots), "
     "mask: rect|rounded|circle|ellipse|arch|blob|star|hexagon|torn, filter: style|none|grayscale|sepia|duotone|posterize|"
     "high_contrast|blur|invert|vintage|halftone, outline_width: px sticker edge, outline_color, shadow 0..1, flip_x, "
@@ -393,6 +408,24 @@ def _model_view(controls: Mapping[str, Any]) -> dict[str, Any]:
             for layer in controls["layers"]
         ],
     }
+
+
+def _says_nothing(parsed: Mapping[str, Any]) -> bool:
+    """A reply that changes nothing, asks nothing, and names no new look."""
+
+    return not any(parsed.get(key) for key in ("style", "art_style", "new_art_style", "palette", "layers", "items", "content",
+                                               "images", "missing", "unsupported")) and parsed.get("keep_brand_colors") is None
+
+
+def _acceptable(parsed: dict[str, Any]) -> bool:
+    return not (set(parsed) - _CHANGE_KEYS) and not _says_nothing(parsed)
+
+
+def _repair(parsed: dict[str, Any] | None) -> str:
+    if parsed is not None and not (set(parsed) - _CHANGE_KEYS) and _says_nothing(parsed):
+        return ("Your reply changes nothing. Map the instruction to a change, or put a look no art_styles id fits in "
+                "new_art_style, or list what is unclear in missing. Reply with the JSON object only.")
+    return REPAIR_PROMPT
 
 
 class DesignEditor:
@@ -441,14 +474,24 @@ class DesignEditor:
             f"Locale: {locale}\nDesign controls:\n{json.dumps(_model_view(controls), ensure_ascii=False, separators=(',', ':'))}\n"
             f"Return JSON for this instruction.\n<instruction>\n{instruction}\n</instruction>"
         )
+        empty_replies: list[dict[str, Any]] = []
+
+        def accept(parsed: dict[str, Any]) -> bool:
+            if not (set(parsed) - _CHANGE_KEYS) and _says_nothing(parsed):
+                empty_replies.append(parsed)
+            return _acceptable(parsed)
+
         outcome = self.runner.propose(
             job_id=job_id,
             system_prompt=SYSTEM_PROMPT,
             user_content=user_content,
             guard_text=instruction,
-            repair_prompt=REPAIR_PROMPT,
-            accept=lambda parsed: not (set(parsed) - _CHANGE_KEYS),
+            accept=accept,
+            repair_prompt=_repair,
         )
+        if outcome.status != "ok" and outcome.issue_code == "invalid_model_output" and empty_replies:
+            # Asked twice and still nothing to change: ask the person instead of failing.
+            outcome.status, outcome.parsed, outcome.issue_code = "ok", empty_replies[-1], None
         if outcome.status == "abstained":
             result = DesignEditResult(
                 "needs_input", missing=["instruction"],
@@ -479,6 +522,7 @@ class DesignEditor:
             else:
                 result = apply_change(request, change, instruction=instruction)
             result.model_calls, result.input_tokens, result.output_tokens = style_calls, style_in, style_out
+            result.style_model_calls = style_calls
         result.model_calls += outcome.model_calls
         result.input_tokens += outcome.input_tokens
         result.output_tokens += outcome.output_tokens

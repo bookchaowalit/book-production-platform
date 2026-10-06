@@ -55,11 +55,15 @@
     {
       "motif": "halftone",
       "id": "dots",
+      "x": 0,
+      "y": "H * 0.55",
+      "width": "W",
+      "height": "H * 0.45",
       "spacing": "MIN * 0.03",
       "max_radius": "MIN * 0.012",
-      "direction": 135,
+      "direction": 90,
       "color": "role.accent",
-      "opacity": 0.35
+      "opacity": 0.3
     }
   ],
   "overlay": [],

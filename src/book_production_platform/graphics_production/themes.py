@@ -38,6 +38,7 @@ from book_production_platform.graphics_ir import (
     ResolvedImageEffects,
     ShapeNode,
     TextNode,
+    iter_nodes,
 )
 
 from .art_styles import (
@@ -284,7 +285,14 @@ class Context:
     role_colors: dict[str, str] = field(default_factory=dict)
     brand_colors: dict[str, str] = field(default_factory=dict)
     assumptions: dict[str, str] = field(default_factory=dict)
+    # Text boxes (x0, y0, x1, y1) that scattered art-style decoration keeps clear of; empty while theme layers compile.
+    avoid_boxes: list[tuple[float, float, float, float]] = field(default_factory=list)
     _paint_ids: set[str] = field(default_factory=set)
+
+    def clear_of_text(self, x: float, y: float, radius: float) -> bool:
+        """True when a decoration centred at (x, y) with ``radius`` touches no avoided text box."""
+
+        return not any(x0 - radius <= x <= x1 + radius and y0 - radius <= y <= y1 + radius for x0, y0, x1, y1 in self.avoid_boxes)
 
     @property
     def width(self) -> float:
@@ -746,6 +754,12 @@ def compile_theme(
             ))
 
     if ir_version == "graphic-ir.v2" and design is not None:
+        pad = ctx.names["MIN"] * 0.012
+        ctx.avoid_boxes = [
+            (node.x + group.offset_x - pad, node.y + group.offset_y - pad,
+             node.x + group.offset_x + node.width + pad, node.y + group.offset_y + node.height + pad)
+            for group in layers for node in iter_nodes(list(group.children)) if isinstance(node, TextNode)
+        ]
         # Extra layers, bottom to top: theme background, art backdrop, background photos, ...,
         # photos behind text, text layers, ..., front photos, art overlay.
         first_above_background = 1 if layers else 0

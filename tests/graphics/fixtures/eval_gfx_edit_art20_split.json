@@ -1,0 +1,9 @@
+{
+ "suite": "EVAL-GFX-edit-art20",
+ "dev": [
+  "ea-s-en-01",
+  "ea-c-en-01",
+  "ea-a-en-01",
+  "ea-x-en-01"
+ ]
+}

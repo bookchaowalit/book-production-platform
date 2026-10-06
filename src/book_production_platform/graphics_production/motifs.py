@@ -361,6 +361,13 @@ def starfield(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
     sparkle = ctx.opt_num(spec, "sparkle_size", 14)
     for index in range(_count(ctx, spec, "sparkles", 3, cap=50)):
         cx, cy = x0 + rng.random() * width, y0 + rng.random() * height
+        for _ in range(30 if ctx.avoid_boxes else 0):  # art-style sparkles stay off the text
+            if ctx.clear_of_text(cx, cy, sparkle):
+                break
+            cx, cy = x0 + rng.random() * width, y0 + rng.random() * height
+        else:
+            if ctx.avoid_boxes:
+                continue
         s, k = sparkle, sparkle * 0.22
         points = [(cx, cy - s), (cx + k, cy - k), (cx + s, cy), (cx + k, cy + k), (cx, cy + s), (cx - k, cy + k), (cx - s, cy), (cx - k, cy - k)]
         node = _path_node(ctx, f"{item_id}-sparkle-{index + 1}", _polyline(points, closed=True), points, fill=color)
@@ -805,6 +812,8 @@ def confetti_shapes(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
         cx, cy = x0 + rng.random() * width, y0 + rng.random() * height
         if avoid and abs(cx - ctx.width / 2) < ctx.width * avoid / 2 and abs(cy - ctx.height / 2) < ctx.height * avoid / 2:
             continue
+        if not ctx.clear_of_text(cx, cy, size * 1.4):
+            continue
         placed += 1
         kind = kinds[rng.randrange(len(kinds))]
         s = size * (0.6 + rng.random() * 0.8)
@@ -953,6 +962,8 @@ def notes(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
     for _ in range(_count(ctx, spec, "count", 8, cap=200)):
         s = size * (0.7 + rng.random() * 0.6)
         x, y = x0 + rng.random() * width, y0 + rng.random() * height
+        if not ctx.clear_of_text(x + s * 0.45, y - s * 0.4, s * 1.1):
+            continue
         rx, ry = s * 0.32, s * 0.22
         beamed = rng.random() < 0.4
         for k in range(2 if beamed else 1):
@@ -1005,6 +1016,8 @@ def barcode(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
     rng = ctx.rng(item_id)
     x0, y0 = ctx.num(spec["x"], name="x"), ctx.num(spec["y"], name="y")
     width, height = ctx.num(spec["width"], name="width"), ctx.num(spec["height"], name="height")
+    if not ctx.clear_of_text(x0 + width / 2, y0 + height / 2, max(width, height) / 2):
+        return []  # an art-style barcode never sits on text
     parts, x = [], x0
     unit = max(width / 90, 0.6)
     while x < x0 + width - unit:

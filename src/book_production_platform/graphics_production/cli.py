@@ -165,6 +165,10 @@ def _parser() -> argparse.ArgumentParser:
     edit_shadow.add_argument("--split", default=None)
     edit_shadow.add_argument("--budget-root", default=".runtime/graphics-design-edit-ai-budget")
     edit_shadow.add_argument("--output", required=True)
+    edit_shadow.add_argument("--suite", default=None, help="suite name in the report (default: the case file's suite)")
+    edit_shadow.add_argument("--style-provider-config", default=None,
+                             help="art-style designer config for new_look cases; styles go to a scratch library next to --output")
+    edit_shadow.add_argument("--style-budget-root", default=".runtime/graphics-art-style-ai-budget")
     shadow = commands.add_parser("brief-shadow", help="shadow-evaluate the brief adapter; never renders or uses results")
     shadow.add_argument("--provider-config", required=True, help="graphics-provider-config.v1 JSON (no secrets)")
     shadow.add_argument("--cases", action="append", required=True, help="eval case JSON file; repeatable")
@@ -276,13 +280,25 @@ def _run_edit_shadow(args: argparse.Namespace) -> int:
     from .design_edit_shadow import run_edit_shadow
 
     try:
-        editor = DesignEditor(provider_config=load_provider_config(args.provider_config), ledger_root=args.budget_root)
+        designer = None
+        if args.style_provider_config:
+            from .art_style_ai import ArtStyleDesigner
+            from .art_styles import STYLE_DIR_ENV
+
+            # Styles designed during an evaluation never enter the real library.
+            os.environ[STYLE_DIR_ENV] = str(Path(args.output).resolve().parent / "edit-shadow-styles")
+            designer = ArtStyleDesigner(provider_config=load_provider_config(args.style_provider_config),
+                                        ledger_root=args.style_budget_root)
+        editor = DesignEditor(provider_config=load_provider_config(args.provider_config), ledger_root=args.budget_root,
+                              style_designer=designer)
         cases = load_cases(args.cases)
-        dev_ids = _read_json(args.split)["dev"] if args.split else []
+        split = _read_json(args.split) if args.split else {}
+        dev_ids = split.get("dev", [])
     except (EditorNotConfigured, ProviderConfigError, OSError, KeyError, json.JSONDecodeError) as exc:
         print(f"input error: {exc}", file=sys.stderr)
         return 2
-    report = run_edit_shadow(editor, cases, dev_ids=dev_ids)
+    suite = args.suite or split.get("suite") or "EVAL-GFX-edit24"
+    report = run_edit_shadow(editor, cases, dev_ids=dev_ids, suite=suite)
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

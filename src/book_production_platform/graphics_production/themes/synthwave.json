@@ -14,21 +14,21 @@
     "tag": {"required": false, "labels": ["tag", "badge", "ป้าย"]},
     "footer": {"required": false, "labels": ["footer", "website", "ท้ายภาพ", "เว็บไซต์"]}
   },
-  "styles": {"sunrise": {"title": "Sunrise (warm)", "palette": {"night": "#1B0B2E", "dusk": "#4A1248", "plum": "#C2305E", "pink": "#FF8A3D", "gold": "#FFE66D", "sun_mid": "#FFB347", "horizon": "#FFD29D", "chrome_warm": "#FFB37A"}}, "ice": {"title": "Ice (cool blue)", "palette": {"night": "#020617", "dusk": "#0B1E4A", "plum": "#1D4E89", "pink": "#38BDF8", "magenta": "#818CF8", "gold": "#E0F2FE", "sun_mid": "#7DD3FC", "floor_top": "#0B1E4A", "floor_bottom": "#020617", "mount_top": "#1E3A8A", "mount_bottom": "#0B1229", "horizon": "#BAE6FD", "chrome_warm": "#93C5FD"}}, "matrix": {"title": "Matrix (green)", "palette": {"night": "#010B05", "dusk": "#03200F", "plum": "#065F2C", "pink": "#22C55E", "cyan": "#86EFAC", "magenta": "#4ADE80", "gold": "#DCFCE7", "sun_mid": "#4ADE80", "floor_top": "#03200F", "floor_bottom": "#010B05", "mount_top": "#065F2C", "mount_bottom": "#021A0B", "horizon": "#BBF7D0", "chrome_light": "#BBF7D0", "chrome_dark": "#052E16", "chrome_warm": "#4ADE80"}}},  "palette": {
+  "styles": {"sunrise": {"title": "Sunrise (warm)", "palette": {"night": "#1B0B2E", "dusk": "#4A1248", "plum": "#C2305E", "pink": "#FF8A3D", "sky_bottom": "#FF8A3D", "gold": "#FFE66D", "sun_mid": "#FFB347", "horizon": "#FFD29D", "chrome_warm": "#FFB37A"}}, "ice": {"title": "Ice (cool blue)", "palette": {"night": "#020617", "dusk": "#0B1E4A", "plum": "#1D4E89", "pink": "#38BDF8", "sky_bottom": "#38BDF8", "magenta": "#818CF8", "gold": "#E0F2FE", "sun_mid": "#7DD3FC", "floor_top": "#0B1E4A", "floor_bottom": "#020617", "mount_top": "#1E3A8A", "mount_bottom": "#0B1229", "horizon": "#BAE6FD", "chrome_warm": "#93C5FD"}}, "matrix": {"title": "Matrix (green)", "palette": {"night": "#010B05", "dusk": "#03200F", "plum": "#065F2C", "pink": "#22C55E", "sky_bottom": "#22C55E", "cyan": "#86EFAC", "magenta": "#4ADE80", "gold": "#DCFCE7", "sun_mid": "#4ADE80", "floor_top": "#03200F", "floor_bottom": "#010B05", "mount_top": "#065F2C", "mount_bottom": "#021A0B", "horizon": "#BBF7D0", "chrome_light": "#BBF7D0", "chrome_dark": "#052E16", "chrome_warm": "#4ADE80"}}},  "palette": {
     "night": "#05010F", "dusk": "#1A0638", "plum": "#5B0F6B", "pink": "#FF2E88", "cyan": "#22E4FF",
     "magenta": "#FF4FD8", "gold": "#FFF35C", "ink": "#FFE7FB",
     "sun_mid": "#FF9A3C", "floor_top": "#2A0640", "floor_bottom": "#07010F", "mount_top": "#3B0D5C",
     "mount_bottom": "#12031F", "horizon": "#FF9BE3", "chrome_light": "#7FD8FF", "chrome_dark": "#1B1F5E", "chrome_warm": "#FF7AD9",
-    "chrome_top": "#E9FBFF", "chrome_bottom": "#FFF2FB", "white": "#FFFFFF"
+    "chrome_top": "#E9FBFF", "chrome_bottom": "#FFF2FB", "white": "#FFFFFF", "sky_bottom": "#FF2E88"
   },
   "roles": {"night": "bg", "dusk": "bg2", "plum": "bg2", "pink": "accent", "cyan": "accent2", "magenta": "accent", "gold": "highlight",
             "ink": "ink", "sun_mid": "highlight", "floor_top": "bg2", "floor_bottom": "bg", "mount_top": "bg2", "mount_bottom": "bg",
             "horizon": "highlight", "chrome_light": "highlight", "chrome_dark": "bg2", "chrome_warm": "accent",
-            "chrome_top": "highlight", "chrome_bottom": "highlight", "white": "ink"},
+            "chrome_top": "highlight", "chrome_bottom": "highlight", "white": "ink", "sky_bottom": "bg2"},
   "paints": [
     {"paint_id": "sky", "type": "linear", "stops": [
       {"offset": 0, "color": "palette.night"}, {"offset": 0.45, "color": "palette.dusk"},
-      {"offset": 0.78, "color": "palette.plum"}, {"offset": 1, "color": "palette.pink"}]},
+      {"offset": 0.78, "color": "palette.plum"}, {"offset": 1, "color": "palette.sky_bottom"}]},
     {"paint_id": "sun", "type": "linear", "stops": [
       {"offset": 0, "color": "palette.gold"}, {"offset": 0.45, "color": "palette.sun_mid"}, {"offset": 1, "color": "palette.pink"}]},
     {"paint_id": "floor", "type": "linear", "stops": [{"offset": 0, "color": "palette.floor_top"}, {"offset": 1, "color": "palette.floor_bottom"}]},

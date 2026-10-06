@@ -171,6 +171,19 @@ book-production graphics edit-shadow \
   --split tests/graphics/fixtures/eval_gfx_edit24_split.json --output edit-shadow.json
 ```
 
+คำสั่งเรื่องลุคและรูป (art style, ใส่รูป, ลุคใหม่) มีชุดทดสอบแยก `EVAL-GFX-edit-art20` ต้องผ่านทั้งสองชุดก่อนเปิด live
+ชุดนี้มีเคส "ลุคใหม่" ที่ต้องส่ง config ของตัวออกแบบลุคด้วย (style ที่ถูกสร้างระหว่างทดสอบเก็บแยกไว้ข้างไฟล์ผล ไม่เข้าคลังจริง):
+
+```bash
+book-production graphics edit-shadow \
+  --provider-config /home/bookchaowalit/solo-empire/.runtime/provider-configs/graphics-edit.json \
+  --style-provider-config /home/bookchaowalit/solo-empire/.runtime/provider-configs/graphics-art-style.json \
+  --cases tests/graphics/fixtures/eval_gfx_edit_art20.json \
+  --split tests/graphics/fixtures/eval_gfx_edit_art20_split.json --output edit-art-shadow.json
+```
+
+รายงานบอกเฉพาะ id สถานะ และเลขข้อที่ไม่ผ่าน (`failed_checks`) ไม่มีข้อความของงาน
+
 ## 5A. เปลี่ยนลุคทั้งงานด้วย art style
 
 ธีมคือ "วางอะไรตรงไหน" ส่วน art style คือ "หน้าตาเป็นแบบไหน" ใช้ art style ไหนกับธีมไหนก็ได้
