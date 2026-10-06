@@ -76,6 +76,59 @@ def _is_thai(char: str) -> bool:
     return "฀" <= char <= "๿"
 
 
+def _segments(text: str, font_ref: str, weight: str) -> tuple[str, list[tuple[str, str]]] | None:
+    """The primary font file and ``text`` split into runs with the file that draws each (Thai falls back per glyph)."""
+
+    families = _families(font_ref)
+    primary = next((_file(family, weight) for family in families if _file(family, weight)), None)
+    if primary is None:
+        # The rasterizer draws a stack it cannot find with its fallback family; measure that one.
+        fallback = os.environ.get("GRAPHICS_PRODUCTION_FALLBACK_FONT", "").strip() or "Sarabun"
+        primary = _file(fallback, weight)
+        if primary is None:
+            return None
+        families = [fallback]
+    thai_family = next((family for family in families if family in THAI_FAMILIES and _file(family, weight)), None)
+    thai_path = _file(thai_family, weight) if thai_family else _file("Sarabun", weight)
+    primary_is_thai = any(family in THAI_FAMILIES and _file(family, weight) == primary for family in families)
+    runs: list[tuple[str, str]] = []
+    run, run_thai = "", False
+    for char in [*text, None]:
+        is_thai = char is not None and _is_thai(char) and not primary_is_thai
+        if char is not None and (not run or is_thai == run_thai):
+            run += char
+            run_thai = is_thai
+            continue
+        if run:
+            runs.append((run, thai_path if run_thai and thai_path else primary))
+        run, run_thai = (char or ""), is_thai
+    return primary, runs
+
+
+def ink_extent_em(text: str, font_ref: str, weight: str = "normal") -> tuple[float, float] | None:
+    """Top and bottom of the visible glyphs in em, measured from the top of the line box the renderer uses.
+
+    SVG text is placed with ``dominant-baseline="text-before-edge"``: the line starts at the font's ascender, so the
+    first visible pixel of "85.-" sits far lower than that of "สั่ง" (tone marks). Centering by these ink bounds puts
+    text optically in the middle of a button or box. ``None`` when the font files are not installed.
+    """
+
+    found = _segments(text.strip() or "x", font_ref, weight)
+    if found is None:
+        return None
+    primary, runs = found
+    ascent = _font(primary).getmetrics()[0]
+    top, bottom = float("inf"), float("-inf")
+    for run, path in runs:
+        if not run.strip():
+            continue
+        box = _font(path).getbbox(run, anchor="ls")  # relative to the shared baseline
+        top, bottom = min(top, ascent + box[1]), max(bottom, ascent + box[3])
+    if top == float("inf"):
+        return None
+    return top / _MEASURE_SIZE, bottom / _MEASURE_SIZE
+
+
 def text_width_em(text: str, font_ref: str, weight: str = "normal") -> float | None:
     """Advance width of ``text`` in em (font size 1), or ``None`` when the font files are not installed."""
 
@@ -101,4 +154,4 @@ def text_width_em(text: str, font_ref: str, weight: str = "normal") -> float | N
     return total
 
 
-__all__ = ["text_width_em"]
+__all__ = ["ink_extent_em", "text_width_em"]

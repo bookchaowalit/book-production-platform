@@ -803,6 +803,12 @@ def compile_theme(
             if overlay:
                 layers.append(GroupNode(node_id="ArtOverlay", label=f"Texture: {art.title}", children=overlay))
 
+    from .box_text import center_text_on_boxes
+
+    if ir_version == "graphic-ir.v1":
+        flat = center_text_on_boxes(flat, request.canvas.width, request.canvas.height)
+    else:
+        layers = center_text_on_boxes(layers, request.canvas.width, request.canvas.height)
     assumptions = {"model_calls": "0", "renderer": theme.renderer}
     if art is not None:
         assumptions["art_style"] = art.style_id

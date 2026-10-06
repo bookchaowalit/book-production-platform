@@ -122,12 +122,34 @@ def _split_long_word(word: str, max_chars: int) -> list[str]:
     otherwise, or for a single over-long token, between character clusters.
     """
 
+    tokens = _word_tokens(word)
+    if tokens is None:
+        return _hard_split(word, max_chars)
+    pieces: list[str] = []
+    current = ""
+    for token in tokens:
+        if current and visible_length(current + token) > max_chars:
+            pieces.append(current)
+            current = ""
+        if visible_length(token) > max_chars:
+            *full, current = _hard_split(current + token, max_chars)
+            pieces.extend(full)
+            continue
+        current += token
+    if current:
+        pieces.append(current)
+    return pieces
+
+
+def _word_tokens(word: str) -> list[str] | None:
+    """Thai words inside a space-free run (marks kept with their base, loanword fragments joined), else ``None``."""
+
     tokenize = _thai_tokenizer() if _THAI_CHAR.search(word) else None
     if tokenize is None:
-        return _hard_split(word, max_chars)
+        return None
     tokens = tokenize(word)
     if "".join(tokens) != word:
-        return _hard_split(word, max_chars)
+        return None
     # Keep the cluster rules: a token may not start with a combining or following
     # mark, and a leading vowel stays with the token after it.
     merged: list[str] = []
@@ -146,20 +168,17 @@ def _split_long_word(word: str, max_chars: int) -> list[str]:
         else:
             tokens.append(token)
         in_run = fragment
-    pieces: list[str] = []
-    current = ""
-    for token in tokens:
-        if current and visible_length(current + token) > max_chars:
-            pieces.append(current)
-            current = ""
-        if visible_length(token) > max_chars:
-            *full, current = _hard_split(current + token, max_chars)
-            pieces.extend(full)
-            continue
-        current += token
-    if current:
-        pieces.append(current)
-    return pieces
+    return tokens
+
+
+def longest_word(text: str) -> int:
+    """Visible length of the longest piece that must not be broken (a Latin word or one Thai word)."""
+
+    longest = 0
+    for word in text.split():
+        pieces = _word_tokens(word) or [word]
+        longest = max(longest, *(visible_length(piece) for piece in pieces))
+    return longest
 
 
 def wrap_text(text: str, width: float, font_size: float, char_width: float = 0.55) -> tuple[str, ...]:
@@ -210,12 +229,19 @@ def fit_text(
 ) -> TextLayout:
     """Reduce font size within a fixed bound; never silently truncate text."""
 
-    candidate = font_size
-    while candidate >= min_font_size:
-        lines = wrap_text(text, width, candidate, char_width)
-        if len(lines) <= max_lines and len(lines) * candidate * line_height <= height:
-            return TextLayout(lines=lines, font_size=round(candidate, 2))
-        candidate -= 1
+    # First look for a size where no word has to be cut (a Thai word split mid-word reads as two words);
+    # only when none exists, accept a cut at the largest size that fits.
+    longest = longest_word(text)
+    for whole_words in (True, False):
+        candidate = font_size
+        while candidate >= min_font_size:
+            if whole_words and longest > max(1, int(width / max(candidate * char_width, 1))):
+                candidate -= 1
+                continue
+            lines = wrap_text(text, width, candidate, char_width)
+            if len(lines) <= max_lines and len(lines) * candidate * line_height <= height:
+                return TextLayout(lines=lines, font_size=round(candidate, 2))
+            candidate -= 1
     if overflow_policy == "wrap" and len(wrap_text(text, width, min_font_size, char_width)) <= max_lines:
         return TextLayout(lines=wrap_text(text, width, min_font_size, char_width), font_size=round(min_font_size, 2))
     line_chars = max(1, int(width / max(min_font_size * char_width, 1)))
