@@ -40,7 +40,7 @@ from book_production_platform.graphics_ir import (
 from .art_styles import ART_FONTS
 from .assets import AssetReferenceError, validate_local_reference
 from .image_fx import ImageEffectError, process_image
-from .layout import wrap_text
+from .layout import line_runs, wrap_text
 
 
 class RenderError(RuntimeError):
@@ -159,14 +159,49 @@ def _text(node: TextNode, family: str) -> list[str]:
         extra += f' font-weight="{weight}"'
     if node.letter_spacing:
         extra += f' letter-spacing="{_attr(node.letter_spacing)}"'
-    if node.stroke:
+    outline_width = node.stroke_width or max(1.0, round(node.font_size * 0.025, 2))
+    if node.outline_only:
+        extra += f' stroke="{_attr(_paint(node.color))}" stroke-width="{_attr(outline_width)}" stroke-linejoin="round"'
+    elif node.stroke:
         extra += f' stroke="{_attr(_paint(node.stroke))}" stroke-width="{_attr(node.stroke_width)}" paint-order="stroke"'
     if node.opacity != 1:
         extra += f' opacity="{_attr(node.opacity)}"'
-    parts = [f'<text id="{_attr(node.node_id)}" x="{_attr(x)}" y="{_attr(node.y)}" text-anchor="{anchor}" dominant-baseline="text-before-edge" font-family="{_attr(family)}" font-size="{_attr(node.font_size)}" fill="{_attr(_paint(node.color))}"{extra}>']
-    for index, line in enumerate(_lines(node)):
+    parts: list[str] = []
+    if node.blur or node.motion_blur:
+        # Horizontal motion blur stretches along x only; ``blur`` softens both directions.
+        parts.append(
+            f'<defs><filter id="blur-{_attr(node.node_id)}" x="-30%" y="-50%" width="160%" height="200%">'
+            f'<feGaussianBlur stdDeviation="{_attr(round(node.motion_blur + node.blur, 2))} {_attr(round(node.blur, 2))}" />'
+            "</filter></defs>"
+        )
+        extra += f' filter="url(#blur-{_attr(node.node_id)})"'
+    if node.rotation:
+        extra += (f' transform="rotate({_attr(node.rotation)} {_attr(round(node.x + node.width / 2, 2))} '
+                  f'{_attr(round(node.y + node.height / 2, 2))})"')
+    fill = "none" if node.outline_only else _paint(node.color)
+    parts.append(f'<text id="{_attr(node.node_id)}" x="{_attr(x)}" y="{_attr(node.y)}" text-anchor="{anchor}" dominant-baseline="text-before-edge" font-family="{_attr(family)}" font-size="{_attr(node.font_size)}" fill="{_attr(fill)}"{extra}>')
+    lines = _lines(node)
+    pieces = line_runs(node.text, lines, [(run.start, run.end, index) for index, run in enumerate(node.runs)]) if node.runs else None
+    for index, line in enumerate(lines):
         dy = node.font_size * 1.2 if index else 0
-        parts.append(f'<tspan x="{_attr(x)}" dy="{_attr(dy)}">{_attr(line)}</tspan>')
+        if pieces is None:
+            parts.append(f'<tspan x="{_attr(x)}" dy="{_attr(dy)}">{_attr(line)}</tspan>')
+            continue
+        # Sibling tspans (never nested): the first one starts the line, the rest continue it.
+        segments = pieces[index] or [("", -1)]
+        for position, (segment, run_index) in enumerate(segments):
+            place = f' x="{_attr(x)}" dy="{_attr(dy)}"' if position == 0 else ""
+            style = ""
+            if run_index >= 0:
+                run = node.runs[run_index]
+                if run.font_weight:
+                    style += f' font-weight="{_WEIGHTS[run.font_weight] or "400"}"'
+                color = run.color or node.color
+                if run.outline:
+                    style += f' fill="none" stroke="{_attr(_paint(color))}" stroke-width="{_attr(outline_width)}" stroke-linejoin="round"'
+                elif run.color:
+                    style += f' fill="{_attr(_paint(run.color))}"'
+            parts.append(f"<tspan{place}{style}>{_attr(segment)}</tspan>")
     parts.append("</text>")
     return parts
 

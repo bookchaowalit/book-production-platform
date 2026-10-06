@@ -67,6 +67,15 @@ ART_FONTS: dict[str, tuple[str, float]] = {
     "builtin:monoton": ("Monoton, Bungee, Kanit, Sarabun, sans-serif", 0.95),
     "builtin:pixel": ("'Press Start 2P', 'Courier New', 'Chakra Petch', Sarabun, monospace", 1.0),
     "builtin:typewriter": ("'Special Elite', 'Courier New', Trirong, Sarabun, monospace", 0.62),
+    "builtin:bebas": ("'Bebas Neue', Anton, Kanit, Sarabun, sans-serif", 0.42),
+    "builtin:archivo": ("'Archivo Black', 'Arial Black', Kanit, Sarabun, sans-serif", 0.72),
+    "builtin:dm_serif": ("'DM Serif Display', Trirong, Georgia, serif", 0.55),
+    "builtin:script": ("'Kaushan Script', Sriracha, cursive", 0.52),
+    "builtin:marker": ("'Permanent Marker', Sriracha, Itim, cursive", 0.62),
+    "builtin:poppins": ("Poppins, Prompt, Kanit, Sarabun, sans-serif", 0.6),
+    "builtin:prompt": ("Prompt, Kanit, Sarabun, sans-serif", 0.6),
+    "builtin:anuphan": ("Anuphan, Sarabun, sans-serif", 0.55),
+    "builtin:serif_thai": ("'Noto Serif Thai', Trirong, Georgia, serif", 0.58),
 }
 MIN_TEXT_CONTRAST = 4.5
 MIN_ACCENT_CONTRAST = 3.0

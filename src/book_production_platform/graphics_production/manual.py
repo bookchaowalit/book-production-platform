@@ -125,6 +125,10 @@ _MOTIF_TOOLS = {
     "barcode": "Rectangle Tool bars of 1-3 widths",
     "vignette": "Rectangle full canvas + Gradient Tool (radial, clear centre → color edges)",
     "torn_edge": "Pen Tool (P) jagged edge, or a torn-paper brush",
+    "big_type": "Artistic Text Tool (T) one line, scale until it spans the width; outline = Stroke only; motion blur = Live Filter ▸ Motion Blur",
+    "swoosh": "Pen Tool (P) curved blade, tapered with the Pencil/Width tool",
+    "brush_stroke": "Paint Brush Tool with a dry brush, or a rough Pen Tool band",
+    "swatches": "Ellipse Tool (hold Shift) circles in a row, one fill each",
 }
 _MASK_TOOLS = {
     "rect": "no mask",
@@ -231,6 +235,14 @@ def _add_layered_item(guide: ManualGuide, name: str, ir: GraphicIR, controls: Ma
             content = params
             if texts:
                 content = f"ข้อความ: {' / '.join(text_lines(texts[0]))} · {params}"
+                styled = [f"{texts[0].text[run.start:run.end]}={'outline' if run.outline else run.font_weight or run.color}"
+                          for run in texts[0].runs]
+                if styled:
+                    content += f" · ไฮไลต์ (เลือกเฉพาะคำแล้วเปลี่ยน): {', '.join(styled)}"
+                if texts[0].outline_only:
+                    content += " · ตัวกลวง: Fill none + Stroke"
+                if texts[0].motion_blur or texts[0].blur:
+                    content += f" · เบลอ: Live Filter ▸ Motion/Gaussian Blur {round(texts[0].motion_blur + texts[0].blur)} px"
             guide.layer(str(item["target"]), str(item["motif"]), content=content, position=_bounds(nodes))
             guide.step(
                 f"สร้าง `{item['target']}` ({item['motif']})",

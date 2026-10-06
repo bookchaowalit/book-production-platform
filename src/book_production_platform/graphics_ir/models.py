@@ -133,8 +133,14 @@ class ImageEffects(ContractModel):
     outline_color: str = "#FFFFFF"
     shadow: float = Field(default=0, ge=0, le=1)
     flip_x: bool = False
+    # Fade the picture out toward an edge (or all edges / radially) over ``fade_amount`` of its size.
+    fade: Literal["none", "bottom", "top", "left", "right", "edges", "radial"] = "none"
+    fade_amount: float = Field(default=0.4, gt=0, le=1)
+    # Soft colored halo around the visible shape (sports and hero cut-outs).
+    glow: float = Field(default=0, ge=0, le=1)
+    glow_color: str = "#FFFFFF"
 
-    _validate_colors = field_validator("duotone_dark", "duotone_light", "outline_color")(_color_ref)
+    _validate_colors = field_validator("duotone_dark", "duotone_light", "outline_color", "glow_color")(_color_ref)
 
 
 class ImagePlacement(ContractModel):
@@ -213,8 +219,29 @@ class NodeBase(ContractModel):
     height: float = Field(gt=0)
 
 
+class TextRun(ContractModel):
+    """Styling for ``text[start:end]`` (characters of the plain text): accent color, weight, or outline-only."""
+
+    start: int = Field(ge=0)
+    end: int = Field(gt=0)
+    color: str | None = None
+    font_weight: FontWeight | None = None
+    outline: bool = False
+
+    _validate_color = field_validator("color")(_hex_or_paint)
+
+    @model_validator(mode="after")
+    def _ordered(self) -> TextRun:
+        if self.end <= self.start:
+            raise ValueError("a text run must end after it starts")
+        return self
+
+
 class TextNode(NodeBase):
     node_type: Literal["text"] = "text"
+    # Display type may bleed past the canvas edge (``bleed``); other text stays inside.
+    x: float = Field(ge=-8192, le=8192)
+    y: float = Field(ge=-8192, le=8192)
     text: str
     font_ref: str = "builtin:sans"
     font_size: float = Field(gt=0, le=512)
@@ -231,9 +258,25 @@ class TextNode(NodeBase):
     opacity: float = Field(default=1, ge=0, le=1)
     # Average character advance in em used to wrap lines (wider for display fonts and letter spacing).
     char_width: float = Field(default=0.55, gt=0.2, le=2)
+    # v2 type treatments: styled character runs, outline-only letters, blur / horizontal motion blur (px),
+    # rotation about the box centre, and display type allowed to run off the canvas.
+    runs: list[TextRun] = Field(default_factory=list, max_length=64)
+    outline_only: bool = False
+    blur: float = Field(default=0, ge=0, le=200)
+    motion_blur: float = Field(default=0, ge=0, le=400)
+    rotation: float = Field(default=0, ge=-180, le=180)
+    bleed: bool = False
 
     _validate_color = field_validator("color")(_hex_or_paint)
     _validate_stroke = field_validator("stroke")(_hex_or_paint)
+
+    @model_validator(mode="after")
+    def _runs_inside_text(self) -> TextNode:
+        if any(run.end > len(self.text) for run in self.runs):
+            raise ValueError("a text run ends past the text")
+        if not self.bleed and (self.x < 0 or self.y < 0):
+            raise ValueError("only bleed text may start outside the canvas")
+        return self
 
 
 class ShapeNode(NodeBase):
@@ -273,7 +316,7 @@ def _optional_hex(value: str | None) -> str | None:
 class ResolvedImageEffects(ImageEffects):
     """``ImageEffects`` with every color resolved to ``#RRGGBB`` and ``filter`` never ``style``."""
 
-    _validate_colors = field_validator("duotone_dark", "duotone_light", "outline_color")(_optional_hex)
+    _validate_colors = field_validator("duotone_dark", "duotone_light", "outline_color", "glow_color")(_optional_hex)
 
     @model_validator(mode="after")
     def _filter_resolved(self) -> ResolvedImageEffects:
@@ -387,7 +430,8 @@ def _uses_v2(node: TextNode | ShapeNode | ImageNode | GroupNode) -> bool:
     if isinstance(node, TextNode):
         return (
             node.font_weight != "normal" or node.letter_spacing != 0 or node.stroke is not None or node.opacity != 1
-            or node.color.startswith("paint:") or node.char_width != 0.55
+            or node.color.startswith("paint:") or node.char_width != 0.55 or bool(node.runs) or node.outline_only
+            or node.blur != 0 or node.motion_blur != 0 or node.rotation != 0 or node.bleed
         )
     return False
 
@@ -403,7 +447,7 @@ def _paint_refs(nodes: list[TextNode | ShapeNode | ImageNode | GroupNode]) -> se
         if isinstance(node, ShapeNode):
             values = [node.fill, node.stroke]
         elif isinstance(node, TextNode):
-            values = [node.color, node.stroke]
+            values = [node.color, node.stroke, *(run.color for run in node.runs)]
         refs |= {value[len("paint:"):] for value in values if value and value.startswith("paint:")}
     return refs
 

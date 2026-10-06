@@ -1,0 +1,374 @@
+{
+  "schema_version": "graphic-theme.v1",
+  "ir_version": "graphic-ir.v2",
+  "template_version": "1",
+  "theme_id": "editorial_hero",
+  "title": "Editorial Hero",
+  "description": "Editorial masthead: a giant serif name behind a black-and-white cut-out portrait, the same name in outline over it (depth), a serif tagline, short body copy, and a pill button.",
+  "variants": [
+    "square",
+    "portrait",
+    "story",
+    "landscape"
+  ],
+  "evidence": [
+    "editorial",
+    "masthead",
+    "personal brand",
+    "portfolio",
+    "แบรนด์บุคคล",
+    "พอร์ตโฟลิโอ",
+    "นิตยสาร",
+    "magazine cover",
+    "หน้าปก",
+    "โปรไฟล์",
+    "profile",
+    "speaker",
+    "วิทยากร",
+    "ผู้ก่อตั้ง",
+    "founder"
+  ],
+  "slots": {
+    "name": {
+      "required": true,
+      "labels": [
+        "name",
+        "ชื่อ",
+        "masthead",
+        "หัวหนังสือ"
+      ]
+    },
+    "tagline": {
+      "required": true,
+      "labels": [
+        "tagline",
+        "headline",
+        "คำโปรย",
+        "หัวข้อ"
+      ]
+    },
+    "body": {
+      "required": false,
+      "labels": [
+        "body",
+        "details",
+        "เนื้อหา",
+        "รายละเอียด"
+      ]
+    },
+    "cta": {
+      "required": false,
+      "labels": [
+        "button",
+        "cta",
+        "ปุ่ม"
+      ]
+    },
+    "kicker": {
+      "required": false,
+      "labels": [
+        "kicker",
+        "label",
+        "ป้าย"
+      ]
+    }
+  },
+  "assets": {
+    "subject": {
+      "required": true
+    }
+  },
+  "styles": {
+    "ink": {
+      "title": "Ink",
+      "palette": {
+        "bg": "#141414",
+        "accent": "#EE5A24"
+      }
+    },
+    "cobalt": {
+      "title": "Cobalt",
+      "palette": {
+        "bg": "#1F3FBF",
+        "accent": "#FFD23F"
+      }
+    },
+    "sand": {
+      "title": "Sand",
+      "palette": {
+        "bg": "#E9DFCF",
+        "ink": "#1A1A1A",
+        "light": "#1A1A1A",
+        "dark": "#1A1A1A",
+        "on_dark": "#E9DFCF"
+      }
+    }
+  },
+  "palette": {
+    "bg": "#EE5A24",
+    "light": "#FFFFFF",
+    "ink": "#FFFFFF",
+    "dark": "#111111",
+    "on_dark": "#FFFFFF",
+    "accent": "#111111"
+  },
+  "roles": {
+    "bg": "accent",
+    "light": "on_accent",
+    "ink": "on_accent",
+    "dark": "ink",
+    "on_dark": "bg",
+    "accent": "ink"
+  },
+  "vars": {
+    "M": "MIN * 0.06",
+    "NAME_Y": {
+      "by_variant": {
+        "landscape": "H * 0.04",
+        "default": "H * 0.05"
+      }
+    },
+    "NAME_SPAN": {
+      "by_variant": {
+        "landscape": "W * 0.96",
+        "default": "W * 1.02"
+      }
+    },
+    "SUB_X": {
+      "by_variant": {
+        "landscape": "W * 0.28",
+        "story": "W * 0.16",
+        "default": "W * 0.36"
+      }
+    },
+    "SUB_Y": {
+      "by_variant": {
+        "landscape": "H * 0.1",
+        "story": "H * 0.12",
+        "default": "H * 0.08"
+      }
+    },
+    "SUB_W": {
+      "by_variant": {
+        "landscape": "W * 0.44",
+        "story": "W * 0.84",
+        "default": "W * 0.64"
+      }
+    },
+    "SUB_H": {
+      "by_variant": {
+        "landscape": "H * 0.9",
+        "story": "H * 0.56",
+        "default": "H * 0.92"
+      }
+    },
+    "TAG_Y": {
+      "by_variant": {
+        "landscape": "H * 0.58",
+        "story": "H * 0.7",
+        "default": "H * 0.42"
+      }
+    },
+    "TAG_W": {
+      "by_variant": {
+        "landscape": "W * 0.3",
+        "story": "W * 0.84",
+        "default": "W * 0.4"
+      }
+    },
+    "TAG_FS": {
+      "by_variant": {
+        "landscape": "MIN * 0.06",
+        "story": "MIN * 0.07",
+        "default": "MIN * 0.058"
+      }
+    },
+    "BODY_X": {
+      "by_variant": {
+        "landscape": "W * 0.72",
+        "default": "M"
+      }
+    },
+    "BODY_Y": {
+      "by_variant": {
+        "landscape": "H * 0.6",
+        "story": "H * 0.84",
+        "default": "H * 0.68"
+      }
+    },
+    "BODY_W": {
+      "by_variant": {
+        "landscape": "W * 0.24",
+        "story": "W * 0.6",
+        "default": "W * 0.34"
+      }
+    }
+  },
+  "layers": [
+    {
+      "id": "Background",
+      "items": [
+        {
+          "motif": "rect",
+          "id": "bg",
+          "fill": "palette.bg"
+        }
+      ]
+    },
+    {
+      "id": "Name",
+      "label": "Name (behind)",
+      "items": [
+        {
+          "motif": "big_type",
+          "id": "name",
+          "slot": "name",
+          "y": "NAME_Y",
+          "span": "NAME_SPAN",
+          "font": "builtin:dm_serif",
+          "text_role": "display",
+          "upper": true,
+          "color": "palette.light",
+          "letter_spacing_em": 0.02,
+          "max_font_size": "H * 0.3"
+        }
+      ]
+    },
+    {
+      "id": "Subject",
+      "items": [
+        {
+          "motif": "image",
+          "id": "subject",
+          "asset": "subject",
+          "x": "SUB_X",
+          "y": "SUB_Y",
+          "width": "SUB_W",
+          "height": "SUB_H",
+          "effects": {
+            "cutout": "ai",
+            "fit": "contain",
+            "focus_y": 1.0,
+            "filter": "grayscale",
+            "contrast": 1.15
+          }
+        }
+      ]
+    },
+    {
+      "id": "NameOutline",
+      "label": "Name (outline in front)",
+      "items": [
+        {
+          "motif": "big_type",
+          "id": "name-outline",
+          "slot": "name",
+          "y": "NAME_Y",
+          "span": "NAME_SPAN",
+          "font": "builtin:dm_serif",
+          "text_role": "display",
+          "upper": true,
+          "color": "palette.light",
+          "letter_spacing_em": 0.02,
+          "max_font_size": "H * 0.3",
+          "outline": true,
+          "outline_width": "MIN * 0.0025"
+        }
+      ]
+    },
+    {
+      "id": "Copy",
+      "items": [
+        {
+          "motif": "text_block",
+          "id": "kicker",
+          "slot": "kicker",
+          "x": "M",
+          "y": "TAG_Y - MIN * 0.06",
+          "width": "TAG_W",
+          "height": "MIN * 0.04",
+          "font_size": "MIN * 0.024",
+          "min_font_size": "MIN * 0.016",
+          "max_lines": 1,
+          "font": "builtin:mono",
+          "color": "palette.ink",
+          "text_role": "label",
+          "measure": true
+        },
+        {
+          "motif": "text_block",
+          "id": "tagline",
+          "slot": "tagline",
+          "x": "M",
+          "y": "TAG_Y",
+          "width": "TAG_W",
+          "height": "TAG_FS * 1.2 * 3",
+          "font_size": "TAG_FS",
+          "min_font_size": "TAG_FS * 0.55",
+          "max_lines": 3,
+          "font": "builtin:dm_serif",
+          "color": "palette.ink",
+          "accent_color": "palette.accent",
+          "text_role": "body",
+          "measure": true
+        },
+        {
+          "motif": "text_block",
+          "id": "body",
+          "slot": "body",
+          "x": "BODY_X",
+          "y": "BODY_Y",
+          "width": "BODY_W",
+          "height": "MIN * 0.14",
+          "font_size": "MIN * 0.024",
+          "min_font_size": "MIN * 0.016",
+          "max_lines": 6,
+          "font": "builtin:poppins",
+          "color": "palette.ink",
+          "text_role": "body",
+          "measure": true
+        },
+        {
+          "motif": "rect",
+          "id": "cta-pill",
+          "x": "BODY_X",
+          "y": "BODY_Y + MIN * 0.17",
+          "width": "MIN * 0.24",
+          "height": "MIN * 0.06",
+          "rx": "MIN * 0.03",
+          "fill": "palette.dark",
+          "when": {
+            "slot": "cta"
+          }
+        },
+        {
+          "motif": "ellipse",
+          "id": "cta-dot",
+          "cx": "BODY_X + MIN * 0.03",
+          "cy": "BODY_Y + MIN * 0.2",
+          "r": "MIN * 0.018",
+          "fill": "palette.on_dark",
+          "when": {
+            "slot": "cta"
+          }
+        },
+        {
+          "motif": "text_block",
+          "id": "cta",
+          "slot": "cta",
+          "x": "BODY_X + MIN * 0.06",
+          "y": "BODY_Y + MIN * 0.184",
+          "width": "MIN * 0.17",
+          "height": "MIN * 0.035",
+          "font_size": "MIN * 0.022",
+          "min_font_size": "MIN * 0.014",
+          "max_lines": 1,
+          "font": "builtin:poppins",
+          "color": "palette.on_dark",
+          "text_role": "label",
+          "measure": true
+        }
+      ]
+    }
+  ]
+}

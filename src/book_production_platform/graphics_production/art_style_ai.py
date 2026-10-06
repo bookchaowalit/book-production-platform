@@ -66,6 +66,15 @@ FONT_NOTES = {
     "builtin:monoton": "Monoton, neon multi-line (titles only)",
     "builtin:pixel": "Press Start 2P, 8-bit pixel (wide)",
     "builtin:typewriter": "Special Elite, worn typewriter",
+    "builtin:bebas": "Bebas Neue, tall condensed caps",
+    "builtin:archivo": "Archivo Black, wide heavy grotesk (sports, bold promos)",
+    "builtin:dm_serif": "DM Serif Display, editorial high-contrast serif",
+    "builtin:script": "Kaushan Script, brush script accents (Latin)",
+    "builtin:marker": "Permanent Marker, marker handwriting (Latin)",
+    "builtin:poppins": "Poppins, clean geometric sans (brand, UI)",
+    "builtin:prompt": "Prompt, clean modern Thai sans with heavy weights",
+    "builtin:anuphan": "Anuphan, neutral modern Thai",
+    "builtin:serif_thai": "Noto Serif Thai, Thai serif",
 }
 MOTIF_NOTES = {
     "rect": "x,y,width,height,fill,stroke,stroke_width,rx,opacity",
@@ -99,6 +108,9 @@ MOTIF_NOTES = {
     "barcode": "x,y,width,height,color,opacity",
     "vignette": "color,strength (dark edges)",
     "torn_edge": "y,height,side(top|bottom),amplitude,fill,opacity (ripped paper strip)",
+    "swoosh": "x1,y1,x2,y2,width,bend,tip,fill (tapered curved blade, sports)",
+    "brush_stroke": "x,y,width,height,angle,fill,streaks (rough paint band)",
+    "swatches": "x,y,width,height,colors:[..] (row of color circles)",
 }
 
 SYSTEM_PROMPT = (

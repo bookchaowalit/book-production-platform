@@ -1,0 +1,479 @@
+{
+  "schema_version": "graphic-theme.v1",
+  "ir_version": "graphic-ir.v2",
+  "template_version": "1",
+  "theme_id": "hero_poster",
+  "title": "Hero Poster",
+  "description": "Sports / hero poster: a cut-out subject in front of a giant motion-blurred name, a faded ghost portrait, a swoosh, heavy headline, script accent, and spaced caption.",
+  "variants": [
+    "square",
+    "portrait",
+    "story",
+    "landscape"
+  ],
+  "evidence": [
+    "hero poster",
+    "sports poster",
+    "athlete",
+    "player",
+    "นักกีฬา",
+    "โปสเตอร์กีฬา",
+    "ฮีโร่",
+    "แชมป์",
+    "champion",
+    "line-up",
+    "starting",
+    "mvp",
+    "game day",
+    "แมตช์",
+    "โปรไฟล์นักกีฬา"
+  ],
+  "slots": {
+    "name": {
+      "required": true,
+      "labels": [
+        "name",
+        "player",
+        "ชื่อ",
+        "ชื่อนักกีฬา",
+        "คำใหญ่"
+      ]
+    },
+    "headline": {
+      "required": true,
+      "labels": [
+        "headline",
+        "title",
+        "หัวข้อ",
+        "พาดหัว"
+      ]
+    },
+    "kicker": {
+      "required": false,
+      "labels": [
+        "kicker",
+        "script",
+        "accent",
+        "คำเน้น",
+        "ลายมือ"
+      ]
+    },
+    "tagline": {
+      "required": false,
+      "labels": [
+        "tagline",
+        "caption",
+        "subtitle",
+        "คำโปรย",
+        "ชื่อเต็ม"
+      ]
+    },
+    "badge": {
+      "required": false,
+      "labels": [
+        "badge",
+        "team",
+        "brand",
+        "ทีม",
+        "แบรนด์"
+      ]
+    },
+    "footer": {
+      "required": false,
+      "labels": [
+        "footer",
+        "credit",
+        "ท้าย"
+      ]
+    }
+  },
+  "assets": {
+    "subject": {
+      "required": true
+    }
+  },
+  "styles": {
+    "gold": {
+      "title": "Gold & Cardinal",
+      "palette": {
+        "paper": "#F4F1EA",
+        "accent": "#9D2235",
+        "accent2": "#FFC72C"
+      }
+    },
+    "night": {
+      "title": "Night",
+      "palette": {
+        "paper": "#101114",
+        "ink": "#F4F4F4",
+        "accent": "#E63946",
+        "accent2": "#F1C453",
+        "ghost": "#3A3D44"
+      }
+    },
+    "ice": {
+      "title": "Ice",
+      "palette": {
+        "paper": "#EEF3F8",
+        "accent": "#0B3C8C",
+        "accent2": "#4FC3F7"
+      }
+    }
+  },
+  "palette": {
+    "paper": "#F2F0EB",
+    "ink": "#121212",
+    "accent": "brand.primary",
+    "accent2": "brand.accent",
+    "ghost": "#C9C9C9",
+    "white": "#FFFFFF"
+  },
+  "roles": {
+    "paper": "bg",
+    "ink": "ink",
+    "accent": "accent",
+    "accent2": "accent2",
+    "ghost": "muted",
+    "white": "surface"
+  },
+  "paints": [
+    {
+      "paint_id": "floor",
+      "type": "linear",
+      "angle": 90,
+      "stops": [
+        {
+          "offset": 0,
+          "color": "palette.accent2",
+          "opacity": 0
+        },
+        {
+          "offset": 0.35,
+          "color": "palette.accent2",
+          "opacity": 0.85
+        },
+        {
+          "offset": 1,
+          "color": "palette.accent2"
+        }
+      ]
+    }
+  ],
+  "vars": {
+    "M": "MIN * 0.06",
+    "NAME_Y": {
+      "by_variant": {
+        "landscape": "H * 0.14",
+        "story": "H * 0.3",
+        "default": "H * 0.24"
+      }
+    },
+    "NAME_X": {
+      "by_variant": {
+        "landscape": "W * 0.68",
+        "default": "CX"
+      }
+    },
+    "NAME_SPAN": {
+      "by_variant": {
+        "landscape": "W * 0.62",
+        "default": "W * 1.15"
+      }
+    },
+    "SUB_X": {
+      "by_variant": {
+        "landscape": "W * 0.44",
+        "default": "W * 0.08"
+      }
+    },
+    "SUB_Y": {
+      "by_variant": {
+        "landscape": "H * 0.04",
+        "story": "H * 0.12",
+        "default": "H * 0.08"
+      }
+    },
+    "SUB_W": {
+      "by_variant": {
+        "landscape": "W * 0.52",
+        "default": "W * 0.84"
+      }
+    },
+    "SUB_H": {
+      "by_variant": {
+        "landscape": "H * 0.96",
+        "story": "H * 0.62",
+        "default": "H * 0.7"
+      }
+    },
+    "HEAD_X": {
+      "by_variant": {
+        "landscape": "M",
+        "default": "W * 0.4"
+      }
+    },
+    "HEAD_Y": {
+      "by_variant": {
+        "landscape": "H * 0.56",
+        "story": "H * 0.74",
+        "portrait": "H * 0.7",
+        "default": "H * 0.66"
+      }
+    },
+    "TAG_TOP": "H - M - MIN * 0.08",
+    "HEAD_W": {
+      "by_variant": {
+        "landscape": "W * 0.42",
+        "default": "W - HEAD_X - M"
+      }
+    },
+    "HEAD_FS": {
+      "by_variant": {
+        "landscape": "MIN * 0.085",
+        "story": "MIN * 0.085",
+        "default": "MIN * 0.07"
+      }
+    },
+    "FLOOR_Y": {
+      "by_variant": {
+        "landscape": "H * 0.62",
+        "story": "H * 0.66",
+        "default": "H * 0.6"
+      }
+    }
+  },
+  "layers": [
+    {
+      "id": "Background",
+      "items": [
+        {
+          "motif": "rect",
+          "id": "paper",
+          "fill": "palette.paper"
+        },
+        {
+          "motif": "rect",
+          "id": "floor",
+          "y": "FLOOR_Y",
+          "height": "H - FLOOR_Y",
+          "fill": "paint:floor",
+          "decor": true
+        }
+      ]
+    },
+    {
+      "id": "Ghost",
+      "label": "Ghost portrait",
+      "items": [
+        {
+          "motif": "image",
+          "id": "ghost",
+          "asset": "subject",
+          "x": "W * -0.15",
+          "y": "H * -0.05",
+          "width": "W * 1.3",
+          "height": "H * 0.8",
+          "opacity": 0.22,
+          "effects": {
+            "cutout": "ai",
+            "fit": "contain",
+            "focus_y": 0.15,
+            "filter": "grayscale",
+            "contrast": 1.3,
+            "zoom": 1.6,
+            "fade": "bottom",
+            "fade_amount": 0.5
+          }
+        }
+      ]
+    },
+    {
+      "id": "Name",
+      "label": "Giant name",
+      "items": [
+        {
+          "motif": "big_type",
+          "id": "name",
+          "slot": "name",
+          "x": "NAME_X",
+          "y": "NAME_Y",
+          "span": "NAME_SPAN",
+          "font": "builtin:display",
+          "text_role": "display",
+          "upper": true,
+          "color": "palette.accent",
+          "motion_blur": "MIN * 0.012",
+          "opacity": 0.85,
+          "max_font_size": "H * 0.27"
+        }
+      ]
+    },
+    {
+      "id": "Swoosh",
+      "decor": true,
+      "items": [
+        {
+          "motif": "swoosh",
+          "id": "blade",
+          "x1": "W * -0.05",
+          "y1": "H * 1.02",
+          "x2": "W * 0.42",
+          "y2": "FLOOR_Y - H * 0.04",
+          "width": "MIN * 0.16",
+          "bend": 0.12,
+          "tip": 0.02,
+          "fill": "palette.accent"
+        }
+      ]
+    },
+    {
+      "id": "Subject",
+      "items": [
+        {
+          "motif": "image",
+          "id": "subject",
+          "asset": "subject",
+          "x": "SUB_X",
+          "y": "SUB_Y",
+          "width": "SUB_W",
+          "height": "SUB_H",
+          "effects": {
+            "cutout": "ai",
+            "fit": "contain",
+            "focus_y": 1.0,
+            "shadow": 0.45
+          }
+        }
+      ]
+    },
+    {
+      "id": "Texture",
+      "decor": true,
+      "items": [
+        {
+          "motif": "distress",
+          "id": "splatter",
+          "x": "W * 0.6",
+          "y": 0,
+          "width": "W * 0.4",
+          "height": "H * 0.35",
+          "count": 90,
+          "size": "MIN * 0.012",
+          "color": "palette.ink",
+          "opacity": 0.25
+        },
+        {
+          "motif": "grain",
+          "id": "grain",
+          "count": "1400 * W * H / 1166400",
+          "size": "MIN * 0.0016",
+          "color": "palette.ink",
+          "opacity": 0.08
+        }
+      ]
+    },
+    {
+      "id": "Type",
+      "items": [
+        {
+          "motif": "rect",
+          "id": "badge-chip",
+          "x": "M",
+          "y": "M",
+          "width": "MIN * 0.09",
+          "height": "MIN * 0.09",
+          "fill": "palette.accent",
+          "when": {
+            "slot": "badge"
+          }
+        },
+        {
+          "motif": "text_block",
+          "id": "badge",
+          "slot": "badge",
+          "x": "M",
+          "y": "M + MIN * 0.022",
+          "width": "MIN * 0.09",
+          "height": "MIN * 0.05",
+          "font_size": "MIN * 0.034",
+          "min_font_size": "MIN * 0.018",
+          "max_lines": 1,
+          "font": "builtin:archivo",
+          "align": "center",
+          "color": "palette.accent2",
+          "text_role": "label",
+          "measure": true
+        },
+        {
+          "motif": "text_block",
+          "id": "kicker",
+          "slot": "kicker",
+          "x": "M",
+          "y": "HEAD_Y - MIN * 0.17",
+          "width": "W * 0.5",
+          "height": "MIN * 0.14",
+          "font_size": "MIN * 0.085",
+          "min_font_size": "MIN * 0.05",
+          "max_lines": 1,
+          "font": "builtin:script",
+          "color": "palette.accent",
+          "rotation": -6,
+          "text_role": "label",
+          "measure": true
+        },
+        {
+          "motif": "text_block",
+          "id": "headline",
+          "slot": "headline",
+          "x": "HEAD_X",
+          "y": "HEAD_Y",
+          "width": "HEAD_W",
+          "height": "TAG_TOP - HEAD_Y - MIN * 0.02",
+          "font_size": "HEAD_FS",
+          "min_font_size": "HEAD_FS * 0.45",
+          "max_lines": 3,
+          "font": "builtin:archivo",
+          "weight": "black",
+          "color": "palette.ink",
+          "accent_color": "palette.accent",
+          "measure": true
+        },
+        {
+          "motif": "text_block",
+          "id": "tagline",
+          "slot": "tagline",
+          "x": "M",
+          "y": "H - M - MIN * 0.07",
+          "width": "W - 2 * M",
+          "height": "MIN * 0.05",
+          "font_size": "MIN * 0.028",
+          "min_font_size": "MIN * 0.018",
+          "max_lines": 1,
+          "font": "builtin:archivo",
+          "align": "center",
+          "letter_spacing": "MIN * 0.012",
+          "color": "palette.ink",
+          "text_role": "label",
+          "measure": true
+        },
+        {
+          "motif": "text_block",
+          "id": "footer",
+          "slot": "footer",
+          "x": "W - M - W * 0.4",
+          "y": "H - M * 0.7",
+          "width": "W * 0.4",
+          "height": "MIN * 0.03",
+          "font_size": "MIN * 0.016",
+          "min_font_size": "MIN * 0.012",
+          "max_lines": 1,
+          "font": "builtin:mono",
+          "align": "right",
+          "color": "palette.ink",
+          "opacity": 0.7,
+          "measure": true
+        }
+      ]
+    }
+  ]
+}

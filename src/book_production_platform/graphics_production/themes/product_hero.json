@@ -1,0 +1,308 @@
+{
+  "schema_version": "graphic-theme.v1",
+  "ir_version": "graphic-ir.v2",
+  "template_version": "1",
+  "theme_id": "product_hero",
+  "title": "Product Hero",
+  "description": "Product hero: a cut-out product with glow in front of a giant outlined word, a brush-stroke price, headline with accent words, and a short detail line.",
+  "variants": [
+    "square",
+    "portrait",
+    "story",
+    "landscape"
+  ],
+  "evidence": [
+    "product hero",
+    "สินค้าเด่น",
+    "สินค้าใหม่",
+    "new product",
+    "launch",
+    "เปิดตัวสินค้า",
+    "packshot",
+    "แพ็กช็อต",
+    "โชว์สินค้า"
+  ],
+  "slots": {
+    "word": {
+      "required": true,
+      "labels": [
+        "word",
+        "big word",
+        "คำใหญ่",
+        "คำพื้นหลัง"
+      ]
+    },
+    "headline": {
+      "required": true,
+      "labels": [
+        "headline",
+        "title",
+        "หัวข้อ",
+        "ชื่อสินค้า"
+      ]
+    },
+    "price": {
+      "required": false,
+      "labels": [
+        "price",
+        "ราคา"
+      ]
+    },
+    "detail": {
+      "required": false,
+      "labels": [
+        "detail",
+        "details",
+        "รายละเอียด"
+      ]
+    },
+    "cta": {
+      "required": false,
+      "labels": [
+        "button",
+        "cta",
+        "ปุ่ม"
+      ]
+    }
+  },
+  "assets": {
+    "product": {
+      "required": true
+    }
+  },
+  "styles": {
+    "dark": {
+      "title": "Dark",
+      "palette": {
+        "bg": "#111315",
+        "bg2": "#1E2226",
+        "ink": "#F5F5F5",
+        "word": "#F5F5F5"
+      }
+    },
+    "citrus": {
+      "title": "Citrus",
+      "palette": {
+        "bg": "#FFE45C",
+        "bg2": "#FFD000",
+        "ink": "#1A1A1A",
+        "word": "#1A1A1A",
+        "accent": "#E4002B"
+      }
+    }
+  },
+  "palette": {
+    "bg": "#F1EEE8",
+    "bg2": "#E3DED5",
+    "ink": "#151515",
+    "word": "#151515",
+    "accent": "brand.primary",
+    "on_accent": "#FFFFFF"
+  },
+  "roles": {
+    "bg": "bg",
+    "bg2": "bg2",
+    "ink": "ink",
+    "word": "ink",
+    "accent": "accent",
+    "on_accent": "on_accent"
+  },
+  "paints": [
+    {
+      "paint_id": "spot",
+      "type": "radial",
+      "stops": [
+        {
+          "offset": 0,
+          "color": "palette.bg2"
+        },
+        {
+          "offset": 1,
+          "color": "palette.bg"
+        }
+      ]
+    }
+  ],
+  "vars": {
+    "M": "MIN * 0.06",
+    "WORD_Y": {
+      "by_variant": {
+        "landscape": "H * 0.22",
+        "story": "H * 0.28",
+        "default": "H * 0.24"
+      }
+    },
+    "PX": {
+      "by_variant": {
+        "landscape": "W * 0.3",
+        "default": "W * 0.16"
+      }
+    },
+    "PY": {
+      "by_variant": {
+        "landscape": "H * 0.08",
+        "story": "H * 0.2",
+        "default": "H * 0.14"
+      }
+    },
+    "PW": {
+      "by_variant": {
+        "landscape": "W * 0.4",
+        "default": "W * 0.68"
+      }
+    },
+    "PH": {
+      "by_variant": {
+        "landscape": "H * 0.72",
+        "story": "H * 0.46",
+        "default": "H * 0.56"
+      }
+    },
+    "HEAD_Y": {
+      "by_variant": {
+        "landscape": "H * 0.8",
+        "story": "H * 0.72",
+        "portrait": "H * 0.74",
+        "default": "H * 0.74"
+      }
+    },
+    "HEAD_FS": {
+      "by_variant": {
+        "landscape": "MIN * 0.06",
+        "story": "MIN * 0.075",
+        "default": "MIN * 0.06"
+      }
+    }
+  },
+  "layers": [
+    {
+      "id": "Background",
+      "items": [
+        {
+          "motif": "rect",
+          "id": "bg",
+          "fill": "paint:spot"
+        }
+      ]
+    },
+    {
+      "id": "Word",
+      "label": "Giant word",
+      "items": [
+        {
+          "motif": "big_type",
+          "id": "word",
+          "slot": "word",
+          "y": "WORD_Y",
+          "span": "W * 1.08",
+          "font": "builtin:display",
+          "text_role": "display",
+          "upper": true,
+          "color": "palette.word",
+          "outline": true,
+          "outline_width": "MIN * 0.003",
+          "opacity": 0.55,
+          "max_font_size": "H * 0.34"
+        }
+      ]
+    },
+    {
+      "id": "Product",
+      "items": [
+        {
+          "motif": "image",
+          "id": "product",
+          "asset": "product",
+          "x": "PX",
+          "y": "PY",
+          "width": "PW",
+          "height": "PH",
+          "effects": {
+            "cutout": "ai",
+            "fit": "contain",
+            "glow": 0.5,
+            "glow_color": "#FFFFFF",
+            "shadow": 0.5
+          }
+        }
+      ]
+    },
+    {
+      "id": "Price",
+      "items": [
+        {
+          "motif": "brush_stroke",
+          "id": "price-brush",
+          "x": "W - M - MIN * 0.34",
+          "y": "PY + MIN * 0.04",
+          "width": "MIN * 0.3",
+          "height": "MIN * 0.11",
+          "angle": -6,
+          "fill": "palette.accent",
+          "when": {
+            "slot": "price"
+          }
+        },
+        {
+          "motif": "text_block",
+          "id": "price",
+          "slot": "price",
+          "x": "W - M - MIN * 0.34",
+          "y": "PY + MIN * 0.055",
+          "width": "MIN * 0.3",
+          "height": "MIN * 0.08",
+          "font_size": "MIN * 0.06",
+          "min_font_size": "MIN * 0.03",
+          "max_lines": 1,
+          "font": "builtin:archivo",
+          "align": "center",
+          "color": "palette.on_accent",
+          "rotation": -6,
+          "text_role": "label",
+          "measure": true
+        }
+      ]
+    },
+    {
+      "id": "Copy",
+      "items": [
+        {
+          "motif": "text_block",
+          "id": "headline",
+          "slot": "headline",
+          "x": "M",
+          "y": "HEAD_Y",
+          "width": "W - 2 * M",
+          "height": "HEAD_FS * 1.2 * 2",
+          "font_size": "HEAD_FS",
+          "min_font_size": "HEAD_FS * 0.55",
+          "max_lines": 2,
+          "font": "builtin:prompt",
+          "weight": "black",
+          "align": "center",
+          "color": "palette.ink",
+          "accent_color": "palette.accent",
+          "measure": true
+        },
+        {
+          "motif": "text_block",
+          "id": "detail",
+          "slot": "detail",
+          "x": "M",
+          "y": "HEAD_Y + HEAD_FS * 2.5",
+          "width": "W - 2 * M",
+          "height": "MIN * 0.05",
+          "font_size": "MIN * 0.028",
+          "min_font_size": "MIN * 0.018",
+          "max_lines": 2,
+          "font": "builtin:prompt",
+          "align": "center",
+          "color": "palette.ink",
+          "opacity": 0.8,
+          "text_role": "body",
+          "measure": true
+        }
+      ]
+    }
+  ]
+}

@@ -20,6 +20,7 @@ from .models import (
     ResolvedImageEffects,
     ShapeNode,
     TextNode,
+    TextRun,
     ValidationIssue,
     iter_nodes,
 )
@@ -45,6 +46,7 @@ __all__ = [
     "ResolvedImageEffects",
     "ShapeNode",
     "TextNode",
+    "TextRun",
     "ValidationIssue",
     "iter_nodes",
     "validate_request",

@@ -101,6 +101,9 @@ def compile_template(request: GraphicRequest | dict[str, Any]) -> GraphicIR:
     for slot, spec in theme.slots.items():
         if spec.get("required", True) and not parsed.content.get(slot, "").strip():
             raise TemplateError(f"content_required:{slot}")
+    for asset, spec in theme.assets.items():
+        if spec.get("required", False) and asset not in parsed.assets:
+            raise TemplateError(f"asset_required:{asset}")
     try:
         return compile_theme(theme, parsed, product_image=_image_loader(parsed))
     except LayoutError:

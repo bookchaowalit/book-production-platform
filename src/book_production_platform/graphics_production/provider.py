@@ -81,7 +81,12 @@ MAX_TEXT_CHARS = 1_000
 # Everything the adapter knows about templates comes from the theme registry
 # (graphics_production/themes/*.json): ids, text slots (required or optional),
 # the words that name each template in a brief, and the labels for each slot.
-THEMES: dict[str, Theme] = load_themes()
+# A brief carries text only, so themes that need a photo (hero cut-outs, product shots) are made with
+# ``graphics make --photo`` instead and are not offered to the brief model.
+THEMES: dict[str, Theme] = {
+    theme_id: theme for theme_id, theme in load_themes().items()
+    if not any(spec.get("required", False) for spec in theme.assets.values())
+}
 TEMPLATE_SLOTS: dict[str, tuple[str, ...]] = {theme_id: theme.slot_names for theme_id, theme in THEMES.items()}
 REQUIRED_SLOTS: dict[str, tuple[str, ...]] = {
     theme_id: tuple(name for name, spec in theme.slots.items() if spec.get("required", True)) for theme_id, theme in THEMES.items()

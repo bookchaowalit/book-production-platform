@@ -17,10 +17,17 @@ import math
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
-from book_production_platform.graphics_ir import ImageNode, ShapeNode, TextNode
+from book_production_platform.graphics_ir import (
+    ImageEffects,
+    ImageNode,
+    ShapeNode,
+    TextNode,
+    TextRun,
+)
 
 from .art_styles import ART_FONTS
-from .layout import LayoutError, fit_text
+from .fonts import text_width_em
+from .layout import LayoutError, fit_text, parse_markup, visible_length
 from .themes import DEFAULT_CHAR_WIDTH, Context, ThemeError, resolve_effects
 
 Node = TextNode | ShapeNode | ImageNode
@@ -213,6 +220,66 @@ def _char_width(text: str, font: str, spacing_em: float) -> float:
     return round(min(max(DEFAULT_CHAR_WIDTH * thai + latin * (1 - thai) + spacing_em, 0.3), 2.0), 3)
 
 
+def _runs(ctx: Context, spec: Mapping[str, Any], marks: list[tuple[int, int, str]]) -> list[TextRun]:
+    """Inline markup as text runs: accent color, heavy weight, outline-only letters."""
+
+    if not marks:
+        return []
+    default_accent = "palette.accent" if "accent" in ctx.palette else "role.accent"
+    accent = _paint_param(ctx, spec, "accent_color", default_accent, str(spec.get("id", "text")))
+    runs = []
+    for start, end, kind in marks:
+        if kind == "accent":
+            runs.append(TextRun(start=start, end=end, color=accent))
+        elif kind == "heavy":
+            runs.append(TextRun(start=start, end=end, font_weight="black"))
+        else:
+            runs.append(TextRun(start=start, end=end, outline=True))
+    return runs
+
+
+def big_type(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
+    """One line of giant display type sized to ``span`` px wide (may run off the canvas).
+
+    Sized from the font's average advance, never wrapped. ``align`` and ``x`` place it; ``outline``,
+    ``blur``, ``motion_blur``, ``rotation``, and inline markup work as in ``text_block``. For names
+    and words used as a backdrop behind a subject, sports posters, editorial mastheads.
+    """
+
+    node_id = _id(spec)
+    raw = ctx.text(spec)
+    if raw is None:
+        return []
+    style = ctx.text_style({**spec, "text_role": spec.get("text_role", "display")}, ctx.names["MIN"])
+    if style["upper"] or spec.get("upper"):
+        raw = raw.upper()
+    value, marks = parse_markup(raw) if spec.get("markup", True) else (raw, [])
+    spacing_em = float(style["spacing_em"] or 0.0) if style["role"] else ctx.opt_num(spec, "letter_spacing_em", 0)
+    length = max(visible_length(value), 1)
+    measured = text_width_em(value, style["font"], style["weight"])
+    em_width = (measured + spacing_em * len(value)) if measured else length * _char_width(value, style["font"], spacing_em)
+    char_width = min(max(em_width / length * 1.02, 0.25), 2.0)
+    span = ctx.num(spec.get("span", "W"), name="span")
+    font_size = min(span / em_width * 0.99, ctx.opt_num(spec, "max_font_size", 2000))
+    width = length * char_width * font_size + 2
+    align = str(spec.get("align", "center"))
+    anchor_x = ctx.num(spec.get("x", "CX" if align == "center" else 0), name="x")
+    x = anchor_x - width / 2 if align == "center" else anchor_x - width if align == "right" else anchor_x
+    y = ctx.num(spec["y"], name="y")
+    node = TextNode(
+        node_id=node_id, x=round(x, 2), y=round(y, 2), width=round(width, 2), height=round(font_size * 1.25, 2),
+        text=value, font_size=round(min(font_size, 512), 2), font_ref=style["font"],
+        color=_paint_param(ctx, spec, "color", "#111111", node_id), align=align,  # type: ignore[arg-type]
+        overflow_policy="wrap", max_lines=1, font_weight=style["weight"], letter_spacing=round(spacing_em * font_size, 2),
+        opacity=ctx.opt_num(spec, "opacity", 1), char_width=char_width, runs=_runs(ctx, spec, marks),
+        outline_only=bool(spec.get("outline", False)), blur=ctx.opt_num(spec, "blur", 0),
+        motion_blur=ctx.opt_num(spec, "motion_blur", 0), rotation=ctx.opt_num(spec, "rotation", 0), bleed=True,
+    )
+    if node.outline_only or any(run.outline for run in node.runs):
+        node = node.model_copy(update={"stroke": None, "stroke_width": ctx.opt_num(spec, "outline_width", max(1.0, round(node.font_size * 0.012, 2)))})
+    return [node]
+
+
 def text_block(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
     """Text fitted into a box (font shrinks to ``min_font_size``; overflow is reported, never cut).
 
@@ -230,11 +297,18 @@ def text_block(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
     font_size = ctx.num(spec["font_size"], name="font_size")
     max_lines = int(ctx.opt_num(spec, "max_lines", 8))
     style = ctx.text_style(spec, font_size)
-    if style["upper"]:
+    if style["upper"] or spec.get("upper"):
         value = value.upper()
+    value, marks = parse_markup(value) if spec.get("markup", True) else (value, [])
     styled = style["role"] is not None
     spacing_em = style["spacing_em"] or 0.0
     char_width = _char_width(value, style["font"], spacing_em) if styled else DEFAULT_CHAR_WIDTH
+    if spec.get("measure") or styled:
+        # Real advance from the font files when installed (wide caps, display faces); estimate otherwise.
+        measured = text_width_em(value.replace("\n", ""), style["font"], style["weight"])
+        if measured:
+            letter_em = ctx.opt_num(spec, "letter_spacing", 0) / max(font_size, 1) if not styled else spacing_em
+            char_width = round(min(max(measured / max(visible_length(value), 1) * 1.04 + letter_em, 0.25), 2.0), 3)
     try:
         layout = fit_text(
             value,
@@ -272,11 +346,19 @@ def text_block(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
         stroke_width=ctx.opt_num(spec, "stroke_width", 0 if stroke is None else 1),
         opacity=ctx.opt_num(spec, "opacity", 1),
         char_width=char_width,
+        runs=_runs(ctx, spec, marks),
+        outline_only=bool(spec.get("outline", False)),
+        blur=ctx.opt_num(spec, "blur", 0),
+        motion_blur=ctx.opt_num(spec, "motion_blur", 0),
+        rotation=ctx.opt_num(spec, "rotation", 0),
     )
+    if node.outline_only or any(run.outline for run in node.runs):
+        node = node.model_copy(update={"stroke_width": ctx.opt_num(spec, "outline_width", max(1.0, round(layout.font_size * 0.025, 2)))})
     shadow = style["shadow"]
     if not shadow:
         return [node]
     echo = node.model_copy(update={
+        "runs": [],
         "node_id": f"{node_id}-shadow",
         "x": max(0.0, node.x + ctx.num(shadow.get("dx", "MIN * 0.006"), name="dx")),
         "y": max(0.0, node.y + ctx.num(shadow.get("dy", "MIN * 0.006"), name="dy")),
@@ -303,6 +385,7 @@ def display_text(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
     for index, shadow in enumerate(spec.get("shadows", []), start=1):
         dx, dy = ctx.num(shadow.get("dx", 0), name="dx"), ctx.num(shadow.get("dy", 0), name="dy")
         echoes.append(base.model_copy(update={
+            "runs": [],
             "node_id": f"{node_id}-echo-{index}",
             "x": max(0.0, base.x + dx),
             "y": max(0.0, base.y + dy),
@@ -318,17 +401,30 @@ def display_text(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
 
 
 def image(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
+    x, y = ctx.num(spec["x"], name="x"), ctx.num(spec["y"], name="y")
+    width, height = ctx.num(spec["width"], name="width"), ctx.num(spec["height"], name="height")
+    # A box hanging off the top/left edge is clamped like every node (the photo is fitted to the visible part).
     node = ctx.product_image({
         "node_id": str(spec.get("node_id") or _id(spec)),
         "asset": str(spec.get("asset", "product_image")),
-        "x": ctx.num(spec["x"], name="x"),
-        "y": ctx.num(spec["y"], name="y"),
-        "width": ctx.num(spec["width"], name="width"),
-        "height": ctx.num(spec["height"], name="height"),
+        "x": round(max(0.0, x), 2),
+        "y": round(max(0.0, y), 2),
+        "width": round(max(1.0, width + min(0.0, x)), 2),
+        "height": round(max(1.0, height + min(0.0, y)), 2),
     })
-    if node is not None and ctx.art is not None and ctx.art.photo:
+    if node is None:
+        return []
+    if isinstance(spec.get("effects"), Mapping):
+        # A theme can treat its own photo slot (hero cut-out, faded ghost portrait, ...).
+        try:
+            effects = ImageEffects.model_validate(dict(spec["effects"]))
+        except ValueError as exc:
+            raise ThemeError(f"image_effects_invalid:{_id(spec)}") from exc
+        node = node.model_copy(update={"effects": resolve_effects(ctx, effects)})
+    elif ctx.art is not None and ctx.art.photo:
         node = node.model_copy(update={"effects": resolve_effects(ctx, None)})
-    return [node] if node else []
+    node = node.model_copy(update={"rotation": ctx.opt_num(spec, "rotation", 0), "opacity": ctx.opt_num(spec, "opacity", 1)})
+    return [node]
 
 
 # --- generative ---------------------------------------------------------------------------------
@@ -1070,6 +1166,94 @@ def torn_edge(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
                            fill=ctx.color(spec.get("fill", "#FFFFFF")), opacity=ctx.opt_num(spec, "opacity", 1)))
 
 
+def swoosh(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
+    """A tapered curved blade from (x1, y1) to (x2, y2) bowing by ``bend`` (sports posters, dynamic promos).
+
+    ``width`` is the thickness at the start; it narrows to ``tip`` (fraction) at the end.
+    """
+
+    item_id = _id(spec)
+    x1, y1 = ctx.num(spec["x1"], name="x1"), ctx.num(spec["y1"], name="y1")
+    x2, y2 = ctx.num(spec["x2"], name="x2"), ctx.num(spec["y2"], name="y2")
+    thickness = ctx.num(spec.get("width", "MIN * 0.12"), name="width")
+    bend = ctx.opt_num(spec, "bend", 0.25)
+    tip = min(max(ctx.opt_num(spec, "tip", 0.05), 0.0), 1.0)
+    length = math.hypot(x2 - x1, y2 - y1) or 1.0
+    nx, ny = -(y2 - y1) / length, (x2 - x1) / length
+    mx, my = (x1 + x2) / 2 + nx * bend * length, (y1 + y2) / 2 + ny * bend * length
+    steps = 48
+    upper, lower = [], []
+    for index in range(steps + 1):
+        t = index / steps
+        px = (1 - t) ** 2 * x1 + 2 * (1 - t) * t * mx + t * t * x2
+        py = (1 - t) ** 2 * y1 + 2 * (1 - t) * t * my + t * t * y2
+        dx = 2 * (1 - t) * (mx - x1) + 2 * t * (x2 - mx)
+        dy = 2 * (1 - t) * (my - y1) + 2 * t * (y2 - my)
+        norm = math.hypot(dx, dy) or 1.0
+        half = thickness * (1 - (1 - tip) * t) / 2
+        upper.append((px - dy / norm * half, py + dx / norm * half))
+        lower.append((px + dy / norm * half, py - dx / norm * half))
+    outline = [*upper, *reversed(lower)]
+    return _one(_path_node(ctx, item_id, _polyline(outline, closed=True), outline,
+                           fill=_paint_param(ctx, spec, "fill", "#000000", item_id), opacity=ctx.opt_num(spec, "opacity", 1)))
+
+
+def brush_stroke(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
+    """A rough paint stroke band (x, y, width, height, ``angle``) with ragged ends and dry-brush streaks."""
+
+    item_id = _id(spec)
+    rng = ctx.rng(item_id)
+    x0, y0 = ctx.num(spec["x"], name="x"), ctx.num(spec["y"], name="y")
+    width, height = ctx.num(spec["width"], name="width"), ctx.num(spec["height"], name="height")
+    angle = math.radians(ctx.opt_num(spec, "angle", -3))
+    cx, cy = x0 + width / 2, y0 + height / 2
+    cos_a, sin_a = math.cos(angle), math.sin(angle)
+
+    def turn(px: float, py: float) -> tuple[float, float]:
+        return (cx + (px - cx) * cos_a - (py - cy) * sin_a, cy + (px - cx) * sin_a + (py - cy) * cos_a)
+
+    steps = 40
+    top = [turn(x0 + width * i / steps, y0 + (rng.random() - 0.5) * height * 0.12) for i in range(steps + 1)]
+    bottom = [turn(x0 + width * i / steps, y0 + height + (rng.random() - 0.5) * height * 0.12) for i in range(steps, -1, -1)]
+    tail = [turn(x0 - rng.random() * height * 0.35, y0 + height * k / 6) for k in range(6, -1, -1)]
+    head = [turn(x0 + width + rng.random() * height * 0.35, y0 + height * k / 6) for k in range(7)]
+    band = [*top, *head, *bottom, *tail]
+    fill = _paint_param(ctx, spec, "fill", "#000000", item_id)
+    nodes = _one(_path_node(ctx, item_id, _polyline(band, closed=True), band, fill=fill, opacity=ctx.opt_num(spec, "opacity", 1)))
+    streaks = []
+    for _ in range(int(ctx.opt_num(spec, "streaks", 7))):
+        sy = y0 + rng.random() * height
+        sx = x0 + width * (0.6 + rng.random() * 0.4)
+        a, b = turn(sx, sy), turn(sx + width * (0.15 + rng.random() * 0.3), sy + (rng.random() - 0.5) * height * 0.1)
+        streaks.append(f"M{_fmt(a[0])} {_fmt(a[1])} L{_fmt(b[0])} {_fmt(b[1])}")
+    if streaks:
+        nodes += _one(_path_node(ctx, f"{item_id}-streaks", " ".join(streaks), band, stroke=fill,
+                                 stroke_width=max(height * 0.03, 1), opacity=ctx.opt_num(spec, "opacity", 1) * 0.8))
+    return nodes
+
+
+def swatches(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
+    """A row of color circles (``colors``) centred in a box — brand boards and style guides."""
+
+    item_id = _id(spec)
+    x0, y0 = ctx.num(spec["x"], name="x"), ctx.num(spec["y"], name="y")
+    width, height = ctx.num(spec["width"], name="width"), ctx.num(spec["height"], name="height")
+    colors = list(spec.get("colors", []))[:8]
+    if not colors:
+        return []
+    gap = ctx.opt_num(spec, "gap", width * 0.04)
+    radius = min(height / 2, (width - gap * (len(colors) - 1)) / len(colors) / 2)
+    start = x0 + (width - (radius * 2 * len(colors) + gap * (len(colors) - 1))) / 2 + radius
+    nodes: list[Any] = []
+    stroke = ctx.color(spec["stroke"], name="stroke") if spec.get("stroke") else None
+    for index, color in enumerate(colors):
+        cx = start + index * (radius * 2 + gap)
+        nodes += _one(_path_node(ctx, f"{item_id}-{index + 1}", _ellipse_path(cx, y0 + height / 2, radius, radius),
+                                 [(cx - radius, y0 + height / 2 - radius), (cx + radius, y0 + height / 2 + radius)],
+                                 fill=ctx.solid(color, name="color"), stroke=stroke, stroke_width=1 if stroke else 0))
+    return nodes
+
+
 MOTIFS: dict[str, Motif] = {
     "rect": rect,
     "ellipse": ellipse,
@@ -1077,6 +1261,7 @@ MOTIFS: dict[str, Motif] = {
     "polygon": polygon,
     "glow": glow,
     "text_block": text_block,
+    "big_type": big_type,
     "display_text": display_text,
     "image": image,
     "starfield": starfield,
@@ -1105,9 +1290,12 @@ MOTIFS: dict[str, Motif] = {
     "barcode": barcode,
     "vignette": vignette,
     "torn_edge": torn_edge,
+    "swoosh": swoosh,
+    "brush_stroke": brush_stroke,
+    "swatches": swatches,
 }
 
 # Motifs that only decorate (no text, no photos): what art style packs may use.
-DECOR_MOTIFS = frozenset(set(MOTIFS) - {"text_block", "display_text", "image"})
+DECOR_MOTIFS = frozenset(set(MOTIFS) - {"text_block", "display_text", "big_type", "image"})
 
 __all__ = ["DECOR_MOTIFS", "MOTIFS", "Motif"]

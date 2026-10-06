@@ -302,6 +302,46 @@ def _smooth(points: list[tuple[float, float]], samples: int = 12) -> list[tuple[
     return out  # type: ignore[return-value]
 
 
+def _fade_mask(kind: str, amount: float, width: int, height: int) -> Image.Image:
+    """White where the picture stays, ramping to black over ``amount`` of the size toward the faded side(s)."""
+
+    def ramp(length: int, reverse: bool) -> Image.Image:
+        span = max(1, round(length * amount))
+        values = [min(255, round(255 * position / span)) for position in range(length)]
+        if reverse:
+            values.reverse()
+        strip = Image.new("L", (length, 1))
+        strip.putdata(values)
+        return strip
+
+    if kind in ("bottom", "top"):
+        return _vertical(ramp(height, kind == "bottom"), width, height)
+    if kind in ("left", "right"):
+        return ramp(width, kind == "right").resize((width, height))
+    if kind == "edges":
+        horizontal = ImageChops.multiply(ramp(width, False).resize((width, height)), ramp(width, True).resize((width, height)))
+        vertical = ImageChops.multiply(_vertical(ramp(height, False), width, height), _vertical(ramp(height, True), width, height))
+        return ImageChops.multiply(horizontal, vertical)
+    return _vignette_mask((width, height), 1.0) if amount >= 0.99 else _radial_fade(width, height, amount)
+
+
+def _vertical(strip: Image.Image, width: int, height: int) -> Image.Image:
+    column = Image.new("L", (1, height))
+    column.putdata(list(strip.getdata()))
+    return column.resize((width, height))
+
+
+def _radial_fade(width: int, height: int, amount: float) -> Image.Image:
+    small = Image.new("L", (64, 64), 0)
+    pixels = small.load()
+    for y in range(64):
+        for x in range(64):
+            distance = math.hypot((x - 31.5) / 31.5, (y - 31.5) / 31.5)
+            inner = 1 - amount
+            pixels[x, y] = 255 if distance <= inner else max(0, round(255 * (1 - (distance - inner) / max(amount, 1e-3))))  # type: ignore[index]
+    return small.resize((width, height), Image.Resampling.BILINEAR)
+
+
 # --- pipeline -----------------------------------------------------------------------------------
 
 
@@ -346,7 +386,8 @@ def _process_cached(path: str, mtime: int, size: int, effects_json: str, width: 
     outline = round(effects.outline_width * factor)
     shadow_blur = round(base * 0.025) if effects.shadow else 0
     shadow_offset = round(base * 0.018) if effects.shadow else 0
-    pad = outline + (shadow_blur * 2 + shadow_offset if effects.shadow else 0)
+    glow_blur = round(base * 0.04) if effects.glow else 0
+    pad = outline + max(shadow_blur * 2 + shadow_offset if effects.shadow else 0, glow_blur * 2)
     inner_w, inner_h = max(1, width - 2 * pad), max(1, height - 2 * pad)
 
     picture, (ox, oy) = _fit(image, inner_w, inner_h, effects)
@@ -356,6 +397,8 @@ def _process_cached(path: str, mtime: int, size: int, effects_json: str, width: 
     # Seeded by the picture's name and size, not its folder, so the same photo gives the same shape anywhere.
     shape = _mask(effects.mask, inner_w, inner_h, effects.corner_radius, f"{Path(path).name}|{image.size}|{effects.mask}")
     area.putalpha(ImageChops.multiply(area.getchannel("A"), shape))
+    if effects.fade != "none":
+        area.putalpha(ImageChops.multiply(area.getchannel("A"), _fade_mask(effects.fade, effects.fade_amount, inner_w, inner_h)))
 
     canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     alpha = Image.new("L", (width, height), 0)
@@ -376,6 +419,11 @@ def _process_cached(path: str, mtime: int, size: int, effects_json: str, width: 
         shadow_layer = Image.new("RGBA", (width, height), (0, 0, 0, 255))
         shadow_layer.putalpha(shadow_alpha)
         canvas = Image.alpha_composite(canvas, shadow_layer)
+    if effects.glow:
+        halo = alpha.filter(ImageFilter.GaussianBlur(glow_blur)).point(lambda v: min(255, round(v * 1.6 * effects.glow)))
+        glow_layer = Image.new("RGBA", (width, height), (*_hex(effects.glow_color, "#FFFFFF"), 255))
+        glow_layer.putalpha(halo)
+        canvas = Image.alpha_composite(canvas, glow_layer)
     if footprint is not None:
         canvas = Image.alpha_composite(canvas, footprint)
     placed = Image.new("RGBA", (width, height), (0, 0, 0, 0))

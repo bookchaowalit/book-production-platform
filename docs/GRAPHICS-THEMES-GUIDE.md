@@ -277,6 +277,53 @@ book-production graphics make --theme grand_opening --variant portrait \
 รูปที่แต่งแล้วฝังใน SVG เป็น PNG ขนาดเท่ากรอบ ถ้าจะแก้ต่อใน Affinity ให้ใช้รูปต้นฉบับ
 โดยทำตามขั้นตอนใน `MANUAL-STEPS.md` (มีขั้นตอนลบพื้นหลัง ครอป มาสก์ ฟิลเตอร์ ขอบ และเงาของแต่ละรูป)
 
+## 5C. ตัวหนังสือแบบงานดีไซเนอร์ และธีมที่มีรูปเป็นพระเอก
+
+### ไฮไลต์บางคำในข้อความเดียว
+
+พิมพ์สัญลักษณ์ครอบคำในข้อความได้เลย (ทุกธีม ทุกช่องข้อความ):
+
+| พิมพ์ | ได้ | ตัวอย่าง |
+|---|---|---|
+| `*คำ*` | คำนั้นเป็นสีเน้น | `CRAFTING *DESIGNS* THAT CONNECT` |
+| `**คำ**` | คำนั้นหนาพิเศษ | `**LEADER**HEALTH` (โลโก้ตัวหนา-บาง) |
+| `~คำ~` | คำนั้นเป็นตัวกลวง (มีแต่เส้นขอบ) | `AR~DI~AN` |
+
+สัญลักษณ์ที่ไม่มีคู่ปิด หรือมีช่องว่างติดด้านใน (`x * y * z`) จะเป็นตัวอักษรธรรมดา
+ถ้าต้องการพิมพ์ `*` จริง ๆ ให้ใส่ `\*`
+
+### ค่าตัวหนังสือที่ธีมใช้ได้
+
+- `big_type` ตัวยักษ์บรรทัดเดียว กว้างตาม `span` (ล้นขอบได้) ใช้กับชื่อหรือคำพื้นหลัง
+- `outline: true` ตัวกลวงทั้งข้อความ, `motion_blur` เบลอวิ่งแนวนอน, `blur` เบลอ, `rotation` เอียง
+- ฟอนต์เพิ่ม: `builtin:bebas`, `builtin:archivo` (หนากว้างแบบกีฬา), `builtin:dm_serif` (serif นิตยสาร),
+  `builtin:script` (ลายมือพู่กัน), `builtin:marker`, `builtin:poppins`, `builtin:prompt`, `builtin:anuphan`, `builtin:serif_thai`
+- ถ้ามีไฟล์ฟอนต์ในเครื่อง ระบบวัดความกว้างจริงจากฟอนต์ ตัวยักษ์จึงพอดีขอบ (ไม่มีไฟล์ก็ใช้ค่าประมาณ)
+
+### รูป: ไล่จาง เรืองแสง
+
+`effects.fade`: `bottom top left right edges radial` + `fade_amount` (0–1) ทำรูปจางหายเข้าพื้นหลัง
+`effects.glow` (0–1) + `glow_color` แสงฟุ้งรอบตัวแบบ (เหมาะกับคน/สินค้าที่ตัดพื้นแล้ว)
+
+### ธีมที่มีรูปเป็นพระเอก
+
+| ธีม | แนว | ช่องข้อความ | รูปที่ต้องมี |
+|---|---|---|---|
+| `hero_poster` | โปสเตอร์ฮีโร่/กีฬา: ชื่อยักษ์เบลอวิ่งหลังตัวแบบ ภาพเงาขาวดำจาง แถบเฉียง หัวข้อหนา ลายมือเน้น | name, headline, kicker, tagline, badge, footer | `subject` |
+| `editorial_hero` | หน้าปกนิตยสาร/แบรนด์บุคคล: ชื่อ serif ยักษ์อยู่หลังคน และชื่อเดียวกันแบบตัวกลวงทับหน้า (ได้ความลึก) | name, tagline, body, cta, kicker | `subject` |
+| `brand_board` | บอร์ดแบรนด์แบบ bento: การ์ดมุมมน รูป สีแบรนด์ คำขวัญ โปสเตอร์ โลโก้ตัวหนา-บาง | brand, tagline, poster_headline, poster_label | `photo1-3` (ไม่บังคับ) |
+| `product_hero` | สินค้าตัดพื้นเรืองแสง หน้าคำยักษ์ตัวกลวง ราคาบนรอยพู่กัน | word, headline, price, detail | `product` |
+| `numbered_list` | รายการบริการ/ขั้นตอน 01–04 เลขใหญ่ เส้นบาง หัวข้อมีคำเน้น | kicker, title, item1–4, note | – |
+
+```bash
+book-production graphics make --theme hero_poster --variant all \
+  --set name=KORGI --set "headline=MVP *ประจำเดือน*" --set "kicker=Good Boy!" --set "tagline=N O . 7" \
+  --photo subject=photos/dog.jpg --output work --idempotency-key hero-1
+```
+
+ใช้รูปที่ตัวแบบชัด พื้นหลังไม่รก ระบบตัดพื้นหลังด้วย AI ให้ (ข้อ 5B) ธีมที่บังคับรูปจะไม่ถูกเลือกจากคำสั่ง `brief`
+(brief รับแต่ข้อความ) ให้ใช้ `make --photo` แทน art style ทั้ง 18 แบบใช้กับธีมเหล่านี้ได้ทุกตัว
+
 ## 6. นำเข้า Affinity และส่งลูกค้า
 
 1. Affinity Designer/Photo: `File ▸ Open…` เลือกไฟล์ `.svg`

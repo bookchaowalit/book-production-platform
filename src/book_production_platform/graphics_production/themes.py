@@ -514,13 +514,18 @@ EDITABLE_NUMBERS = frozenset({
     "bottom", "vanish_x", "spread", "near_spread", "verticals", "horizontals", "power", "amplitude", "wavelength", "step",
     "spacing", "max_radius", "min_radius", "direction", "angle", "band", "gap", "inset", "length", "base", "min_height",
     "max_height", "peaks", "strength", "size", "rotation", "inner", "outer", "radius", "slat_start", "cut_y", "wobble",
-    "border_width", "border_opacity",
+    "border_width", "border_opacity", "blur", "motion_blur", "outline_width", "span", "bend", "tip", "max_font_size",
+    "streaks", "fade_amount",
 })
-EDITABLE_COLORS = frozenset({"color", "fill", "stroke", "horizon_color", "horizontal_color", "vertical_color", "floor", "border"})
-EDITABLE_CHOICES: dict[str, frozenset[str]] = {
+EDITABLE_COLORS = frozenset({
+    "color", "fill", "stroke", "horizon_color", "horizontal_color", "vertical_color", "floor", "border", "accent_color",
+})
+EDITABLE_CHOICES: dict[str, frozenset[str | bool]] = {
     "weight": frozenset({"normal", "bold", "black"}),
     "align": frozenset({"left", "center", "right"}),
     "font": frozenset(BUILTIN_FONTS | {"request"}),
+    "outline": frozenset({True, False}),
+    "upper": frozenset({True, False}),
 }
 
 

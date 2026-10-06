@@ -1,0 +1,503 @@
+{
+  "schema_version": "graphic-theme.v1",
+  "ir_version": "graphic-ir.v2",
+  "template_version": "1",
+  "theme_id": "numbered_list",
+  "title": "Numbered List",
+  "description": "Editorial list: small kicker, serif title with accent words, and up to four rows with giant numerals and hairlines (services, steps, reasons, menu highlights).",
+  "variants": [
+    "square",
+    "portrait",
+    "story",
+    "landscape"
+  ],
+  "evidence": [
+    "services",
+    "บริการ",
+    "ขั้นตอน",
+    "steps",
+    "how it works",
+    "reasons",
+    "เหตุผล",
+    "list",
+    "รายการ",
+    "top 4",
+    "4 ข้อ"
+  ],
+  "slots": {
+    "kicker": {
+      "required": false,
+      "labels": [
+        "kicker",
+        "label",
+        "ป้าย"
+      ]
+    },
+    "title": {
+      "required": true,
+      "labels": [
+        "title",
+        "headline",
+        "หัวข้อ"
+      ]
+    },
+    "item1": {
+      "required": true,
+      "labels": [
+        "item 1",
+        "ข้อ 1",
+        "บริการ 1"
+      ]
+    },
+    "item2": {
+      "required": true,
+      "labels": [
+        "item 2",
+        "ข้อ 2",
+        "บริการ 2"
+      ]
+    },
+    "item3": {
+      "required": false,
+      "labels": [
+        "item 3",
+        "ข้อ 3",
+        "บริการ 3"
+      ]
+    },
+    "item4": {
+      "required": false,
+      "labels": [
+        "item 4",
+        "ข้อ 4",
+        "บริการ 4"
+      ]
+    },
+    "note": {
+      "required": false,
+      "labels": [
+        "note",
+        "หมายเหตุ",
+        "ท้าย"
+      ]
+    }
+  },
+  "styles": {
+    "paper": {
+      "title": "Paper",
+      "palette": {
+        "bg": "#F3EFE7",
+        "ink": "#151515",
+        "rule": "#CFC7B8",
+        "accent": "#D9441F"
+      }
+    },
+    "navy": {
+      "title": "Navy",
+      "palette": {
+        "bg": "#0E1A33",
+        "ink": "#F1F1F1",
+        "rule": "#33415F",
+        "accent": "#F2A541"
+      }
+    }
+  },
+  "palette": {
+    "bg": "#0D0D0D",
+    "ink": "#F2F2F2",
+    "rule": "#3A3A3A",
+    "accent": "#EE5A24"
+  },
+  "roles": {
+    "bg": "bg",
+    "ink": "ink",
+    "rule": "muted",
+    "accent": "accent"
+  },
+  "vars": {
+    "M": "MIN * 0.07",
+    "TITLE_FS": {
+      "by_variant": {
+        "landscape": "MIN * 0.07",
+        "story": "MIN * 0.09",
+        "default": "MIN * 0.075"
+      }
+    },
+    "LIST_Y": {
+      "by_variant": {
+        "landscape": "H * 0.36",
+        "story": "H * 0.34",
+        "default": "H * 0.38"
+      }
+    },
+    "ROW": {
+      "by_variant": {
+        "landscape": "H * 0.12",
+        "story": "H * 0.13",
+        "portrait": "H * 0.13",
+        "default": "H * 0.135"
+      }
+    }
+  },
+  "layers": [
+    {
+      "id": "Background",
+      "items": [
+        {
+          "motif": "rect",
+          "id": "bg",
+          "fill": "palette.bg"
+        },
+        {
+          "motif": "grain",
+          "id": "grain",
+          "color": "palette.ink",
+          "opacity": 0.05,
+          "decor": true
+        }
+      ]
+    },
+    {
+      "id": "Header",
+      "items": [
+        {
+          "motif": "text_block",
+          "id": "kicker",
+          "slot": "kicker",
+          "x": "M",
+          "y": "M",
+          "width": "W - 2 * M",
+          "height": "MIN * 0.035",
+          "font_size": "MIN * 0.02",
+          "min_font_size": "MIN * 0.014",
+          "max_lines": 1,
+          "font": "builtin:mono",
+          "color": "palette.ink",
+          "opacity": 0.75,
+          "text_role": "label",
+          "measure": true
+        },
+        {
+          "motif": "text_block",
+          "id": "title",
+          "slot": "title",
+          "x": "M",
+          "y": "M + MIN * 0.06",
+          "width": "W * 0.78",
+          "height": "LIST_Y - M - MIN * 0.1",
+          "font_size": "TITLE_FS",
+          "min_font_size": "TITLE_FS * 0.5",
+          "max_lines": 4,
+          "font": "builtin:dm_serif",
+          "color": "palette.ink",
+          "accent_color": "palette.accent",
+          "upper": true,
+          "measure": true
+        }
+      ]
+    },
+    {
+      "id": "List",
+      "items": [
+        {
+          "motif": "line",
+          "id": "rule1",
+          "x1": "M",
+          "y1": "LIST_Y + 0 * ROW",
+          "x2": "W - M",
+          "y2": "LIST_Y + 0 * ROW",
+          "stroke": "palette.rule",
+          "stroke_width": "MIN * 0.0015",
+          "when": {
+            "slot": "item1"
+          }
+        },
+        {
+          "motif": "text_block",
+          "id": "num1",
+          "text": "01",
+          "x": "M",
+          "y": "LIST_Y + 0 * ROW + ROW * 0.08",
+          "width": "ROW * 1.4",
+          "height": "ROW * 0.9",
+          "font_size": "ROW * 0.72",
+          "min_font_size": "ROW * 0.4",
+          "max_lines": 1,
+          "font": "builtin:poppins",
+          "color": "palette.ink",
+          "markup": false,
+          "text_role": "label",
+          "when": {
+            "slot": "item1"
+          },
+          "measure": true
+        },
+        {
+          "motif": "text_block",
+          "id": "item1",
+          "slot": "item1",
+          "x": "W * 0.45",
+          "y": "LIST_Y + 0 * ROW + ROW * 0.3",
+          "width": "W * 0.42 - M",
+          "height": "ROW * 0.5",
+          "font_size": "ROW * 0.2",
+          "min_font_size": "ROW * 0.1",
+          "max_lines": 2,
+          "font": "builtin:dm_serif",
+          "color": "palette.ink",
+          "upper": true,
+          "text_role": "body",
+          "measure": true
+        },
+        {
+          "motif": "text_block",
+          "id": "arrow1",
+          "text": "→",
+          "x": "W - M - ROW * 0.3",
+          "y": "LIST_Y + 0 * ROW + ROW * 0.3",
+          "width": "ROW * 0.3",
+          "height": "ROW * 0.3",
+          "font_size": "ROW * 0.18",
+          "max_lines": 1,
+          "font": "builtin:poppins",
+          "color": "palette.ink",
+          "markup": false,
+          "text_role": "label",
+          "when": {
+            "slot": "item1"
+          },
+          "measure": true
+        },
+        {
+          "motif": "line",
+          "id": "rule2",
+          "x1": "M",
+          "y1": "LIST_Y + 1 * ROW",
+          "x2": "W - M",
+          "y2": "LIST_Y + 1 * ROW",
+          "stroke": "palette.rule",
+          "stroke_width": "MIN * 0.0015",
+          "when": {
+            "slot": "item2"
+          }
+        },
+        {
+          "motif": "text_block",
+          "id": "num2",
+          "text": "02",
+          "x": "M",
+          "y": "LIST_Y + 1 * ROW + ROW * 0.08",
+          "width": "ROW * 1.4",
+          "height": "ROW * 0.9",
+          "font_size": "ROW * 0.72",
+          "min_font_size": "ROW * 0.4",
+          "max_lines": 1,
+          "font": "builtin:poppins",
+          "color": "palette.ink",
+          "markup": false,
+          "text_role": "label",
+          "when": {
+            "slot": "item2"
+          },
+          "measure": true
+        },
+        {
+          "motif": "text_block",
+          "id": "item2",
+          "slot": "item2",
+          "x": "W * 0.45",
+          "y": "LIST_Y + 1 * ROW + ROW * 0.3",
+          "width": "W * 0.42 - M",
+          "height": "ROW * 0.5",
+          "font_size": "ROW * 0.2",
+          "min_font_size": "ROW * 0.1",
+          "max_lines": 2,
+          "font": "builtin:dm_serif",
+          "color": "palette.ink",
+          "upper": true,
+          "text_role": "body",
+          "measure": true
+        },
+        {
+          "motif": "text_block",
+          "id": "arrow2",
+          "text": "→",
+          "x": "W - M - ROW * 0.3",
+          "y": "LIST_Y + 1 * ROW + ROW * 0.3",
+          "width": "ROW * 0.3",
+          "height": "ROW * 0.3",
+          "font_size": "ROW * 0.18",
+          "max_lines": 1,
+          "font": "builtin:poppins",
+          "color": "palette.ink",
+          "markup": false,
+          "text_role": "label",
+          "when": {
+            "slot": "item2"
+          },
+          "measure": true
+        },
+        {
+          "motif": "line",
+          "id": "rule3",
+          "x1": "M",
+          "y1": "LIST_Y + 2 * ROW",
+          "x2": "W - M",
+          "y2": "LIST_Y + 2 * ROW",
+          "stroke": "palette.rule",
+          "stroke_width": "MIN * 0.0015",
+          "when": {
+            "slot": "item3"
+          }
+        },
+        {
+          "motif": "text_block",
+          "id": "num3",
+          "text": "03",
+          "x": "M",
+          "y": "LIST_Y + 2 * ROW + ROW * 0.08",
+          "width": "ROW * 1.4",
+          "height": "ROW * 0.9",
+          "font_size": "ROW * 0.72",
+          "min_font_size": "ROW * 0.4",
+          "max_lines": 1,
+          "font": "builtin:poppins",
+          "color": "palette.ink",
+          "markup": false,
+          "text_role": "label",
+          "when": {
+            "slot": "item3"
+          },
+          "measure": true
+        },
+        {
+          "motif": "text_block",
+          "id": "item3",
+          "slot": "item3",
+          "x": "W * 0.45",
+          "y": "LIST_Y + 2 * ROW + ROW * 0.3",
+          "width": "W * 0.42 - M",
+          "height": "ROW * 0.5",
+          "font_size": "ROW * 0.2",
+          "min_font_size": "ROW * 0.1",
+          "max_lines": 2,
+          "font": "builtin:dm_serif",
+          "color": "palette.ink",
+          "upper": true,
+          "text_role": "body",
+          "measure": true
+        },
+        {
+          "motif": "text_block",
+          "id": "arrow3",
+          "text": "→",
+          "x": "W - M - ROW * 0.3",
+          "y": "LIST_Y + 2 * ROW + ROW * 0.3",
+          "width": "ROW * 0.3",
+          "height": "ROW * 0.3",
+          "font_size": "ROW * 0.18",
+          "max_lines": 1,
+          "font": "builtin:poppins",
+          "color": "palette.ink",
+          "markup": false,
+          "text_role": "label",
+          "when": {
+            "slot": "item3"
+          },
+          "measure": true
+        },
+        {
+          "motif": "line",
+          "id": "rule4",
+          "x1": "M",
+          "y1": "LIST_Y + 3 * ROW",
+          "x2": "W - M",
+          "y2": "LIST_Y + 3 * ROW",
+          "stroke": "palette.rule",
+          "stroke_width": "MIN * 0.0015",
+          "when": {
+            "slot": "item4"
+          }
+        },
+        {
+          "motif": "text_block",
+          "id": "num4",
+          "text": "04",
+          "x": "M",
+          "y": "LIST_Y + 3 * ROW + ROW * 0.08",
+          "width": "ROW * 1.4",
+          "height": "ROW * 0.9",
+          "font_size": "ROW * 0.72",
+          "min_font_size": "ROW * 0.4",
+          "max_lines": 1,
+          "font": "builtin:poppins",
+          "color": "palette.ink",
+          "markup": false,
+          "text_role": "label",
+          "when": {
+            "slot": "item4"
+          },
+          "measure": true
+        },
+        {
+          "motif": "text_block",
+          "id": "item4",
+          "slot": "item4",
+          "x": "W * 0.45",
+          "y": "LIST_Y + 3 * ROW + ROW * 0.3",
+          "width": "W * 0.42 - M",
+          "height": "ROW * 0.5",
+          "font_size": "ROW * 0.2",
+          "min_font_size": "ROW * 0.1",
+          "max_lines": 2,
+          "font": "builtin:dm_serif",
+          "color": "palette.ink",
+          "upper": true,
+          "text_role": "body",
+          "measure": true
+        },
+        {
+          "motif": "text_block",
+          "id": "arrow4",
+          "text": "→",
+          "x": "W - M - ROW * 0.3",
+          "y": "LIST_Y + 3 * ROW + ROW * 0.3",
+          "width": "ROW * 0.3",
+          "height": "ROW * 0.3",
+          "font_size": "ROW * 0.18",
+          "max_lines": 1,
+          "font": "builtin:poppins",
+          "color": "palette.ink",
+          "markup": false,
+          "text_role": "label",
+          "when": {
+            "slot": "item4"
+          },
+          "measure": true
+        }
+      ]
+    },
+    {
+      "id": "Footer",
+      "items": [
+        {
+          "motif": "text_block",
+          "id": "note",
+          "slot": "note",
+          "x": "M",
+          "y": "H - M - MIN * 0.03",
+          "width": "W - 2 * M",
+          "height": "MIN * 0.03",
+          "font_size": "MIN * 0.018",
+          "min_font_size": "MIN * 0.012",
+          "max_lines": 1,
+          "font": "builtin:mono",
+          "color": "palette.ink",
+          "opacity": 0.7,
+          "text_role": "label",
+          "measure": true
+        }
+      ]
+    }
+  ]
+}

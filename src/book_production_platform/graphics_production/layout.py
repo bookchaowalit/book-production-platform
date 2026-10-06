@@ -214,3 +214,85 @@ def fit_text(
     raise LayoutError(
         "text_does_not_fit", max_lines=max(1, fitting_lines), line_chars=line_chars, length=visible_length(text)
     )
+
+
+# --- inline markup -------------------------------------------------------------------------------
+
+_MARKERS = (("**", "heavy"), ("*", "accent"), ("~", "outline"))
+
+
+def parse_markup(text: str) -> tuple[str, list[tuple[int, int, str]]]:
+    """Strip inline markup and return the plain text and its styled runs.
+
+    ``*word*`` gives the accent color, ``**word**`` heavy weight, ``~word~`` outline-only letters.
+    A marker without a closing partner stays literal text, and a backslash before ``*`` or ``~``
+    writes the character itself, so ordinary copy (footnote stars, ``~5 km``) is unchanged.
+    """
+
+    plain: list[str] = []
+    runs: list[tuple[int, int, str]] = []
+    index = 0
+    while index < len(text):
+        char = text[index]
+        if char == "\\" and index + 1 < len(text) and text[index + 1] in "*~":
+            plain.append(text[index + 1])
+            index += 2
+            continue
+        matched = False
+        for marker, kind in _MARKERS:
+            if not text.startswith(marker, index):
+                continue
+            close = text.find(marker, index + len(marker))
+            # A single "*" never closes on half of a "**".
+            while marker == "*" and close != -1 and text.startswith("**", close):
+                close = text.find(marker, close + 2)
+            if close <= index + len(marker):
+                break
+            inner = text[index + len(marker):close]
+            # Like Markdown: no space just inside the markers ("x * y * z" stays as written).
+            if "\n" in inner or inner[0].isspace() or inner[-1].isspace():
+                break
+            start = len(plain)
+            plain.extend(inner)
+            runs.append((start, len(plain), kind))
+            index = close + len(marker)
+            matched = True
+            break
+        if not matched:
+            plain.append(char)
+            index += 1
+    return "".join(plain), runs
+
+
+def line_runs(text: str, lines: tuple[str, ...], runs: list[tuple[int, int, int]]) -> list[list[tuple[str, int]]]:
+    """Split each rendered line into ``(segment, run_index)`` pieces (-1 = unstyled).
+
+    ``runs`` are ``(start, end, run_index)`` ranges over ``text``. :func:`wrap_text` keeps every
+    non-space character in order, so line characters are matched back to ``text`` by walking both.
+    """
+
+    owner = [-1] * len(text)
+    for start, end, run_index in runs:
+        for position in range(start, min(end, len(text))):
+            owner[position] = run_index
+    pieces: list[list[tuple[str, int]]] = []
+    cursor = 0
+    for line in lines:
+        segments: list[tuple[str, int]] = []
+        for char in line:
+            if char.isspace():
+                style = -1
+                if cursor < len(text) and text[cursor].isspace():
+                    style = owner[cursor]
+                    cursor += 1
+            else:
+                while cursor < len(text) and text[cursor] != char:
+                    cursor += 1
+                style = owner[cursor] if cursor < len(text) else -1
+                cursor += 1
+            if segments and segments[-1][1] == style:
+                segments[-1] = (segments[-1][0] + char, style)
+            else:
+                segments.append((char, style))
+        pieces.append(segments)
+    return pieces

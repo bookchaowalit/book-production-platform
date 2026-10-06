@@ -1,0 +1,413 @@
+{
+  "schema_version": "graphic-theme.v1",
+  "ir_version": "graphic-ir.v2",
+  "template_version": "1",
+  "theme_id": "brand_board",
+  "title": "Brand Board",
+  "description": "Bento brand board: rounded cards with a hero photo, color swatches, tagline card, product photo, poster card, and a big wordmark with weight contrast (**BOLD**light).",
+  "variants": [
+    "square",
+    "portrait",
+    "story",
+    "landscape"
+  ],
+  "evidence": [
+    "brand board",
+    "moodboard",
+    "mood board",
+    "brand identity",
+    "bento",
+    "แบรนด์บอร์ด",
+    "มู้ดบอร์ด",
+    "อัตลักษณ์แบรนด์",
+    "ภาพรวมแบรนด์",
+    "brand guideline",
+    "แนะนำแบรนด์"
+  ],
+  "slots": {
+    "brand": {
+      "required": true,
+      "labels": [
+        "brand",
+        "wordmark",
+        "logo text",
+        "ชื่อแบรนด์"
+      ]
+    },
+    "tagline": {
+      "required": true,
+      "labels": [
+        "tagline",
+        "slogan",
+        "สโลแกน",
+        "คำโปรย"
+      ]
+    },
+    "poster_headline": {
+      "required": false,
+      "labels": [
+        "poster headline",
+        "headline",
+        "หัวข้อโปสเตอร์"
+      ]
+    },
+    "poster_label": {
+      "required": false,
+      "labels": [
+        "poster label",
+        "label",
+        "ป้ายเล็ก"
+      ]
+    }
+  },
+  "assets": {
+    "photo1": {
+      "required": false
+    },
+    "photo2": {
+      "required": false
+    },
+    "photo3": {
+      "required": false
+    }
+  },
+  "styles": {
+    "forest": {
+      "title": "Forest",
+      "palette": {
+        "accent": "#2F5D50",
+        "accent_soft": "#9CC5A1",
+        "dark": "#1E2B26"
+      }
+    },
+    "cobalt": {
+      "title": "Cobalt",
+      "palette": {
+        "accent": "#2347D1",
+        "accent_soft": "#8FA6FF",
+        "dark": "#151B33"
+      }
+    }
+  },
+  "palette": {
+    "canvas": "#EFEDEA",
+    "card": "#E6DCC8",
+    "accent": "#E03143",
+    "accent_soft": "#FF6B7A",
+    "dark": "#3A1714",
+    "light": "#F3EFE6",
+    "ink": "#2B1A16"
+  },
+  "roles": {
+    "canvas": "bg",
+    "card": "bg2",
+    "accent": "accent",
+    "accent_soft": "highlight",
+    "dark": "ink",
+    "light": "on_accent",
+    "ink": "ink"
+  },
+  "vars": {
+    "M": "MIN * 0.045",
+    "G": "MIN * 0.03",
+    "R": "MIN * 0.035",
+    "CW": "(W - 2 * M - 2 * G) / 3",
+    "RH": "(H - 2 * M - 2 * G) / 3",
+    "C1": "M",
+    "C2": "M + CW + G",
+    "C3": "M + 2 * (CW + G)",
+    "R1": "M",
+    "R2": "M + RH + G",
+    "R3": "M + 2 * (RH + G)"
+  },
+  "layers": [
+    {
+      "id": "Canvas",
+      "items": [
+        {
+          "motif": "rect",
+          "id": "canvas",
+          "fill": "palette.canvas"
+        }
+      ]
+    },
+    {
+      "id": "Cards",
+      "items": [
+        {
+          "motif": "rect",
+          "id": "photo1-card",
+          "x": "C1",
+          "y": "R1",
+          "width": "CW",
+          "height": "2 * RH + G",
+          "rx": "R",
+          "fill": "palette.dark"
+        },
+        {
+          "motif": "rect",
+          "id": "swatch-card",
+          "x": "C2",
+          "y": "R1",
+          "width": "CW",
+          "height": "RH * 0.55",
+          "rx": "R",
+          "fill": "palette.card"
+        },
+        {
+          "motif": "rect",
+          "id": "tag-card",
+          "x": "C3",
+          "y": "R1",
+          "width": "CW",
+          "height": "RH",
+          "rx": "R",
+          "fill": "palette.accent"
+        },
+        {
+          "motif": "rect",
+          "id": "photo2-card",
+          "x": "C2",
+          "y": "R1 + RH * 0.55 + G",
+          "width": "CW",
+          "height": "RH * 1.45",
+          "rx": "R",
+          "fill": "palette.dark"
+        },
+        {
+          "motif": "rect",
+          "id": "poster-card",
+          "x": "C3",
+          "y": "R2",
+          "width": "CW",
+          "height": "2 * RH + G",
+          "rx": "R",
+          "fill": "palette.card"
+        },
+        {
+          "motif": "rect",
+          "id": "wordmark-card",
+          "x": "C1",
+          "y": "R3",
+          "width": "2 * CW + G",
+          "height": "RH",
+          "rx": "R",
+          "fill": "palette.accent"
+        }
+      ]
+    },
+    {
+      "id": "Photos",
+      "items": [
+        {
+          "motif": "image",
+          "id": "photo1",
+          "asset": "photo1",
+          "x": "C1",
+          "y": "R1",
+          "width": "CW",
+          "height": "2 * RH + G",
+          "effects": {
+            "fit": "cover",
+            "mask": "rounded",
+            "corner_radius": 0.06,
+            "focus_y": 0.3
+          }
+        },
+        {
+          "motif": "image",
+          "id": "photo2",
+          "asset": "photo2",
+          "x": "C2",
+          "y": "R1 + RH * 0.55 + G",
+          "width": "CW",
+          "height": "RH * 1.45",
+          "effects": {
+            "fit": "cover",
+            "mask": "rounded",
+            "corner_radius": 0.08
+          }
+        }
+      ]
+    },
+    {
+      "id": "Swatches",
+      "items": [
+        {
+          "motif": "swatches",
+          "id": "swatches",
+          "x": "C2 + CW * 0.08",
+          "y": "R1 + RH * 0.12",
+          "width": "CW * 0.84",
+          "height": "RH * 0.3",
+          "colors": [
+            "palette.dark",
+            "palette.accent",
+            "palette.accent_soft",
+            "palette.light"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TaglineCard",
+      "items": [
+        {
+          "motif": "line",
+          "id": "rule-top",
+          "x1": "C3 + CW * 0.55",
+          "y1": "R1 + RH * 0.18",
+          "x2": "C3 + CW * 0.92",
+          "y2": "R1 + RH * 0.18",
+          "stroke": "palette.light",
+          "stroke_width": "MIN * 0.002"
+        },
+        {
+          "motif": "text_block",
+          "id": "brand-small",
+          "slot": "brand",
+          "x": "C3 + CW * 0.08",
+          "y": "R1 + RH * 0.13",
+          "width": "CW * 0.45",
+          "height": "MIN * 0.03",
+          "font_size": "MIN * 0.018",
+          "min_font_size": "MIN * 0.012",
+          "max_lines": 1,
+          "font": "builtin:poppins",
+          "color": "palette.light",
+          "text_role": "label",
+          "measure": true
+        },
+        {
+          "motif": "text_block",
+          "id": "tagline",
+          "slot": "tagline",
+          "x": "C3 + CW * 0.1",
+          "y": "R1 + RH * 0.34",
+          "width": "CW * 0.8",
+          "height": "RH * 0.4",
+          "font_size": "MIN * 0.034",
+          "min_font_size": "MIN * 0.018",
+          "max_lines": 3,
+          "font": "builtin:poppins",
+          "weight": "bold",
+          "align": "center",
+          "color": "palette.light",
+          "text_role": "body",
+          "measure": true
+        },
+        {
+          "motif": "line",
+          "id": "rule-bottom",
+          "x1": "C3",
+          "y1": "R1 + RH * 0.84",
+          "x2": "C3 + CW * 0.45",
+          "y2": "R1 + RH * 0.84",
+          "stroke": "palette.light",
+          "stroke_width": "MIN * 0.002"
+        }
+      ]
+    },
+    {
+      "id": "Poster",
+      "items": [
+        {
+          "motif": "rect",
+          "id": "poster",
+          "x": "C3 + CW * 0.12",
+          "y": "R2 + RH * 0.12",
+          "width": "CW * 0.76",
+          "height": "(2 * RH + G) * 0.8",
+          "fill": "palette.dark"
+        },
+        {
+          "motif": "image",
+          "id": "photo3",
+          "asset": "photo3",
+          "x": "C3 + CW * 0.15",
+          "y": "R2 + RH * 0.15",
+          "width": "CW * 0.7",
+          "height": "(2 * RH + G) * 0.42",
+          "effects": {
+            "fit": "cover",
+            "focus_y": 0.25
+          }
+        },
+        {
+          "motif": "text_block",
+          "id": "poster-brand",
+          "slot": "brand",
+          "x": "C3 + CW * 0.16",
+          "y": "R2 + RH * 0.15 + (2 * RH + G) * 0.45",
+          "width": "CW * 0.68",
+          "height": "MIN * 0.05",
+          "font_size": "MIN * 0.03",
+          "min_font_size": "MIN * 0.016",
+          "max_lines": 1,
+          "font": "builtin:poppins",
+          "color": "palette.light",
+          "text_role": "label",
+          "measure": true
+        },
+        {
+          "motif": "text_block",
+          "id": "poster-headline",
+          "slot": "poster_headline",
+          "x": "C3 + CW * 0.16",
+          "y": "R2 + RH * 0.15 + (2 * RH + G) * 0.53",
+          "width": "CW * 0.68",
+          "height": "(2 * RH + G) * 0.18",
+          "font_size": "MIN * 0.026",
+          "min_font_size": "MIN * 0.016",
+          "max_lines": 4,
+          "font": "builtin:poppins",
+          "weight": "bold",
+          "color": "palette.light",
+          "text_role": "body",
+          "measure": true
+        },
+        {
+          "motif": "text_block",
+          "id": "poster-label",
+          "slot": "poster_label",
+          "x": "C3 + CW * 0.16",
+          "y": "R2 + RH * 0.12 + (2 * RH + G) * 0.74",
+          "width": "CW * 0.68",
+          "height": "MIN * 0.025",
+          "font_size": "MIN * 0.014",
+          "min_font_size": "MIN * 0.01",
+          "max_lines": 1,
+          "font": "builtin:poppins",
+          "align": "right",
+          "color": "palette.light",
+          "text_role": "label",
+          "measure": true
+        }
+      ]
+    },
+    {
+      "id": "Wordmark",
+      "items": [
+        {
+          "motif": "text_block",
+          "id": "wordmark",
+          "slot": "brand",
+          "x": "C1 + CW * 0.08",
+          "y": "R3 + RH * 0.3",
+          "width": "(2 * CW + G) * 0.86",
+          "height": "RH * 0.42",
+          "font_size": "MIN * 0.11",
+          "min_font_size": "MIN * 0.04",
+          "max_lines": 1,
+          "font": "builtin:poppins",
+          "align": "center",
+          "color": "palette.light",
+          "upper": true,
+          "text_role": "display",
+          "markup": true,
+          "measure": true
+        }
+      ]
+    }
+  ]
+}

@@ -13,6 +13,7 @@ from book_production_platform.graphics_ir import (
     TextNode,
     iter_nodes,
 )
+from book_production_platform.graphics_production import image_fx
 from book_production_platform.graphics_production.jobs import run_batch
 from book_production_platform.graphics_production.motifs import MOTIFS
 from book_production_platform.graphics_production.qa import contrast_report
@@ -43,15 +44,36 @@ SAMPLE = {
     "promo_sale": {"headline": "ลดปลายปี", "discount": "-30%", "detail": "ทุกเมนู", "date": "1–15 ธ.ค.", "cta": "สั่งเลย"},
     "grand_opening": {"shop": "ร้านตัวอย่าง", "headline": "เปิดแล้ว!", "date": "12 ธันวาคม", "time": "09:00–20:00",
                       "location": "ถนนตัวอย่าง", "offer": "ลด 20%"},
+    "hero_poster": {"name": "KORGI", "headline": "MVP *ประจำเดือน*", "kicker": "Good Boy!", "tagline": "N O . 7", "badge": "WT",
+                    "footer": "SAMPLE"},
+    "editorial_hero": {"name": "AR~DI~AN", "tagline": "Designing *Products* That Last", "body": "From concept to creation.",
+                       "cta": "See My Work", "kicker": "// PORTFOLIO"},
+    "brand_board": {"brand": "**LEADER**HEALTH", "tagline": "GUIDED BY EXPERTS", "poster_headline": "NEXT GEN HEALTH",
+                    "poster_label": "SAMPLE"},
+    "product_hero": {"word": "FRESH", "headline": "รองเท้า *รุ่นใหม่*", "price": "990.-", "detail": "เบาสบาย"},
+    "numbered_list": {"kicker": "// SERVICES", "title": "*Design* that works", "item1": "Product design", "item2": "UI/UX",
+                      "item3": "Brand", "item4": "Testing", "note": "SAMPLE"},
 }
+PHOTOS = Path(__file__).parent / "fixtures" / "photos"
+
+
+@pytest.fixture(autouse=True)
+def _no_ai_cutout(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Theme tests use the built-in plain cut-out; the rembg model is exercised in test_image_fx.
+    monkeypatch.setattr(image_fx, "ai_cutout_available", lambda: False)
 
 
 def request(theme: str, variant: str, content: dict[str, str] | None = None, request_id: str = "theme-test") -> dict[str, object]:
     width, height = VARIANT_SIZES[variant]
-    return {
+    data: dict[str, object] = {
         "request_id": request_id, "template_id": theme, "variant": variant, "canvas": {"width": width, "height": height},
         "brand": {"primary": "#14213D", "accent": "#FCA311"}, "content": content if content is not None else SAMPLE[theme],
     }
+    declared = load_themes()[theme].assets if theme in load_themes() else {}
+    if declared and theme != "product_card":
+        data["assets"] = {name: "dog.png" for name in declared}
+        data["asset_root"] = str(PHOTOS)
+    return data
 
 
 def test_every_registered_theme_has_sample_content_and_valid_structure() -> None:
@@ -67,7 +89,7 @@ def test_every_registered_theme_has_sample_content_and_valid_structure() -> None
 @pytest.mark.parametrize(("theme_id", "variant"), [(t, v) for t, theme in load_themes().items() for v in theme.variants])
 def test_every_theme_compiles_and_renders_in_every_variant(theme_id: str, variant: str) -> None:
     ir = compile_template(request(theme_id, variant))
-    svg = render_svg(ir)
+    svg = render_svg(ir, asset_root=PHOTOS)
     root = ElementTree.fromstring(svg)
     assert root.attrib["width"] == str(VARIANT_SIZES[variant][0])
     texts = [node.text for node in iter_nodes(list(ir.nodes)) if isinstance(node, TextNode)]

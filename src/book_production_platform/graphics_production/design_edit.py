@@ -44,7 +44,7 @@ from book_production_platform.graphics_ir import (
 
 from .art_style_ai import ArtStyleDesigner
 from .art_styles import load_art_styles
-from .layout import LayoutError
+from .layout import LayoutError, parse_markup
 from .provider_config import ProviderConfig, ProviderConfigError, parse_provider_config
 from .templates import TemplateError, compile_template, controls_for
 from .themes import ThemeError, get_theme
@@ -75,6 +75,8 @@ SYSTEM_PROMPT = (
     '"V * 1.2" is 20% bigger). Colors are "#RRGGBB" or "palette.<name>". '
     "content: {slot: new text} only when the instruction gives the new text; copy it exactly. slots lists each text "
     "slot with the words people use for it (in English and Thai), so map the instruction's word to its slot. "
+    "In content text, *word* gives a word the accent color, **word** heavy weight, ~word~ outline letters; use them only "
+    "when the instruction asks to emphasize part of a text. "
     "Change only what the instruction asks for and nothing else. Screen directions: y grows downward, x grows to the right. "
     "If the instruction does not say which part to change, or how, list it in missing. "
     'art_style: an id from art_styles when the instruction names a look ("แนวมินิมอล" = minimal), "none" removes it, null keeps. '
@@ -315,7 +317,8 @@ def apply_change(
         cleaned = text.strip().strip(_QUOTES).strip()
         if not cleaned:
             return DesignEditResult("rejected", issues=[_issue("content_invalid", f"content.{slot}", "new text must not be blank")])
-        if instruction is not None and not text_grounded(cleaned, instruction):
+        # Inline emphasis markers are styling, not text the person must have typed.
+        if instruction is not None and not text_grounded(parse_markup(cleaned)[0], instruction):
             issues.append(_issue("ungrounded_text", f"content.{slot}", "new text must be copied from the instruction"))
         content_change[slot] = cleaned
     if issues:
