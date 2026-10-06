@@ -476,7 +476,9 @@ def layout_problems(ir: GraphicIR, behind_ids: set[str]) -> list[str]:
             texts.append((node.node_id, (node.x + dx, node.y + dy, node.x + dx + used_w, node.y + dy + used_h), order.get(layer, 0)))
             if node.x + dx < -1 or node.y + dy < -1 or node.x + dx + node.width > width + 1 or node.y + dy + used_h > height + 1:
                 problems.append(f"text_outside_canvas:{node.node_id}")
-        elif isinstance(node, ImageNode):
+        elif node.node_id.startswith("art-overlay"):
+            continue  # an art style's texture (smoke, grain, light leak) is meant to sit over everything, text included
+        elif isinstance(node, ImageNode) and node.opacity >= 0.85:
             photos.append((node.node_id, _rect(node, dx, dy), order.get(layer, 0)))
         elif (isinstance(node, ShapeNode) and node.kind in ("rect", "ellipse") and node.opacity >= 0.85
               and node.fill not in ("none",) and node.node_id != "bg"):
@@ -574,13 +576,22 @@ def check_layout(spec: Mapping[str, Any], base: Mapping[str, Any], variants: lis
     Returns the theme, fingerprints per size, and problems (empty when usable).
     """
 
+    theme, prints, problems, _scores = assess_layout(spec, base, variants)
+    return theme, prints, problems
+
+
+def assess_layout(spec: Mapping[str, Any], base: Mapping[str, Any], variants: list[str]
+                  ) -> tuple[Theme | None, dict[str, list[str]], list[str], dict[str, Any]]:
+    """:func:`check_layout` plus the design-quality score per size (:mod:`.aesthetics`)."""
+
+    from .aesthetics import score_ir
     from .layout import LayoutError as TextFitError
     from .templates import TemplateError, compile_template
 
     try:
         theme = spec_theme(spec)
     except LayoutError as exc:
-        return None, {}, [str(exc)]
+        return None, {}, [str(exc)], {}
     behind = {str(item["id"]) for layer in theme.layers for item in layer["items"] if item.get("behind")}
     missing = [slot for slot in theme.slots if not str((base.get("content") or {}).get(slot, "")).strip()]
     # "big" is an optional giant word only some compositions use; every other given text must be placed.
@@ -589,8 +600,9 @@ def check_layout(spec: Mapping[str, Any], base: Mapping[str, Any], variants: lis
     missing_assets = [asset for asset in theme.assets if asset not in (base.get("assets") or {})]
     problems += [f"photo_not_provided:{asset}" for asset in missing_assets]
     if problems:
-        return theme, {}, problems
+        return theme, {}, problems, {}
     prints: dict[str, list[str]] = {}
+    scores: dict[str, Any] = {}
     with candidate_layout(theme):
         for variant in variants:
             width, height = VARIANT_SIZES[variant]
@@ -606,7 +618,8 @@ def check_layout(spec: Mapping[str, Any], base: Mapping[str, Any], variants: lis
                 continue
             problems += [f"{problem}:{variant}" for problem in layout_problems(ir, behind)]
             prints[variant] = fingerprint(ir, behind)
-    return theme, prints, problems
+            scores[variant] = score_ir(ir).to_dict()
+    return theme, prints, problems, scores
 
 
 __all__ = [
@@ -614,6 +627,7 @@ __all__ = [
     "LAYOUT_SCHEMA",
     "TEXT_SLOTS",
     "LayoutError",
+    "assess_layout",
     "candidate_layout",
     "check_layout",
     "find_layout_theme",

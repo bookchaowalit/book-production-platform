@@ -129,12 +129,34 @@ def test_ai_cutout_falls_back_to_plain_when_rembg_is_missing(photos: Path, monke
 
 
 @pytest.mark.skipif(not image_fx.ai_cutout_available(), reason="optional rembg (cutout extra) is not installed")
-def test_ai_cutout_runs_when_installed(photos: Path) -> None:
+def test_ai_cutout_runs_when_installed(photos: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv(image_fx.CUTOUT_CACHE_ENV, str(tmp_path / "cutouts"))
     try:
         image = png(process_image(photos / "product.png", effects(cutout="ai", fit="contain"), 160, 160))
     except ImageEffectError as exc:
         pytest.skip(f"rembg model not available offline: {exc}")
     assert image.getpixel((1, 1))[3] < 40
+
+
+def test_ai_cutouts_are_reused_from_disk_by_file_content(photos: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    calls: list[tuple[int, int]] = []
+
+    def fake_cutout(image: Image.Image) -> Image.Image:
+        calls.append(image.size)
+        return image.convert("RGBA")
+
+    monkeypatch.setattr(image_fx, "_ai_cutout", fake_cutout)
+    monkeypatch.setenv(image_fx.CUTOUT_CACHE_ENV, str(tmp_path / "cutouts"))
+    copy = tmp_path / "renamed.png"
+    copy.write_bytes((photos / "product.png").read_bytes())
+    with Image.open(photos / "product.png") as image:
+        first = image_fx._cached_ai_cutout(photos / "product.png", image.convert("RGBA"))
+        again = image_fx._cached_ai_cutout(copy, image.convert("RGBA"))  # same bytes under another name
+    assert len(calls) == 1 and first.size == again.size and len(list((tmp_path / "cutouts").glob("*.png"))) == 1
+    monkeypatch.setenv(image_fx.CUTOUT_CACHE_ENV, "off")
+    with Image.open(photos / "product.png") as image:
+        image_fx._cached_ai_cutout(photos / "product.png", image.convert("RGBA"))
+    assert len(calls) == 2
 
 
 # --- placement ------------------------------------------------------------------------------------

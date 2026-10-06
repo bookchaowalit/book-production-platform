@@ -178,6 +178,12 @@ def test_compose_without_a_photo_uses_type_led_ideas() -> None:
     assert result.specs and all(spec["archetype"] in ("type_poster", "center_stack") for spec in result.specs)
 
 
+@pytest.mark.parametrize("style", ["jazz", "noir", "grunge", "minimal"])
+def test_art_style_textures_do_not_block_composition(style: str) -> None:
+    job = {**base(), "design": {"art_style": style}}
+    assert len(compose(job, ["square"], count=2, seed=1).specs) == 2  # style overlays sit over text by design
+
+
 def test_same_seed_same_layouts() -> None:
     one = compose(base(), ["portrait"], count=2, seed=9, avoid_history=False)
     two = compose(base(), ["portrait"], count=2, seed=9, avoid_history=False)

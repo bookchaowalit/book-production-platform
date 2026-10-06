@@ -1,0 +1,7 @@
+{
+ "suite": "EVAL-GFX-compose14",
+ "dev": [
+  "cp-phot-th-01",
+  "cp-type-en-04"
+ ]
+}

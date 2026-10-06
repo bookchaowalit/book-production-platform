@@ -186,6 +186,20 @@ def _parser() -> argparse.ArgumentParser:
     edit_shadow.add_argument("--style-provider-config", default=None,
                              help="art-style designer config for new_look cases; styles go to a scratch library next to --output")
     edit_shadow.add_argument("--style-budget-root", default=".runtime/graphics-art-style-ai-budget")
+    campaign = commands.add_parser("compose-campaign", help="many posts in one run: one look, a different layout per post")
+    campaign.add_argument("--plan", required=True, help="graphic-campaign.v1 JSON (posts inline or posts_csv)")
+    campaign.add_argument("--output", required=True)
+    campaign.add_argument("--workers", type=int, default=None, help="parallel render processes (default: CPU count)")
+    campaign.add_argument("--seed", type=int, default=0)
+    campaign.add_argument("--layout-dir", default=None, help="layout library (default $GRAPHICS_PRODUCTION_LAYOUT_DIR or .runtime/graphics-layouts)")
+    campaign.add_argument("--dry-run", action="store_true", help="compose and report only; render nothing")
+    compose_shadow = commands.add_parser("compose-shadow", help="evaluate layout composition (procedural baseline, optional AI art director)")
+    compose_shadow.add_argument("--cases", action="append", required=True)
+    compose_shadow.add_argument("--split", default=None)
+    compose_shadow.add_argument("--photo-root", default="tests/graphics/fixtures/photos")
+    compose_shadow.add_argument("--director-config", default=None, help="art-director provider config; shadow mode is allowed here")
+    compose_shadow.add_argument("--budget-root", default=".runtime/graphics-art-director-ai-budget")
+    compose_shadow.add_argument("--output", required=True)
     shadow = commands.add_parser("brief-shadow", help="shadow-evaluate the brief adapter; never renders or uses results")
     shadow.add_argument("--provider-config", required=True, help="graphics-provider-config.v1 JSON (no secrets)")
     shadow.add_argument("--cases", action="append", required=True, help="eval case JSON file; repeatable")
@@ -326,6 +340,56 @@ def _run_edit_shadow(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_compose_campaign(args: argparse.Namespace) -> int:
+    from .campaign import CampaignError, load_campaign, run_campaign
+    from .layouts import LAYOUT_DIR_ENV
+
+    if args.layout_dir or not os.environ.get(LAYOUT_DIR_ENV):
+        os.environ[LAYOUT_DIR_ENV] = args.layout_dir or ".runtime/graphics-layouts"
+    try:
+        plan_path = Path(args.plan)
+        campaign = load_campaign(_read_json(args.plan), plan_path.resolve().parent)
+    except (OSError, json.JSONDecodeError, CampaignError, ValueError) as exc:
+        print(f"input error: {exc}", file=sys.stderr)
+        return 2
+    summary = run_campaign(campaign, args.output, seed=args.seed, workers=args.workers, render=not args.dry_run)
+    output = Path(args.output)
+    output.mkdir(parents=True, exist_ok=True)
+    (output / "campaign-summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps({key: value for key, value in summary.items() if key != "posts"}, ensure_ascii=False, indent=2))
+    if summary["composed"] < summary["total"]:
+        print("some posts got no layout: shorten their texts or add a photo (see campaign-summary.json)", file=sys.stderr)
+        return 4
+    return 0
+
+
+def _run_compose_shadow(args: argparse.Namespace) -> int:
+    from book_production_platform.brief_adapter_kit.shadow import load_cases
+
+    from .compose_eval import SUITE, run_compose_eval
+    from .composer_ai import ArtDirector, DirectorNotConfigured
+
+    try:
+        director = None
+        if args.director_config:
+            director = ArtDirector(provider_config=load_provider_config(args.director_config), ledger_root=args.budget_root)
+        cases = load_cases(args.cases)
+        split = _read_json(args.split) if args.split else {}
+    except (DirectorNotConfigured, ProviderConfigError, OSError, KeyError, json.JSONDecodeError) as exc:
+        print(f"input error: {exc}", file=sys.stderr)
+        return 2
+    report = run_compose_eval(cases, photo_root=args.photo_root, director=director, dev_ids=split.get("dev", []),
+                              suite=split.get("suite") or SUITE)
+    output = Path(args.output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps({"gate": report["gate"], "metrics": report["metrics"]}, ensure_ascii=False, indent=2))
+    if not report["gate"]["passed"]:
+        print("compose gate failed: review the report", file=sys.stderr)
+        return 6
+    return 0
+
+
 def _run_style_create(args: argparse.Namespace) -> int:
     from .art_style_ai import ArtStyleDesigner, StyleDesignerNotConfigured
 
@@ -461,6 +525,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_edit(args)
     if args.command == "edit-shadow":
         return _run_edit_shadow(args)
+    if args.command == "compose-campaign":
+        return _run_compose_campaign(args)
+    if args.command == "compose-shadow":
+        return _run_compose_shadow(args)
     if args.command == "themes":
         from .themes import load_themes
 

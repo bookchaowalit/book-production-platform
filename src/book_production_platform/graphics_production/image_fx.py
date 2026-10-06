@@ -38,6 +38,7 @@ MAX_SIDE = 2400
 SVG_SUFFIXES = {".svg"}
 _SESSION_LOCK = threading.Lock()
 _SESSIONS: dict[str, Any] = {}
+CUTOUT_CACHE_ENV = "GRAPHICS_PRODUCTION_CUTOUT_CACHE"
 
 
 class ImageEffectError(RuntimeError):
@@ -86,6 +87,44 @@ def _plain_cutout(image: Image.Image, tolerance: int) -> Image.Image:
         alpha = ImageChops.multiply(alpha, image.getchannel("A"))
     result = image.convert("RGBA")
     result.putalpha(alpha)
+    return result
+
+
+def _cutout_cache_dir() -> Path | None:
+    """Where AI cut-outs are kept between runs: ``$GRAPHICS_PRODUCTION_CUTOUT_CACHE``, else the user cache, ``off`` disables."""
+
+    configured = os.environ.get(CUTOUT_CACHE_ENV, "").strip()
+    if configured.lower() == "off":
+        return None
+    if configured:
+        return Path(configured)
+    return Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "book-production" / "cutouts"
+
+
+def _cached_ai_cutout(source: Path, image: Image.Image) -> Image.Image:
+    """The AI cut-out of ``source``, reused from disk when the same file (by content hash) was cut before."""
+
+    folder = _cutout_cache_dir()
+    model = os.environ.get("GRAPHICS_PRODUCTION_CUTOUT_MODEL", "u2net").strip() or "u2net"
+    target = None
+    if folder is not None:
+        digest = hashlib.sha256(source.read_bytes()).hexdigest()
+        target = folder / f"{digest}-{model}-{image.size[0]}x{image.size[1]}.png"
+        if target.is_file():
+            try:
+                with Image.open(target) as cached:
+                    return cached.convert("RGBA")
+            except OSError:
+                pass  # a damaged entry is replaced below
+    result = _ai_cutout(image)
+    if target is not None:
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            partial = target.with_suffix(f".{os.getpid()}.tmp")
+            result.save(partial, format="PNG")
+            partial.replace(target)
+        except OSError:
+            pass  # the cache is an optimisation; a read-only disk only costs time
     return result
 
 
@@ -378,7 +417,7 @@ def _process_cached(path: str, mtime: int, size: int, effects_json: str, width: 
     if effects.cutout == "plain":
         image = _trim_to_subject(_plain_cutout(image, effects.cutout_tolerance))
     elif effects.cutout == "ai":
-        image = _trim_to_subject(_ai_cutout(image))
+        image = _trim_to_subject(_cached_ai_cutout(Path(path), image))
     if effects.flip_x:
         image = ImageOps.mirror(image)
 

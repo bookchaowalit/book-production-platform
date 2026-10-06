@@ -25,7 +25,6 @@ from typing import Any
 from .art_styles import contrast
 from .layouts import (
     LAYOUT_SCHEMA,
-    check_layout,
     layout_id,
     recent_fingerprints,
     similarity,
@@ -34,8 +33,11 @@ from .layouts import (
 from .themes import VARIANT_SIZES
 
 ARCHETYPES = ("split", "full_bleed", "sandwich", "type_poster", "frame_card", "diagonal", "circle_focus", "editorial_column",
-              "sticker_pop", "center_stack")
-PHOTO_ARCHETYPES = {"split", "full_bleed", "sandwich", "frame_card", "diagonal", "circle_focus", "editorial_column", "sticker_pop"}
+              "sticker_pop", "center_stack", "grid", "magazine_cover", "corner_minimal")
+PHOTO_ARCHETYPES = {"split", "full_bleed", "sandwich", "frame_card", "diagonal", "circle_focus", "editorial_column", "sticker_pop",
+                    "magazine_cover"}
+# Ideas whose elements are all boxes (no positional motifs) can also be mirrored left-right.
+MIRRORABLE = {"split", "full_bleed", "frame_card", "circle_focus", "editorial_column", "center_stack", "grid", "corner_minimal", "type_poster"}
 # (display, body, label) — Thai-capable display faces first; Latin display faces fall back to Thai fonts per glyph.
 PAIRS_THAI = (
     ("builtin:kanit", "builtin:anuphan", "builtin:mono"),
@@ -373,7 +375,7 @@ def a_type_poster(plan: Plan, content: Mapping[str, str], photos: list[str], var
     top = my * 1.5 if shape != "block" else my * 1.2
     texts = stack(blocks, content, x, top, w, 1 - my - _room(plan, content, variant), variant, align, palette=plan.palette)
     end = max((t["box"]["y"] + t["box"]["h"] for t in texts), default=top)
-    rule = [{"id": "rule", "kind": "shape", "shape": "line", "z": 9, "stroke": "role.ink", "stroke_width": 0.002,
+    rule = [{"id": "rule", "kind": "shape", "shape": "line", "z": 5, "stroke": "role.ink", "stroke_width": 0.002,
              "box": {"x": mx, "y": round(end + 0.01, 4), "w": 1 - 2 * mx, "h": 0.01}}] if plan.knobs.get("rule") else []
     return elements + texts + rule + _cta(plan, content, anchor, end + 0.03, variant, align)
 
@@ -534,10 +536,172 @@ def a_center_stack(plan: Plan, content: Mapping[str, str], photos: list[str], va
     return _decor(plan, (0, 0.6, 1, 0.4), 1) + elements + texts + tail + _cta(plan, content, 0.5, end + 0.015, variant, "center")
 
 
+def a_grid(plan: Plan, content: Mapping[str, str], photos: list[str], variant: str) -> list[dict[str, Any]]:
+    """A modular grid: photo zones, colour blocks, and one text zone snapped to cells (endless arrangements)."""
+
+    width, height = VARIANT_SIZES[variant]
+    cols = plan.knobs.get("cols", 3) if variant != "story" else max(2, plan.knobs.get("cols", 3) - 1)
+    rows = plan.knobs.get("rows", 4) + (2 if variant == "story" else 1 if variant == "portrait" else 0)
+    if variant == "landscape":
+        cols, rows = cols + 1, max(3, rows - 1)
+    gutter = plan.knobs.get("gutter", 0.012)
+    gx, gy = gutter, gutter * width / height
+
+    def cell(c0: int, r0: int, c1: int, r1: int) -> dict[str, float]:
+        cw, rh = (1 - gx * (cols + 1)) / cols, (1 - gy * (rows + 1)) / rows
+        return {"x": round(gx + c0 * (cw + gx), 4), "y": round(gy + r0 * (rh + gy), 4),
+                "w": round((c1 - c0) * cw + (c1 - c0 - 1) * gx, 4), "h": round((r1 - r0) * rh + (r1 - r0 - 1) * gy, 4)}
+
+    elements: list[dict[str, Any]] = []
+    text_side = plan.knobs.get("text_side", "bottom")
+    if variant == "landscape" and text_side in ("top", "bottom"):
+        text_side = "left" if text_side == "top" else "right"
+    if variant != "landscape" and text_side in ("left", "right"):
+        text_side = "bottom" if text_side == "right" else "top"
+    text_cells = max(2, rows // 2) if text_side in ("top", "bottom") else max(1, cols // 2)
+    if text_side == "bottom":
+        text_box, free = cell(0, rows - text_cells, cols, rows), (0, 0, cols, rows - text_cells)
+    elif text_side == "top":
+        text_box, free = cell(0, 0, cols, text_cells), (0, text_cells, cols, rows)
+    elif text_side == "left":
+        text_box, free = cell(0, 0, text_cells, rows), (text_cells, 0, cols, rows)
+    else:
+        text_box, free = cell(cols - text_cells, 0, cols, rows), (0, 0, cols - text_cells, rows)
+    c0, r0, c1, r1 = free
+    pieces = [photos[0]] if photos else []
+    pieces += photos[1:3]
+    if pieces:
+        split = plan.knobs.get("split", "single")
+        boxes: list[dict[str, float]]
+        if len(pieces) == 1 or split == "single" or c1 - c0 < 2:
+            boxes = [cell(c0, r0, c1, r1)]
+        else:
+            mid = c0 + (c1 - c0) // 2
+            boxes = [cell(c0, r0, mid, r1), cell(mid, r0, c1, r1)]
+            if len(pieces) >= 3 and r1 - r0 >= 2:
+                mr = r0 + (r1 - r0) // 2
+                boxes = [cell(c0, r0, mid, r1), cell(mid, r0, c1, mr), cell(mid, mr, c1, r1)]
+        for index, box in enumerate(boxes):
+            asset = pieces[index % len(pieces)]
+            elements.append({"id": f"photo{index + 1}", "kind": "photo", "asset": asset, "z": 3, "box": box,
+                             "effects": {"fit": "cover", "focus_y": 0.4, "mask": "rounded" if plan.knobs.get("rounded") else "rect",
+                                         "corner_radius": 0.04, "filter": plan.knobs.get("filter", "none")}})
+    else:
+        # No photo: a Swiss-style mosaic of colour cells, one carrying a pattern, instead of one empty slab.
+        if c1 - c0 >= 2 and r1 - r0 >= 2:
+            mid_c, mid_r = c0 + (c1 - c0) // 2, r0 + (r1 - r0) // 2
+            tiles = [(cell(c0, r0, mid_c, r1), "role.accent"), (cell(mid_c, r0, c1, mid_r), "role.ink"), (cell(mid_c, mid_r, c1, r1), "role.bg2")]
+        elif c1 - c0 >= 2:
+            mid_c = c0 + (c1 - c0) // 2
+            tiles = [(cell(c0, r0, mid_c, r1), "role.accent"), (cell(mid_c, r0, c1, r1), "role.ink")]
+        elif r1 - r0 >= 2:
+            mid_r = r0 + (r1 - r0) // 2
+            tiles = [(cell(c0, r0, c1, mid_r), "role.accent"), (cell(c0, mid_r, c1, r1), "role.ink")]
+        else:
+            tiles = [(cell(c0, r0, c1, r1), "role.accent")]
+        if plan.knobs.get("flip_tiles"):
+            tiles = list(reversed(tiles)) if len(tiles) == 2 else [tiles[0], tiles[2], tiles[1]]
+        for index, (box, fill) in enumerate(tiles):
+            elements.append({"id": f"tile{index + 1}", "kind": "shape", "shape": "rect", "z": 2, "fill": fill, "box": box,
+                             "radius": plan.knobs.get("radius", 0.0)})
+        pattern_box, pattern_on = tiles[-1]
+        pattern = plan.knobs.get("tile_pattern", "stripes")
+        region = {"x": f"W * {pattern_box['x']}", "y": f"H * {pattern_box['y']}", "width": f"W * {pattern_box['w']}",
+                  "height": f"H * {pattern_box['h']}"}
+        color = "role.bg" if pattern_on == "role.ink" else "role.accent" if pattern_on == "role.bg2" else "role.ink"
+        params = ({**region, "band": "MIN * 0.012", "gap": "MIN * 0.018", "angle": 45, "color": color, "opacity": 0.5} if pattern == "stripes"
+                  else {**region, "spacing": "MIN * 0.03", "radius": "MIN * 0.007", "color": color, "opacity": 0.55})
+        elements.append({"id": "tile-pattern", "kind": "motif", "motif": pattern, "params": params, "z": 3})
+    if plan.knobs.get("panel", True):
+        elements.append({"id": "panel", "kind": "shape", "shape": "rect", "z": 4, "fill": "role.bg2", "box": text_box,
+                         "radius": plan.knobs.get("radius", 0.0)})
+    pad_x, pad_y = 0.04, 0.04 * width / height
+    x, w = text_box["x"] + pad_x, text_box["w"] - 2 * pad_x
+    top, bottom = text_box["y"] + pad_y, text_box["y"] + text_box["h"] - pad_y
+    align = plan.knobs.get("align", "left")
+    anchor = x if align == "left" else x + w / 2 if align == "center" else x + w
+    texts = stack(_text_blocks(plan, content, plan.knobs.get("head", 0.075)), content, x, top, w, bottom - _room(plan, content, variant),
+                  variant, align, palette=plan.palette, on="bg2" if plan.knobs.get("panel", True) else "bg")
+    end = max((t["box"]["y"] + t["box"]["h"] for t in texts), default=top)
+    return elements + texts + _cta(plan, content, anchor, end + 0.015, variant, align)
+
+
+def a_magazine_cover(plan: Plan, content: Mapping[str, str], photos: list[str], variant: str) -> list[dict[str, Any]]:
+    """Full-bleed photo, a masthead word across the top, cover lines down one side."""
+
+    mx, my = _margin(plan, variant)
+    word_slot = "big" if str(content.get("big", "")).strip() else "kicker"
+    elements: list[dict[str, Any]] = [
+        {"id": "photo", "kind": "photo", "asset": photos[0], "z": 1, "box": {"x": 0, "y": 0, "w": 1, "h": 1},
+         "effects": {"fit": "cover", "focus_y": 0.35, "filter": plan.knobs.get("filter", "none"), "brightness": 0.9}},
+        {"id": "shade", "kind": "shape", "shape": "rect", "z": 2, "fill": "role.bg", "opacity": 0.88,
+         "box": {"x": 0, "y": 0.6 if variant != "landscape" else 0.0, "w": 1 if variant != "landscape" else 0.46,
+                 "h": 0.4 if variant != "landscape" else 1}},
+    ]
+    if str(content.get(word_slot, "")).strip():
+        elements.append({"id": "masthead", "kind": "big_type", "slot": word_slot, "z": 4, "font": plan.knobs.get("mast_font", "builtin:dm_serif"),
+                         "x": 0.5, "y": 0.02, "span": 0.94, "color": "role.ink", "max_size": 0.2, "opacity": 0.95})
+    blocks = [block for block in _text_blocks(plan, content, plan.knobs.get("head", 0.07)) if block.slot != word_slot]
+    if variant == "landscape":
+        x, w, top, bottom = mx, 0.46 - 2 * mx, 0.3, 1 - my
+    else:
+        x, w, top, bottom = mx, 1 - 2 * mx, 0.62 + my * 0.3, 1 - my
+    texts = stack(blocks, content, x, top, w, bottom - _room(plan, content, variant), variant, "left", palette=plan.palette)
+    end = max((t["box"]["y"] + t["box"]["h"] for t in texts), default=top)
+    return elements + texts + _cta(plan, content, x, end + 0.015, variant, "left")
+
+
+def a_corner_minimal(plan: Plan, content: Mapping[str, str], photos: list[str], variant: str) -> list[dict[str, Any]]:
+    """Mostly empty canvas: a small photo or mark, one confident headline, details tucked into a corner."""
+
+    mx, my = _margin(plan, variant)
+    corner = plan.knobs.get("corner", "bottom_left")
+    elements: list[dict[str, Any]] = []
+    if photos:
+        size = 0.34 if variant != "landscape" else 0.24
+        box_h = size * VARIANT_SIZES[variant][0] / VARIANT_SIZES[variant][1]
+        px = 1 - mx - size if corner.endswith("left") else mx
+        elements.append({"id": "photo", "kind": "photo", "asset": photos[0], "z": 3,
+                         "box": {"x": round(px, 4), "y": round(my * 1.4, 4), "w": size, "h": round(box_h, 4)},
+                         "effects": {"fit": "cover", "mask": plan.knobs.get("mask", "rect"), "focus_y": 0.4}})
+    else:
+        elements.append({"id": "mark", "kind": "shape", "shape": "ellipse", "z": 3, "fill": "role.accent",
+                         "box": {"x": 1 - mx - 0.08 if corner.endswith("left") else mx, "y": my * 1.4, "w": 0.08,
+                                 "h": round(0.08 * VARIANT_SIZES[variant][0] / VARIANT_SIZES[variant][1], 4)}})
+    align = "left" if corner.endswith("left") else "right"
+    x, w = mx, (0.62 if variant != "landscape" else 0.5)
+    if align == "right":
+        x = 1 - mx - w
+    blocks = _text_blocks(plan, content, plan.knobs.get("head", 0.06))
+    top = 0.5 if variant != "story" else 0.55
+    texts = stack(blocks, content, x, top, w, 1 - my - _room(plan, content, variant), variant, align, palette=plan.palette)
+    end = max((t["box"]["y"] + t["box"]["h"] for t in texts), default=top)
+    anchor = x if align == "left" else x + w
+    return elements + texts + _cta(plan, content, anchor, end + 0.015, variant, align)
+
+
+def _mirror(elements: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Left-right mirror of a composition (boxes, giant words, alignment); positional motifs are not mirrored."""
+
+    flipped = []
+    for element in elements:
+        element = dict(element)
+        if "box" in element:
+            box = dict(element["box"])
+            box["x"] = round(1 - box["x"] - box["w"], 4)
+            element["box"] = box
+        if element.get("kind") == "big_type" and "x" in element:
+            element["x"] = round(1 - element["x"], 4)
+        if element.get("align") in ("left", "right"):
+            element["align"] = "right" if element["align"] == "left" else "left"
+        flipped.append(element)
+    return flipped
+
+
 GEOMETRY: dict[str, Callable[[Plan, Mapping[str, str], list[str], str], list[dict[str, Any]]]] = {
     "split": a_split, "full_bleed": a_full_bleed, "sandwich": a_sandwich, "type_poster": a_type_poster, "frame_card": a_frame_card,
     "diagonal": a_diagonal, "circle_focus": a_circle_focus, "editorial_column": a_editorial_column, "sticker_pop": a_sticker_pop,
-    "center_stack": a_center_stack,
+    "center_stack": a_center_stack, "grid": a_grid, "magazine_cover": a_magazine_cover, "corner_minimal": a_corner_minimal,
 }
 
 
@@ -571,8 +735,21 @@ def _knobs(archetype: str, rng: random.Random) -> dict[str, Any]:
         knobs.update(filter=rng.choice(("none", "grayscale", "none")), head=rng.choice((0.065, 0.075)), upper=rng.random() < 0.6)
     elif archetype == "sticker_pop":
         knobs.update(tilt=rng.choice((-8, -5, 5, 8)), rays=rng.choice((20, 28, 36)), head=rng.choice((0.08, 0.09)))
+    elif archetype == "grid":
+        knobs.update(cols=rng.choice((2, 3, 4)), rows=rng.choice((3, 4, 5)), gutter=rng.choice((0.0, 0.01, 0.02)),
+                     text_side=rng.choice(("top", "bottom", "left", "right")), split=rng.choice(("single", "pair")),
+                     rounded=rng.random() < 0.4, panel=rng.random() < 0.7, radius=rng.choice((0.0, 0.02)),
+                     filter=rng.choice(("none", "none", "grayscale", "duotone")), head=rng.choice((0.065, 0.08)), flip_tiles=rng.random() < 0.5,
+                     tile_pattern=rng.choice(("stripes", "dots")))
+    elif archetype == "magazine_cover":
+        knobs.update(mast_font=rng.choice(("builtin:dm_serif", "builtin:display", "builtin:archivo", "builtin:serif_thai")),
+                     filter=rng.choice(("none", "none", "grayscale")), head=rng.choice((0.06, 0.07)))
+    elif archetype == "corner_minimal":
+        knobs.update(corner=rng.choice(("bottom_left", "bottom_right")), mask=rng.choice(("rect", "circle", "arch")),
+                     head=rng.choice((0.055, 0.065)), decor="none")
     else:
         knobs.update(frame=rng.random() < 0.5, head=rng.choice((0.08, 0.1)))
+    knobs["mirror"] = archetype in MIRRORABLE and rng.random() < 0.35
     return knobs
 
 
@@ -611,13 +788,16 @@ def _allowed(content: Mapping[str, str], photos: list[str]) -> list[str]:
 
     names = [name for name in ARCHETYPES if photos or name not in PHOTO_ARCHETYPES]
     # A giant backdrop word needs a short word: the optional "big" text, or a short headline.
-    if not str(content.get("big", "")).strip() and _visible(str(content.get("headline", ""))) > 12:
+    # Thai words are long and lose their shape when cropped, so a Thai headline never becomes the backdrop word.
+    headline = str(content.get("headline", ""))
+    thai = any("\u0e00" <= char <= "\u0e7f" for char in headline)
+    if not str(content.get("big", "")).strip() and (thai or _visible(headline) > 10):
         names = [name for name in names if name != "sandwich"]
     return names
 
 
 def plan_layout(content: Mapping[str, str], photos: list[str], variants: list[str], brand: Mapping[str, str], seed: int,
-                archetype: str | None = None) -> dict[str, Any]:
+                archetype: str | None = None, style_colors: Mapping[str, str] | None = None) -> dict[str, Any]:
     rng = random.Random(seed)
     options = _allowed(content, photos)
     chosen = archetype or rng.choice(options)
@@ -626,14 +806,22 @@ def plan_layout(content: Mapping[str, str], photos: list[str], variants: list[st
     scheme, palette = _scheme(rng, str(brand.get("primary", "#14213D")).upper(), str(brand.get("accent", "#FCA311")).upper())
     if not palette:
         scheme, palette = _scheme(random.Random(seed + 1), "#14213D", "#FCA311")
+    if style_colors:
+        # An art style recolors every role at render time, so readable-color choices are made against its colors.
+        scheme, palette = "style", {**palette, **{key: str(value).upper() for key, value in style_colors.items()}}
     headline = str(content.get("headline", "") or content.get("big", ""))
     thai = any("฀" <= char <= "๿" for char in headline)
     fonts = rng.choice(PAIRS_THAI if thai else PAIRS_LATIN + PAIRS_THAI[:3])
     plan = Plan(archetype=chosen, seed=seed, scheme=scheme, palette=palette, fonts=fonts, knobs=_knobs(chosen, rng))
-    per_variant = {variant: GEOMETRY[chosen](plan, content, photos, variant) + _footer(plan, content, variant) for variant in variants}
+    per_variant = {}
+    for variant in variants:
+        elements = GEOMETRY[chosen](plan, content, photos, variant)
+        if plan.knobs.get("mirror"):
+            elements = _mirror(elements)
+        per_variant[variant] = elements + _footer(plan, content, variant)
     spec = {
         "schema_version": LAYOUT_SCHEMA, "archetype": chosen,
-        "concept": f"{chosen.replace('_', ' ')} · {scheme} · {fonts[0].split(':')[1]}",
+        "concept": f"{chosen.replace('_', ' ')}{' (mirrored)' if plan.knobs.get('mirror') else ''} · {scheme} · {fonts[0].split(':')[1]}",
         "palette": palette, "background": {"color": "role.bg"}, "elements": _merge(per_variant),
     }
     spec["layout_id"] = layout_id(spec)
@@ -646,43 +834,85 @@ class ComposeResult:
     fingerprints: list[dict[str, list[str]]]
     attempts: int
     rejected: dict[str, int]
+    scores: list[float] = field(default_factory=list)
+    score_details: list[dict[str, Any]] = field(default_factory=list)
 
 
-def compose(base: Mapping[str, Any], variants: list[str], *, count: int = 3, seed: int | None = None, max_attempts: int = 80,
-            avoid_history: bool = True, archetypes: list[str] | None = None) -> ComposeResult:
-    """Up to ``count`` checked layouts that differ from each other and from the library's recent memory."""
+def _mean_score(scores: Mapping[str, Any]) -> float:
+    values = [float(value["total"]) for value in scores.values()]
+    return sum(values) / len(values) if values else 0.0
+
+
+def compose(base: Mapping[str, Any], variants: list[str], *, count: int = 3, seed: int | None = None, max_attempts: int = 120,
+            avoid_history: bool = True, archetypes: list[str] | None = None, pool_factor: int = 3,
+            min_score: float = 60.0) -> ComposeResult:
+    """The ``count`` best-scoring checked layouts that differ from each other and from the library's memory.
+
+    Candidates are generated until a pool of ``count * pool_factor`` usable layouts exists (or attempts run
+    out); each is scored for design quality (:mod:`.aesthetics`, mean over sizes) and the best are picked
+    greedily so no two options nearly copy each other.
+    """
+
+    from .layouts import assess_layout
 
     content = {key: str(value) for key, value in (base.get("content") or {}).items() if str(value).strip()}
     photos = sorted(base.get("assets") or {})
     start = seed if seed is not None else int(hashlib.sha256(repr(sorted(content.items())).encode()).hexdigest()[:8], 16)
     history = recent_fingerprints() if avoid_history else []
-    chosen: list[dict[str, Any]] = []
-    prints: list[dict[str, list[str]]] = []
+    style_colors = None
+    style_id = (base.get("design") or {}).get("art_style")
+    if style_id:
+        from .art_styles import ArtStyleError, get_art_style
+
+        try:
+            style_colors = get_art_style(str(style_id)).colors
+        except ArtStyleError:
+            style_colors = None  # an unknown style is reported by the render step
+    pool: list[tuple[float, dict[str, Any], dict[str, list[str]], dict[str, Any]]] = []
     rejected: dict[str, int] = {}
-    used_archetypes: list[str] = []
+    tried: dict[str, int] = {}
     attempts = 0
-    while len(chosen) < count and attempts < max_attempts:
+    target = max(count, count * pool_factor)
+    while len(pool) < target and attempts < max_attempts:
         attempts += 1
         rng = random.Random(start + attempts * 7919)
-        pool = archetypes or _allowed(content, photos)
-        fresh = [name for name in pool if name not in used_archetypes] or pool
-        archetype = rng.choice(fresh)
-        spec = plan_layout(content, photos, variants, base.get("brand") or {}, start + attempts, archetype)
-        _theme, fp, problems = check_layout(spec, base, variants)
+        names = archetypes or _allowed(content, photos)
+        least = min(tried.get(name, 0) for name in names)
+        archetype = rng.choice([name for name in names if tried.get(name, 0) == least])  # spread ideas evenly
+        tried[archetype] = tried.get(archetype, 0) + 1
+        spec = plan_layout(content, photos, variants, base.get("brand") or {}, start + attempts, archetype, style_colors)
+        _theme, fp, problems, scores = assess_layout(spec, base, variants)
         if problems:
             key = problems[0].split(":")[0]
             rejected[key] = rejected.get(key, 0) + 1
             continue
-        if any(all(similarity(fp[v], other[v]) >= 0.8 for v in fp if v in other) for other in prints):
-            rejected["similar_to_option"] = rejected.get("similar_to_option", 0) + 1
-            continue
         if too_similar(fp, history):
             rejected["similar_to_history"] = rejected.get("similar_to_history", 0) + 1
             continue
-        chosen.append(spec)
-        prints.append(fp)
-        used_archetypes.append(archetype)
-    return ComposeResult(specs=chosen, fingerprints=prints, attempts=attempts, rejected=rejected)
+        score = _mean_score(scores)
+        if score < min_score:
+            rejected["low_design_score"] = rejected.get("low_design_score", 0) + 1
+            continue
+        pool.append((score, spec, fp, scores))
+    chosen: list[tuple[float, dict[str, Any], dict[str, list[str]], dict[str, Any]]] = []
+    ranked = sorted(pool, key=lambda item: -item[0])
+    # First pass: the best option of each composition idea; second pass: fill up with the next best.
+    for unique_ideas in (True, False):
+        for candidate in ranked:
+            if len(chosen) >= count:
+                break
+            if any(candidate is item for item in chosen):
+                continue
+            if unique_ideas and candidate[1]["archetype"] in {item[1]["archetype"] for item in chosen}:
+                continue
+            if any(all(similarity(candidate[2][v], other[2][v]) >= 0.8 for v in candidate[2] if v in other[2]) for other in chosen):
+                rejected["similar_to_option"] = rejected.get("similar_to_option", 0) + 1
+                continue
+            chosen.append(candidate)
+    return ComposeResult(
+        specs=[item[1] for item in chosen], fingerprints=[item[2] for item in chosen], attempts=attempts, rejected=rejected,
+        scores=[round(item[0], 1) for item in chosen], score_details=[item[3] for item in chosen],
+    )
 
 
 __all__ = ["ARCHETYPES", "ComposeResult", "compose", "plan_layout"]
