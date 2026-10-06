@@ -152,6 +152,23 @@ def _parser() -> argparse.ArgumentParser:
                       help="art-style designer provider config JSON; lets the editor create a new look on request")
     edit.add_argument("--style-budget-root", default=".runtime/graphics-art-style-ai-budget")
     commands.add_parser("styles", help="list the art style packs (built-in and the style library)")
+    compose_cmd = commands.add_parser("compose", help="design new layouts for this job (different from each other and from recent jobs)")
+    compose_cmd.add_argument("--set", dest="slots", action="append", default=[], metavar="SLOT=TEXT",
+                             help="headline, subhead, body, kicker, price, cta, footer, big (optional giant word); repeatable")
+    compose_cmd.add_argument("--photo", action="append", default=[], metavar="KEY=PATH", help="a local photo; repeatable")
+    compose_cmd.add_argument("--variant", action="append", default=None, help="square, portrait, story, landscape, or all")
+    compose_cmd.add_argument("--count", type=int, default=3, help="how many different options (1-8)")
+    compose_cmd.add_argument("--seed", type=int, default=None, help="repeat an earlier run exactly")
+    compose_cmd.add_argument("--primary", default="#14213D")
+    compose_cmd.add_argument("--accent", default="#FCA311")
+    compose_cmd.add_argument("--art-style", default=None, help="optional art style pack for every option")
+    compose_cmd.add_argument("--look", default=None, help="the wanted look in words (used by the AI art director)")
+    compose_cmd.add_argument("--director-config", default=None, help="AI art director provider config (mode=live); else no model")
+    compose_cmd.add_argument("--budget-root", default=".runtime/graphics-art-director-ai-budget")
+    compose_cmd.add_argument("--job-id", default=None)
+    compose_cmd.add_argument("--layout-dir", default=None, help="layout library (default $GRAPHICS_PRODUCTION_LAYOUT_DIR or .runtime/graphics-layouts)")
+    compose_cmd.add_argument("--output", required=True)
+    compose_cmd.add_argument("--idempotency-key", required=True)
     style_create = commands.add_parser("style-create", help="design a new art style pack from a description via the AI gateway (mode=live only)")
     style_create.add_argument("--description", required=True, help="the look, in any words (e.g. 'งานวัดไทย ไฟกระพริบ สีสด')")
     style_create.add_argument("--job-id", required=True)
@@ -339,8 +356,91 @@ def _run_style_create(args: argparse.Namespace) -> int:
     return 0 if result.status == "complete" else 4 if result.status == "needs_input" else 2
 
 
+def _run_compose(args: argparse.Namespace) -> int:
+    from .composer import compose
+    from .layouts import LAYOUT_DIR_ENV, TEXT_SLOTS, save_layout
+    from .themes import VARIANT_SIZES
+
+    if args.layout_dir or not os.environ.get(LAYOUT_DIR_ENV):
+        os.environ[LAYOUT_DIR_ENV] = args.layout_dir or ".runtime/graphics-layouts"
+    content: dict[str, str] = {}
+    for entry in args.slots:
+        slot, separator, text = entry.partition("=")
+        if not separator or slot not in TEXT_SLOTS:
+            print(f"input error: unknown text {slot!r}; use: {', '.join(TEXT_SLOTS)}", file=sys.stderr)
+            return 2
+        content[slot] = text
+    if not content.get("headline") and not content.get("big"):
+        print("input error: give at least --set headline=...", file=sys.stderr)
+        return 2
+    photos: dict[str, Path] = {}
+    for entry in args.photo:
+        key, separator, path = entry.partition("=")
+        if not separator or not key.replace("_", "").isalnum() or not Path(path).is_file():
+            print(f"input error: --photo needs KEY=PATH to an existing file: {entry!r}", file=sys.stderr)
+            return 2
+        photos[key] = Path(path).resolve()
+    requested = args.variant or ["portrait"]
+    variants = list(VARIANT_SIZES) if "all" in requested else requested
+    if any(variant not in VARIANT_SIZES for variant in variants) or not 1 <= args.count <= 8:
+        print("input error: bad --variant or --count", file=sys.stderr)
+        return 2
+    base: dict[str, Any] = {"request_id": args.idempotency_key, "brand": {"primary": args.primary, "accent": args.accent}, "content": content}
+    if photos:
+        root = Path(os.path.commonpath([str(path.parent) for path in photos.values()]))
+        base.update(asset_root=str(root), assets={key: path.relative_to(root).as_posix() for key, path in photos.items()})
+    if args.art_style:
+        base["design"] = {"art_style": args.art_style}
+    specs: list[dict[str, Any]] = []
+    summary: dict[str, Any] = {"mode": "procedural", "model_calls": 0}
+    if args.director_config:
+        from .composer_ai import ArtDirector, DirectorNotConfigured
+
+        try:
+            director = ArtDirector(provider_config=load_provider_config(args.director_config), ledger_root=args.budget_root)
+        except (DirectorNotConfigured, ProviderConfigError) as exc:
+            print(f"provider_not_configured: {exc}", file=sys.stderr)
+            return 2
+        if director.mode != "live":
+            print("shadow_mode_only: the art-director config is in shadow mode; get owner approval before mode=live", file=sys.stderr)
+            return 2
+        summary["mode"] = "art_director"
+        for index in range(args.count):
+            designed = director.design(base, variants, job_id=f"{args.job_id or args.idempotency_key}-{index + 1}", look=args.look)
+            summary["model_calls"] += designed.model_calls
+            summary.setdefault("director", []).append(designed.to_dict())
+            if designed.spec is not None:
+                specs.append(designed.spec)
+    if len(specs) < args.count:
+        result = compose(base, variants, count=args.count - len(specs), seed=args.seed)
+        for spec, prints in zip(result.specs, result.fingerprints, strict=True):
+            save_layout(spec, prints)
+            specs.append(spec)
+        summary.update(attempts=result.attempts, rejected=result.rejected)
+    if not specs:
+        print(json.dumps(summary, ensure_ascii=False, indent=2))
+        print("no_layout: no candidate passed the checks; shorten the texts or add a photo", file=sys.stderr)
+        return 4
+    items = []
+    for index, spec in enumerate(specs, start=1):
+        for variant in variants:
+            width, height = VARIANT_SIZES[variant]
+            items.append({**base, "request_id": f"option{index}-{variant}", "template_id": spec["layout_id"], "variant": variant,
+                          "canvas": {"width": width, "height": height}})
+    batch = run_batch(items, args.output, args.idempotency_key)
+    output = Path(args.output)
+    for item in items:
+        (output / f"{item['request_id']}.request.json").write_text(json.dumps(item, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    summary.update(options=[{"layout_id": spec["layout_id"], "concept": spec.get("concept")} for spec in specs],
+                   batch={"status": batch.status, "manifest": str(batch.manifest_path) if batch.manifest_path else None})
+    print(json.dumps(summary, ensure_ascii=False, default=str, indent=2))
+    return 0 if batch.status in {"accepted", "partial"} else 2
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
+    if args.command == "compose":
+        return _run_compose(args)
     if args.command == "styles":
         from .art_styles import load_art_styles
 

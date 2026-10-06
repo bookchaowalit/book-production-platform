@@ -265,6 +265,12 @@ def load_themes(directory: str | None = None) -> dict[str, Theme]:
 
 def get_theme(theme_id: str) -> Theme:
     theme = load_themes().get(theme_id)
+    if theme is None and theme_id.startswith("lay_"):
+        from .layouts import (
+            find_layout_theme,  # composed per-job layouts (layout library or candidate)
+        )
+
+        theme = find_layout_theme(theme_id)
     if theme is None:
         raise ThemeError("template_unknown")
     return theme
@@ -314,6 +320,11 @@ class Context:
 
     def opt_num(self, spec: Mapping[str, Any], key: str, default: float) -> float:
         return self.num(spec[key], name=key) if key in spec else default
+
+    def choose(self, value: Any) -> Any:
+        """A literal value, or the entry for this request's size from a ``by_variant`` table."""
+
+        return self._choose(value)
 
     def _choose(self, value: Any) -> Any:
         """Resolve ``by_variant`` / ``if_asset`` / ``if_slot`` selectors."""
@@ -644,7 +655,7 @@ def resolve_effects(ctx: Context, placement_effects: Any | None) -> ResolvedImag
     if values.get("filter") == "duotone":
         values.setdefault("duotone_dark", "role.bg" if ctx.art is not None else "role.ink")
         values.setdefault("duotone_light", "role.highlight" if ctx.art is not None else "role.bg")
-    for key in ("duotone_dark", "duotone_light", "outline_color"):
+    for key in ("duotone_dark", "duotone_light", "outline_color", "glow_color"):
         if values.get(key) is not None:
             values[key] = ctx.solid(values[key], name=key)
     if values.get("cutout") == "ai" and not ai_cutout_available():

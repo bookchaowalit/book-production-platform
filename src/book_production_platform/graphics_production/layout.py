@@ -136,7 +136,16 @@ def _split_long_word(word: str, max_chars: int) -> list[str]:
             merged[-1] += token
         else:
             merged.append(token)
-    tokens = merged
+    # An unknown loanword ("ดริป") comes back as one-letter fragments (ด|ริ|ป); keep each such run together.
+    tokens = []
+    in_run = False
+    for token in merged:
+        fragment = visible_length(token) <= 1 and bool(_THAI_CHAR.search(token))
+        if fragment and in_run:
+            tokens[-1] += token
+        else:
+            tokens.append(token)
+        in_run = fragment
     pieces: list[str] = []
     current = ""
     for token in tokens:

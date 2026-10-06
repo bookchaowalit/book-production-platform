@@ -87,11 +87,14 @@ def contrast_report(ir: GraphicIR) -> list[dict[str, object]]:
         for shape in leaves[:index]:
             if (
                 isinstance(shape, ShapeNode)
-                and shape.kind == "rect"
+                and shape.kind in ("rect", "ellipse")
+                and shape.fill != "none"
                 and shape.x <= centre_x <= shape.x + shape.width
                 and shape.y <= centre_y <= shape.y + shape.height
             ):
-                backdrop, backdrop_id = shape.fill, shape.node_id
+                # A gradient or see-through backdrop cannot be measured from the IR: it is left out (below).
+                backdrop = shape.fill if shape.opacity >= 0.85 else "paint:translucent"
+                backdrop_id = shape.node_id
         if not backdrop.startswith("#"):
             continue
         ratio = contrast_ratio(node.color, backdrop)

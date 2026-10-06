@@ -337,7 +337,7 @@ def text_block(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
         font_size=layout.font_size,
         font_ref=style["font"],
         color=_paint_param(ctx, spec, "color", "#111111", node_id),
-        align=spec.get("align", "left"),
+        align=ctx.choose(spec.get("align", "left")),
         overflow_policy=overflow,  # type: ignore[arg-type]
         max_lines=max_lines,
         font_weight=style["weight"],
@@ -419,7 +419,8 @@ def image(ctx: Context, spec: Mapping[str, Any]) -> list[Any]:
         try:
             effects = ImageEffects.model_validate(dict(spec["effects"]))
         except ValueError as exc:
-            raise ThemeError(f"image_effects_invalid:{_id(spec)}") from exc
+            fields = ", ".join(str(error.get("loc", ["?"])[0]) for error in getattr(exc, "errors", list)())
+            raise ThemeError(f"image_effects_invalid:{_id(spec)} ({fields})") from exc
         node = node.model_copy(update={"effects": resolve_effects(ctx, effects)})
     elif ctx.art is not None and ctx.art.photo:
         node = node.model_copy(update={"effects": resolve_effects(ctx, None)})
