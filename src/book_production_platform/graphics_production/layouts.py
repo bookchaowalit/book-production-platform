@@ -454,6 +454,9 @@ def _overlap(a: tuple[float, float, float, float], b: tuple[float, float, float,
     return max(0.0, min(a[2], b[2]) - max(a[0], b[0])) * max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
 
 
+STORY_TOP, STORY_BOTTOM = 0.10, 0.86
+
+
 def _text_extent(node: TextNode) -> tuple[float, float]:
     """Height actually used by the laid-out lines (boxes are often taller than their text)."""
 
@@ -483,6 +486,11 @@ def layout_problems(ir: GraphicIR, behind_ids: set[str]) -> list[str]:
         elif (isinstance(node, ShapeNode) and node.kind in ("rect", "ellipse") and node.opacity >= 0.85
               and node.fill not in ("none",) and node.node_id != "bg"):
             opaque.append((node.node_id, _rect(node, dx, dy), order.get(layer, 0)))
+    if height >= width * 1.7:
+        # Story apps draw their own UI over the top ~10% and bottom ~14%; only small print may sit there.
+        for name, box, _level in texts:
+            if not name.endswith("footer") and (box[1] < height * STORY_TOP or box[3] > height * STORY_BOTTOM):
+                problems.append(f"text_in_story_ui_zone:{name}")
     for index, (first, box_a, _) in enumerate(texts):
         for second, box_b, _ in texts[index + 1:]:
             smaller = min((box_a[2] - box_a[0]) * (box_a[3] - box_a[1]), (box_b[2] - box_b[0]) * (box_b[3] - box_b[1])) or 1

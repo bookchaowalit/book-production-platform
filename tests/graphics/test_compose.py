@@ -258,3 +258,32 @@ def test_cli_compose_makes_distinct_options(tmp_path: Path, capsys: pytest.Captu
     assert len(list((tmp_path / "lib").glob("lay_*.json"))) == 3
     with candidate_layout(spec_theme(json.loads(next((tmp_path / "lib").glob("lay_*.json")).read_text(encoding="utf-8")))):
         pass
+
+
+# --- design principles ----------------------------------------------------------------------------------
+
+
+def test_story_text_stays_clear_of_the_app_ui_bands() -> None:
+    from book_production_platform.graphics_production.layouts import (
+        STORY_BOTTOM,
+        STORY_TOP,
+    )
+
+    for seed in range(4):
+        spec = plan_layout(CONTENT, ["hero"], ["story"], base()["brand"], seed, "diagonal")
+        _theme, _prints, problems = check_layout(spec, base(), ["story"])
+        assert not [problem for problem in problems if problem.startswith("text_in_story_ui_zone")]
+    low = simple_spec(elements=[{"id": "head", "kind": "text", "slot": "headline", "box": {"x": 0.08, "y": 0.9, "w": 0.84, "h": 0.06},
+                                 "size": 0.04}])
+    _theme, _prints, problems = check_layout(low, base({"headline": "Late"}, photo=False), ["story"])
+    assert any(problem.startswith("text_in_story_ui_zone:") for problem in problems) and STORY_TOP < STORY_BOTTOM
+
+
+def test_art_director_prompt_carries_the_design_principles() -> None:
+    from book_production_platform.graphics_production.composer_ai import SYSTEM_PROMPT
+    from book_production_platform.graphics_production.design_principles import (
+        PRINCIPLES,
+    )
+
+    assert all(f"{name.upper()}:" in SYSTEM_PROMPT for name, _rule in PRINCIPLES)
+    assert "10.5%" in SYSTEM_PROMPT and "4.5:1" in SYSTEM_PROMPT

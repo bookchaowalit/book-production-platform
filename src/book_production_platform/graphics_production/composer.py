@@ -262,6 +262,8 @@ def _footer(plan: Plan, content: Mapping[str, str], variant: str) -> list[dict[s
 def _margin(plan: Plan, variant: str) -> tuple[float, float]:
     width, height = VARIANT_SIZES[variant]
     m = plan.knobs.get("margin", 0.065) * min(width, height)
+    if height >= width * 1.7:
+        return m / width, max(m / height, 0.105)  # stay clear of the story app's own UI at the top and bottom
     return m / width, m / height
 
 
@@ -796,6 +798,43 @@ def _allowed(content: Mapping[str, str], photos: list[str]) -> list[str]:
     return names
 
 
+STORY_SAFE_TOP, STORY_SAFE_BOTTOM = 0.105, 0.855
+
+
+def _story_safe(elements: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Slide the text group (with its buttons and badges) out of the story app's UI bands when it fits between them."""
+
+    texts = [e for e in elements if e.get("kind") == "text" and "box" in e]
+    if not texts:
+        return elements
+    top = min(e["box"]["y"] for e in texts)
+    bottom = max(e["box"]["y"] + e["box"]["h"] for e in texts)
+    if top >= STORY_SAFE_TOP and bottom <= STORY_SAFE_BOTTOM:
+        return elements
+    if bottom - top > STORY_SAFE_BOTTOM - STORY_SAFE_TOP:
+        return elements  # too tall to fit; the checker rejects it and another candidate is tried
+    shift = STORY_SAFE_TOP - top if top < STORY_SAFE_TOP else STORY_SAFE_BOTTOM - bottom
+
+    def carries_text(shape: dict[str, Any]) -> bool:
+        box = shape["box"]
+        if box["w"] * box["h"] > 0.25:
+            return False  # a big panel or photo stays; only buttons, badges and labels travel with the text
+        for text in texts:
+            t = text["box"]
+            overlap_w = min(box["x"] + box["w"], t["x"] + t["w"]) - max(box["x"], t["x"])
+            overlap_h = min(box["y"] + box["h"], t["y"] + t["h"]) - max(box["y"], t["y"])
+            if overlap_w > 0 and overlap_h > 0 and overlap_w * overlap_h >= 0.5 * t["w"] * t["h"]:
+                return True
+        return False
+
+    moved = []
+    for element in elements:
+        if "box" in element and (element in texts or (element.get("kind") == "shape" and carries_text(element))):
+            element = {**element, "box": {**element["box"], "y": round(element["box"]["y"] + shift, 4)}}
+        moved.append(element)
+    return moved
+
+
 def plan_layout(content: Mapping[str, str], photos: list[str], variants: list[str], brand: Mapping[str, str], seed: int,
                 archetype: str | None = None, style_colors: Mapping[str, str] | None = None) -> dict[str, Any]:
     rng = random.Random(seed)
@@ -818,6 +857,8 @@ def plan_layout(content: Mapping[str, str], photos: list[str], variants: list[st
         elements = GEOMETRY[chosen](plan, content, photos, variant)
         if plan.knobs.get("mirror"):
             elements = _mirror(elements)
+        if variant == "story":
+            elements = _story_safe(elements)
         per_variant[variant] = elements + _footer(plan, content, variant)
     spec = {
         "schema_version": LAYOUT_SCHEMA, "archetype": chosen,
