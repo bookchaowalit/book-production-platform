@@ -246,3 +246,29 @@ def test_cli_lists_styles_and_makes_a_styled_collage(photos: Path, tmp_path: Pat
     assert code == 0, capsys.readouterr().err
     saved = json.loads((tmp_path / "out" / "promo_sale-square.request.json").read_text(encoding="utf-8"))
     assert saved["design"]["art_style"] == "noir" and saved["assets"] == {"product": "product.png"}
+
+
+@pytest.mark.parametrize(("shapes", "ok", "reason"), [
+    ([(150, 100, 250, 200)], True, "ok"),
+    ([(190, 140, 205, 155)], False, "subject_too_small"),
+    ([(120, 0, 280, 180)], False, "subject_cut_by_frame"),
+    ([(40, 90, 140, 200), (260, 90, 360, 200)], False, "several_subjects"),
+    ([(150, 120, 250, 300)], True, "ok"),  # cropped at the bottom like a bust: fine
+])
+def test_cutout_suitability_flags_photos_that_do_not_cut_cleanly(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+                                                                 shapes: list[tuple[int, int, int, int]], ok: bool, reason: str) -> None:
+    def fake_ai(_source: Path, picture: Image.Image) -> Image.Image:
+        cut = picture.convert("RGBA")
+        cut.putalpha(picture.convert("L").point(lambda v: 0 if v > 240 else 255))  # the subject is everything not white
+        return cut
+
+    monkeypatch.setattr(image_fx, "ai_cutout_available", lambda: True)
+    monkeypatch.setattr(image_fx, "_cached_ai_cutout", fake_ai)
+    image = Image.new("RGB", (400, 300), "white")
+    draw = ImageDraw.Draw(image)
+    for box in shapes:
+        draw.rectangle(box, fill=(180, 40, 40))
+    path = tmp_path / f"{len(shapes)}-{shapes[0][1]}.png"
+    image.save(path)
+    result, why = image_fx.cutout_suitability(path)
+    assert result is ok and why.startswith(reason)

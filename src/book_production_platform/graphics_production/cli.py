@@ -156,6 +156,9 @@ def _parser() -> argparse.ArgumentParser:
     compose_cmd.add_argument("--set", dest="slots", action="append", default=[], metavar="SLOT=TEXT",
                              help="headline, subhead, body, kicker, price, cta, footer, big (optional giant word); repeatable")
     compose_cmd.add_argument("--photo", action="append", default=[], metavar="KEY=PATH", help="a local photo; repeatable")
+    compose_cmd.add_argument("--logo", default=None, metavar="PATH", help="the brand logo (PNG with transparency is best)")
+    compose_cmd.add_argument("--logo-position", default=None, choices=["top-left", "top-right", "bottom-left", "bottom-right"],
+                             help="fix the logo corner (default: a corner clear of text, chosen per option)")
     compose_cmd.add_argument("--variant", action="append", default=None, help="square, portrait, story, landscape, or all")
     compose_cmd.add_argument("--count", type=int, default=3, help="how many different options (1-8)")
     compose_cmd.add_argument("--seed", type=int, default=None, help="repeat an earlier run exactly")
@@ -193,6 +196,28 @@ def _parser() -> argparse.ArgumentParser:
     campaign.add_argument("--seed", type=int, default=0)
     campaign.add_argument("--layout-dir", default=None, help="layout library (default $GRAPHICS_PRODUCTION_LAYOUT_DIR or .runtime/graphics-layouts)")
     campaign.add_argument("--dry-run", action="store_true", help="compose and report only; render nothing")
+    cbrief = commands.add_parser("campaign-brief", help="turn a client brief into a campaign plan (AI organises, never writes copy)")
+    cbrief.add_argument("--brief", required=True, help="the client's brief as a text or Markdown file")
+    cbrief.add_argument("--photos", default=None, help="folder with the job's photos and logo")
+    cbrief.add_argument("--provider-config", required=True, help="campaign-brief provider config JSON (no secrets)")
+    cbrief.add_argument("--budget-root", default=".runtime/graphics-campaign-brief-ai-budget")
+    cbrief.add_argument("--job-id", required=True)
+    cbrief.add_argument("--locale", default="th-TH")
+    cbrief.add_argument("--output", required=True, help="where to write plan.json (photo paths are relative to it)")
+    cbrief_shadow = commands.add_parser("campaign-brief-shadow", help="evaluate brief -> campaign plan; never uses results")
+    cbrief_shadow.add_argument("--provider-config", required=True)
+    cbrief_shadow.add_argument("--cases", action="append", required=True)
+    cbrief_shadow.add_argument("--split", default=None)
+    cbrief_shadow.add_argument("--budget-root", default=".runtime/graphics-campaign-brief-ai-budget")
+    cbrief_shadow.add_argument("--output", required=True)
+    review = commands.add_parser("review", help="write review.html for a compose or campaign output (pass/fail per option)")
+    review.add_argument("--dir", required=True, help="the compose or campaign output folder")
+    feedback = commands.add_parser("feedback", help="store exported review verdicts so the composer learns from them")
+    feedback.add_argument("--file", required=True, help="review-feedback.json exported from review.html")
+    feedback.add_argument("--reviewer", default="")
+    feedback.add_argument("--layout-dir", default=None)
+    feedback_report = commands.add_parser("feedback-report", help="verdicts, reasons, and where the design score disagrees with people")
+    feedback_report.add_argument("--layout-dir", default=None)
     compose_shadow = commands.add_parser("compose-shadow", help="evaluate layout composition (procedural baseline, optional AI art director)")
     compose_shadow.add_argument("--cases", action="append", required=True)
     compose_shadow.add_argument("--split", default=None)
@@ -340,6 +365,81 @@ def _run_edit_shadow(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_review(args: argparse.Namespace) -> int:
+    from .layouts import LAYOUT_DIR_ENV
+    from .review import build_review_page, feedback_report, import_feedback
+
+    if args.command == "review":
+        print(json.dumps({"review_page": str(build_review_page(args.dir))}, ensure_ascii=False))
+        return 0
+    if args.layout_dir or not os.environ.get(LAYOUT_DIR_ENV):
+        os.environ[LAYOUT_DIR_ENV] = args.layout_dir or ".runtime/graphics-layouts"
+    if args.command == "feedback":
+        try:
+            stored = import_feedback(_read_json(args.file), reviewer=args.reviewer)
+        except (OSError, json.JSONDecodeError, ValueError) as exc:
+            print(f"input error: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps({"stored": stored}, ensure_ascii=False))
+        return 0
+    print(json.dumps(feedback_report(), ensure_ascii=False, indent=2))
+    return 0
+
+
+def _run_campaign_brief(args: argparse.Namespace) -> int:
+    from .campaign_brief import (
+        CampaignBriefAdapter,
+        CampaignBriefNotConfigured,
+        photo_files,
+    )
+
+    try:
+        adapter = CampaignBriefAdapter(provider_config=load_provider_config(args.provider_config), ledger_root=args.budget_root)
+        brief = Path(args.brief).read_text(encoding="utf-8")
+    except (CampaignBriefNotConfigured, ProviderConfigError, OSError) as exc:
+        print(f"input error: {exc}", file=sys.stderr)
+        return 2
+    if adapter.mode != "live":
+        print("shadow_mode_only: the campaign-brief config is in shadow mode; run campaign-brief-shadow and get owner approval",
+              file=sys.stderr)
+        return 2
+    output = Path(args.output)
+    prefix = os.path.relpath(Path(args.photos).resolve(), output.resolve().parent) if args.photos else ""
+    result = adapter.propose(brief, job_id=args.job_id, photos=photo_files(args.photos), photos_prefix=prefix.replace(os.sep, "/"),
+                             locale=args.locale)
+    summary = result.to_dict()
+    if result.plan is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(result.plan, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        summary["plan"] = str(output)
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    return 0 if result.status == "complete" else 3
+
+
+def _run_campaign_brief_shadow(args: argparse.Namespace) -> int:
+    from book_production_platform.brief_adapter_kit.shadow import load_cases
+
+    from .campaign_brief import CampaignBriefAdapter, CampaignBriefNotConfigured
+    from .campaign_brief_eval import SUITE, run_campaign_brief_eval
+
+    try:
+        adapter = CampaignBriefAdapter(provider_config=load_provider_config(args.provider_config), ledger_root=args.budget_root)
+        cases = load_cases(args.cases)
+        split = _read_json(args.split) if args.split else {}
+    except (CampaignBriefNotConfigured, ProviderConfigError, OSError, KeyError, json.JSONDecodeError) as exc:
+        print(f"input error: {exc}", file=sys.stderr)
+        return 2
+    report = run_campaign_brief_eval(adapter, cases, dev_ids=split.get("dev", []), suite=split.get("suite") or SUITE)
+    output = Path(args.output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps({"gate": report["gate"], "metrics": report["metrics"]}, ensure_ascii=False, indent=2))
+    if not report["gate"]["passed"]:
+        print("shadow gate failed: keep mode=shadow and review the report", file=sys.stderr)
+        return 6
+    return 0
+
+
 def _run_compose_campaign(args: argparse.Namespace) -> int:
     from .campaign import CampaignError, load_campaign, run_campaign
     from .layouts import LAYOUT_DIR_ENV
@@ -444,6 +544,11 @@ def _run_compose(args: argparse.Namespace) -> int:
             print(f"input error: --photo needs KEY=PATH to an existing file: {entry!r}", file=sys.stderr)
             return 2
         photos[key] = Path(path).resolve()
+    if args.logo:
+        if not Path(args.logo).is_file() or "logo" in photos:
+            print("input error: --logo needs an existing file (and no --photo named logo)", file=sys.stderr)
+            return 2
+        photos["logo"] = Path(args.logo).resolve()
     requested = args.variant or ["portrait"]
     variants = list(VARIANT_SIZES) if "all" in requested else requested
     if any(variant not in VARIANT_SIZES for variant in variants) or not 1 <= args.count <= 8:
@@ -470,16 +575,20 @@ def _run_compose(args: argparse.Namespace) -> int:
             return 2
         summary["mode"] = "art_director"
         for index in range(args.count):
-            designed = director.design(base, variants, job_id=f"{args.job_id or args.idempotency_key}-{index + 1}", look=args.look)
+            designed = director.design(base, variants, job_id=f"{args.job_id or args.idempotency_key}-{index + 1}", look=args.look,
+                                       logo_position=args.logo_position)
             summary["model_calls"] += designed.model_calls
             summary.setdefault("director", []).append(designed.to_dict())
             if designed.spec is not None:
                 specs.append(designed.spec)
+    result_specs: list[dict[str, Any]] = []
+    result_scores: list[float] = []
     if len(specs) < args.count:
-        result = compose(base, variants, count=args.count - len(specs), seed=args.seed)
+        result = compose(base, variants, count=args.count - len(specs), seed=args.seed, logo_position=args.logo_position)
         for spec, prints in zip(result.specs, result.fingerprints, strict=True):
             save_layout(spec, prints)
             specs.append(spec)
+        result_specs, result_scores = result.specs, result.scores
         summary.update(attempts=result.attempts, rejected=result.rejected)
     if not specs:
         print(json.dumps(summary, ensure_ascii=False, indent=2))
@@ -495,8 +604,12 @@ def _run_compose(args: argparse.Namespace) -> int:
     output = Path(args.output)
     for item in items:
         (output / f"{item['request_id']}.request.json").write_text(json.dumps(item, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    summary.update(options=[{"layout_id": spec["layout_id"], "concept": spec.get("concept")} for spec in specs],
+    scores = dict(zip((spec["layout_id"] for spec in result_specs), result_scores, strict=False))
+    summary.update(options=[{"layout_id": spec["layout_id"], "concept": spec.get("concept"), "archetype": spec.get("archetype"),
+                             "score": scores.get(spec["layout_id"])} for spec in specs],
                    batch={"status": batch.status, "manifest": str(batch.manifest_path) if batch.manifest_path else None})
+    (output / "compose-summary.json").write_text(json.dumps(summary, ensure_ascii=False, default=str, indent=2) + "\n",
+                                                  encoding="utf-8")
     print(json.dumps(summary, ensure_ascii=False, default=str, indent=2))
     return 0 if batch.status in {"accepted", "partial"} else 2
 
@@ -525,6 +638,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_edit(args)
     if args.command == "edit-shadow":
         return _run_edit_shadow(args)
+    if args.command in ("review", "feedback", "feedback-report"):
+        return _run_review(args)
+    if args.command == "campaign-brief":
+        return _run_campaign_brief(args)
+    if args.command == "campaign-brief-shadow":
+        return _run_campaign_brief_shadow(args)
     if args.command == "compose-campaign":
         return _run_compose_campaign(args)
     if args.command == "compose-shadow":

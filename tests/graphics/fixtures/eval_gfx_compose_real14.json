@@ -1,0 +1,398 @@
+[
+ {
+  "id": "real-01-coffee-red",
+  "category": "real_photo",
+  "locale": "th-TH",
+  "canary": "CANARY-real-01-coffee-red",
+  "variants": [
+   "square",
+   "story"
+  ],
+  "seed": 11,
+  "request": {
+   "request_id": "real-01-coffee-red",
+   "brand": {
+    "primary": "#3B2A20",
+    "accent": "#C9772E"
+   },
+   "content": {
+    "kicker": "LOM YEN COFFEE",
+    "headline": "ลาเต้ร้อน *แก้วละ 55*",
+    "cta": "สั่งเลย",
+    "footer": "ref CANARY-real-01-coffee-red"
+   },
+   "assets": {
+    "hero": "real/coffee-red.jpg",
+    "logo": "logo.png"
+   }
+  }
+ },
+ {
+  "id": "real-02-cappuccino-counter",
+  "category": "real_photo",
+  "locale": "en-US",
+  "canary": "CANARY-real-02-cappuccino-counter",
+  "variants": [
+   "portrait",
+   "landscape"
+  ],
+  "seed": 11,
+  "request": {
+   "request_id": "real-02-cappuccino-counter",
+   "brand": {
+    "primary": "#2B2118",
+    "accent": "#D4A24C"
+   },
+   "content": {
+    "headline": "Slow mornings, good coffee",
+    "subhead": "Open 7 AM daily",
+    "cta": "Visit us",
+    "footer": "ref CANARY-real-02-cappuccino-counter"
+   },
+   "assets": {
+    "hero": "real/cappuccino-counter.jpg",
+    "logo": "logo.png"
+   }
+  }
+ },
+ {
+  "id": "real-03-coffee-beans-cup",
+  "category": "real_photo",
+  "locale": "th-TH",
+  "canary": "CANARY-real-03-coffee-beans-cup",
+  "variants": [
+   "square",
+   "portrait"
+  ],
+  "seed": 11,
+  "request": {
+   "request_id": "real-03-coffee-beans-cup",
+   "brand": {
+    "primary": "#1D3557",
+    "accent": "#E63946"
+   },
+   "content": {
+    "headline": "เมล็ดคั่วใหม่ทุกสัปดาห์",
+    "price": "320.-",
+    "cta": "สั่งซื้อ",
+    "footer": "ref CANARY-real-03-coffee-beans-cup"
+   },
+   "assets": {
+    "hero": "real/coffee-beans-cup.jpg",
+    "logo": "logo.png"
+   }
+  }
+ },
+ {
+  "id": "real-04-burgers",
+  "category": "real_photo",
+  "locale": "th-TH",
+  "canary": "CANARY-real-04-burgers",
+  "variants": [
+   "square",
+   "story"
+  ],
+  "seed": 11,
+  "request": {
+   "request_id": "real-04-burgers",
+   "brand": {
+    "primary": "#7A1F1F",
+    "accent": "#F2C14E"
+   },
+   "content": {
+    "kicker": "BURGER BRO",
+    "headline": "เบอร์เกอร์เนื้อ 2 ชั้น",
+    "price": "199.-",
+    "cta": "สั่งเลย",
+    "footer": "ref CANARY-real-04-burgers"
+   },
+   "assets": {
+    "hero": "real/burgers.jpg",
+    "logo": "logo.png"
+   }
+  }
+ },
+ {
+  "id": "real-05-cake-coffee",
+  "category": "real_photo",
+  "locale": "en-US",
+  "canary": "CANARY-real-05-cake-coffee",
+  "variants": [
+   "portrait"
+  ],
+  "seed": 11,
+  "request": {
+   "request_id": "real-05-cake-coffee",
+   "brand": {
+    "primary": "#3E2723",
+    "accent": "#FFB74D"
+   },
+   "content": {
+    "headline": "Cake + coffee set",
+    "price": "$6.50",
+    "footer": "Until 30 Nov CANARY-real-05-cake-coffee"
+   },
+   "assets": {
+    "hero": "real/cake-coffee.jpg",
+    "logo": "logo.png"
+   }
+  }
+ },
+ {
+  "id": "real-06-pizza",
+  "category": "real_photo",
+  "locale": "en-US",
+  "canary": "CANARY-real-06-pizza",
+  "variants": [
+   "square",
+   "landscape"
+  ],
+  "seed": 11,
+  "request": {
+   "request_id": "real-06-pizza",
+   "brand": {
+    "primary": "#1B1B1B",
+    "accent": "#E85D04"
+   },
+   "content": {
+    "kicker": "FORNO",
+    "headline": "Wood-fired, every night",
+    "cta": "Order",
+    "footer": "ref CANARY-real-06-pizza"
+   },
+   "assets": {
+    "hero": "real/pizza.jpg",
+    "logo": "logo.png"
+   }
+  }
+ },
+ {
+  "id": "real-07-sneakers",
+  "category": "real_photo",
+  "locale": "th-TH",
+  "canary": "CANARY-real-07-sneakers",
+  "variants": [
+   "story",
+   "square"
+  ],
+  "seed": 11,
+  "request": {
+   "request_id": "real-07-sneakers",
+   "brand": {
+    "primary": "#14213D",
+    "accent": "#FCA311"
+   },
+   "content": {
+    "headline": "รองเท้าผ้าใบ ลด 30%",
+    "subhead": "เฉพาะสุดสัปดาห์นี้",
+    "cta": "ช้อปเลย",
+    "footer": "ref CANARY-real-07-sneakers"
+   },
+   "assets": {
+    "hero": "real/sneakers.jpg",
+    "logo": "logo.png"
+   }
+  }
+ },
+ {
+  "id": "real-08-dog",
+  "category": "real_photo",
+  "locale": "th-TH",
+  "canary": "CANARY-real-08-dog",
+  "variants": [
+   "square",
+   "portrait",
+   "story"
+  ],
+  "seed": 11,
+  "request": {
+   "request_id": "real-08-dog",
+   "brand": {
+    "primary": "#0F4C5C",
+    "accent": "#F2A541"
+   },
+   "content": {
+    "kicker": "NOVA VET",
+    "headline": "อาบน้ำตัดขน *น้องหมา*",
+    "price": "-30%",
+    "cta": "จองคิว",
+    "footer": "ref CANARY-real-08-dog"
+   },
+   "assets": {
+    "hero": "real/dog.jpg",
+    "logo": "logo.png"
+   }
+  }
+ },
+ {
+  "id": "real-09-woman-hat",
+  "category": "real_photo",
+  "locale": "en-US",
+  "canary": "CANARY-real-09-woman-hat",
+  "variants": [
+   "portrait",
+   "story"
+  ],
+  "seed": 11,
+  "request": {
+   "request_id": "real-09-woman-hat",
+   "brand": {
+    "primary": "#0B3C49",
+    "accent": "#F4A259"
+   },
+   "content": {
+    "headline": "Summer retreat in Bali",
+    "subhead": "7 nights from $890",
+    "cta": "Book now",
+    "footer": "ref CANARY-real-09-woman-hat"
+   },
+   "assets": {
+    "hero": "real/woman-hat.jpg",
+    "logo": "logo.png"
+   }
+  }
+ },
+ {
+  "id": "real-10-man-beard",
+  "category": "real_photo",
+  "locale": "th-TH",
+  "canary": "CANARY-real-10-man-beard",
+  "variants": [
+   "square",
+   "portrait"
+  ],
+  "seed": 11,
+  "request": {
+   "request_id": "real-10-man-beard",
+   "brand": {
+    "primary": "#111111",
+    "accent": "#C9A227"
+   },
+   "content": {
+    "kicker": "BARBER 88",
+    "headline": "ตัดผม + แต่งหนวด",
+    "price": "350.-",
+    "cta": "จองคิว",
+    "footer": "ref CANARY-real-10-man-beard"
+   },
+   "assets": {
+    "hero": "real/man-beard.jpg",
+    "logo": "logo.png"
+   }
+  }
+ },
+ {
+  "id": "real-11-bouquet",
+  "category": "real_photo",
+  "locale": "th-TH",
+  "canary": "CANARY-real-11-bouquet",
+  "variants": [
+   "square",
+   "story"
+  ],
+  "seed": 11,
+  "request": {
+   "request_id": "real-11-bouquet",
+   "brand": {
+    "primary": "#5B2A86",
+    "accent": "#F7B2BD"
+   },
+   "content": {
+    "headline": "ช่อดอกไม้วันแม่",
+    "subhead": "สั่งล่วงหน้า 3 วัน",
+    "cta": "สั่งจอง",
+    "footer": "ref CANARY-real-11-bouquet"
+   },
+   "assets": {
+    "hero": "real/bouquet.jpg",
+    "logo": "logo.png"
+   }
+  }
+ },
+ {
+  "id": "real-12-shop-street",
+  "category": "real_photo",
+  "locale": "en-US",
+  "canary": "CANARY-real-12-shop-street",
+  "variants": [
+   "portrait",
+   "landscape"
+  ],
+  "seed": 11,
+  "request": {
+   "request_id": "real-12-shop-street",
+   "brand": {
+    "primary": "#17122D",
+    "accent": "#FFD33D"
+   },
+   "content": {
+    "headline": "Late-night ramen",
+    "subhead": "Open until 2 AM",
+    "cta": "Find us",
+    "footer": "ref CANARY-real-12-shop-street"
+   },
+   "assets": {
+    "hero": "real/shop-street.jpg",
+    "logo": "logo.png"
+   }
+  }
+ },
+ {
+  "id": "real-13-boxing",
+  "category": "real_photo",
+  "locale": "th-TH",
+  "canary": "CANARY-real-13-boxing",
+  "variants": [
+   "square",
+   "story"
+  ],
+  "seed": 11,
+  "request": {
+   "request_id": "real-13-boxing",
+   "brand": {
+    "primary": "#111827",
+    "accent": "#EF4444"
+   },
+   "content": {
+    "kicker": "IRON BOX",
+    "headline": "คลาสมวยกลางแจ้ง",
+    "subhead": "ทุกเสาร์ 7 โมงเช้า",
+    "cta": "สมัคร",
+    "footer": "ref CANARY-real-13-boxing"
+   },
+   "assets": {
+    "hero": "real/boxing.jpg",
+    "logo": "logo.png"
+   }
+  }
+ },
+ {
+  "id": "real-14-woman-cup",
+  "category": "real_photo",
+  "locale": "en-US",
+  "canary": "CANARY-real-14-woman-cup",
+  "variants": [
+   "square",
+   "portrait",
+   "story",
+   "landscape"
+  ],
+  "seed": 11,
+  "request": {
+   "request_id": "real-14-woman-cup",
+   "brand": {
+    "primary": "#2D3142",
+    "accent": "#EF8354"
+   },
+   "content": {
+    "headline": "Your daily ritual",
+    "cta": "Try it",
+    "footer": "ref CANARY-real-14-woman-cup"
+   },
+   "assets": {
+    "hero": "real/woman-cup.jpg",
+    "logo": "logo.png"
+   }
+  }
+ }
+]

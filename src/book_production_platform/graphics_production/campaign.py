@@ -14,6 +14,9 @@ Plan (``graphic-campaign.v1``)::
      "variants": ["square", "story"], "options_per_post": 1,
      "posts": [{"id": "p01", "content": {"headline": "..."}, "photos": {"hero": "photos/cup.jpg"}}]}
 
+Optional ``"logo": "brand/logo.png"`` and ``"logo_position": "top-right"`` put the same logo in the same
+corner of every post.
+
 or ``"posts_csv": "posts.csv"`` with one row per post: an ``id`` column, text
 columns named after the slots (``headline``, ``cta``, ...), and photo columns
 ``photo:<key>``. Photo paths are relative to the plan file.
@@ -57,6 +60,8 @@ class Campaign:
     posts: list[Post]
     art_style: str | None = None
     options_per_post: int = 1
+    logo: Path | None = None
+    logo_position: str = "top-right"
     meta: dict[str, Any] = field(default_factory=dict)
 
 
@@ -116,7 +121,17 @@ def load_campaign(plan: Mapping[str, Any], plan_dir: str | Path) -> Campaign:
     if not 1 <= options <= 4:
         raise CampaignError("options_per_post must be 1-4")
     brand = {key: str(value) for key, value in (plan.get("brand") or {}).items()}
-    return Campaign(campaign_id, brand, variants, posts, plan.get("art_style") or None, options)
+    logo = None
+    if plan.get("logo"):
+        logo = (root / str(plan["logo"])).resolve()
+        if not logo.is_file():
+            raise CampaignError("logo_missing")
+    position = str(plan.get("logo_position") or "top-right")
+    if position not in ("top-left", "top-right", "bottom-left", "bottom-right"):
+        raise CampaignError("logo_position must be top-left|top-right|bottom-left|bottom-right")
+    if any("logo" in post.photos for post in posts):
+        raise CampaignError("photo_named_logo: set the logo once at the top of the plan")
+    return Campaign(campaign_id, brand, variants, posts, plan.get("art_style") or None, options, logo, position)
 
 
 def _render(items: list[dict[str, Any]], output: str, key: str) -> dict[str, Any]:
@@ -134,12 +149,14 @@ def run_campaign(campaign: Campaign, output_dir: str | Path, *, seed: int = 0, w
     delivered: list[tuple[str, list[str]]] = []
     for index, post in enumerate(campaign.posts):
         base: dict[str, Any] = {"request_id": post.post_id, "brand": dict(campaign.brand), "content": dict(post.content)}
-        if post.photos:
-            root = Path(os.path.commonpath([str(path.parent) for path in post.photos.values()]))
-            base.update(asset_root=str(root), assets={key: path.relative_to(root).as_posix() for key, path in post.photos.items()})
+        files = {**post.photos, **({"logo": campaign.logo} if campaign.logo else {})}
+        if files:
+            root = Path(os.path.commonpath([str(path.parent) for path in files.values()]))
+            base.update(asset_root=str(root), assets={key: path.relative_to(root).as_posix() for key, path in files.items()})
         if campaign.art_style:
             base["design"] = {"art_style": campaign.art_style}
-        result = compose(base, campaign.variants, count=campaign.options_per_post, seed=seed * 1000 + index)
+        result = compose(base, campaign.variants, count=campaign.options_per_post, seed=seed * 1000 + index,
+                         logo_position=campaign.logo_position if campaign.logo else None)
         summary: dict[str, Any] = {"id": post.post_id, "options": [], "rejected": result.rejected}
         if not result.specs:
             summary["status"] = "no_layout"

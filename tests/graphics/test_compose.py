@@ -287,3 +287,52 @@ def test_art_director_prompt_carries_the_design_principles() -> None:
 
     assert all(f"{name.upper()}:" in SYSTEM_PROMPT for name, _rule in PRINCIPLES)
     assert "10.5%" in SYSTEM_PROMPT and "4.5:1" in SYSTEM_PROMPT
+
+
+# --- logo -----------------------------------------------------------------------------------------------
+
+
+def logo_job(**content: str) -> dict[str, Any]:
+    job = base(content or None)
+    job["assets"] = {**job["assets"], "logo": "logo.png"}
+    return job
+
+
+def test_logo_is_placed_in_every_option_never_used_as_the_hero() -> None:
+    from book_production_platform.graphics_production.composer import LOGO
+
+    result = compose(logo_job(), ALL, count=3, seed=4)
+    assert len(result.specs) == 3
+    for spec in result.specs:
+        logos = [e for e in spec["elements"] if e.get("asset") == LOGO]
+        assert len(logos) == 1 and set(logos[0]["boxes"]) == set(ALL)
+        assert all(e.get("asset") != LOGO for e in spec["elements"] if e.get("id") != "logo")
+
+
+@pytest.mark.parametrize("corner", ["top-left", "top-right", "bottom-left", "bottom-right"])
+def test_a_locked_logo_corner_is_kept_with_clear_space(corner: str) -> None:
+    result = compose(logo_job(), ["square", "story"], count=2, seed=5, avoid_history=False, logo_position=corner)
+    assert len(result.specs) == 2
+    for spec in result.specs:
+        box = next(e for e in spec["elements"] if e.get("id") == "logo")["boxes"]["square"]
+        assert (box["x"] < 0.5) == corner.endswith("left") and (box["y"] < 0.5) == corner.startswith("top")
+
+
+def test_text_crowding_the_logo_or_a_shape_over_it_is_rejected() -> None:
+    from book_production_platform.graphics_production.composer import add_logo
+
+    spec = add_logo(simple_spec(), ["portrait"], 3.2, "top-left")
+    crowded = {**spec, "elements": [*spec["elements"],
+                                    {"id": "near", "kind": "text", "slot": "kicker", "box": {"x": 0.05, "y": 0.06, "w": 0.4, "h": 0.04},
+                                     "size": 0.02}]}
+    _theme, _prints, problems = check_layout(crowded, logo_job(kicker="NEW", headline="Hi"), ["portrait"])
+    assert any(problem.startswith("logo_crowded:") for problem in problems)
+
+
+def test_a_logo_that_would_vanish_gets_a_plate() -> None:
+    from book_production_platform.graphics_production.composer import add_logo
+
+    dark = {**simple_spec(), "palette": {"bg": "#0F4C5C"}}
+    assert any(e.get("id") == "logo-plate" for e in add_logo(dark, ["portrait"], 3.2, "top-left", tone=(("#0F4C5C", 1.0),))["elements"])
+    light = {**simple_spec(elements=[]), "palette": {"bg": "#FFFFFF"}}
+    assert not any(e.get("id") == "logo-plate" for e in add_logo(light, ["portrait"], 3.2, "top-left", tone=(("#0F4C5C", 1.0),))["elements"])

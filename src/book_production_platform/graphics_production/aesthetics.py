@@ -15,6 +15,8 @@ principles a designer would apply when reviewing a board:
 - ``density``: total text area for the canvas size (posters should be glanceable).
 - ``color``: a restrained number of distinct colors.
 - ``focus``: a clear focal element (large photo or display type) exists.
+- ``spread``: no long empty band across the canvas (a tall story with all content
+  in its top half and nothing below reads as unfinished).
 
 Each criterion scores 0-1 with a short reason; the total is a weighted average
 scaled to 100. Deterministic and cheap, so the composer can score every
@@ -41,7 +43,7 @@ from .layout import wrap_text
 
 WEIGHTS = {
     "hierarchy": 0.2, "whitespace": 0.12, "balance": 0.12, "alignment": 0.14, "margins": 0.1, "rhythm": 0.08,
-    "density": 0.08, "color": 0.06, "focus": 0.1,
+    "density": 0.08, "color": 0.06, "focus": 0.1, "spread": 0.1,
 }
 
 
@@ -80,7 +82,12 @@ def score_ir(ir: GraphicIR) -> Score:
     blocks: list[tuple[float, float, float, float, float]] = []  # x0, y0, x1, y1, weight
     colors: set[str] = set()
     focal = 0.0
+    filled: list[tuple[float, float]] = []  # vertical extents of everything that occupies space, backgrounds included
     for node, dx, dy in _leaves(list(ir.nodes)):
+        occupies = isinstance(node, (TextNode, ImageNode)) or (
+            isinstance(node, ShapeNode) and node.node_id != "bg" and node.opacity >= 0.3 and node.width * node.height < area * 0.9)
+        if occupies and not (isinstance(node, TextNode) and node.bleed):
+            filled.append((node.y + dy, node.y + dy + node.height))
         if isinstance(node, TextNode):
             if node.node_id.endswith(("-shadow", "-echo-1", "-echo-2")):
                 continue
@@ -194,6 +201,17 @@ def score_ir(ir: GraphicIR) -> Score:
     headline = sizes[0] / short if sizes else 0
     parts["focus"] = max(_bump(focal, 0.0, 0.18, 0.75, 1.01), _bump(headline, 0.02, 0.09, 0.3, 0.5))
     notes["focus"] = f"largest visual {round(focal * 100)}% of canvas, headline {headline:.2f} of short side"
+
+    # spread: the longest horizontal band (share of the height) with nothing in it.
+    bands = 48
+    empty = [not any(top <= (row + 0.5) * height / bands <= bottom for top, bottom in filled) for row in range(bands)]
+    longest = run = 0
+    for is_empty in empty:
+        run = run + 1 if is_empty else 0
+        longest = max(longest, run)
+    gap = longest / bands
+    parts["spread"] = _bump(gap, -1, 0, 0.2, 0.45)
+    notes["spread"] = f"longest empty band {round(gap * 100)}% of the height"
 
     total = sum(parts[name] * weight for name, weight in WEIGHTS.items()) / sum(WEIGHTS.values()) * 100
     return Score(total=total, parts=parts, notes=notes)

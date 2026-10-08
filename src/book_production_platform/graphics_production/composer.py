@@ -20,6 +20,7 @@ import math
 import random
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from .art_styles import contrast
@@ -785,10 +786,26 @@ def _merge(per_variant: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]]
     return [merged[key] for key in order]
 
 
-def _allowed(content: Mapping[str, str], photos: list[str]) -> list[str]:
+def _framed(element: dict[str, Any]) -> dict[str, Any]:
+    """A cut-out sticker turned into a framed photo (for photos that do not cut out cleanly)."""
+
+    effects = element.get("effects") or {}
+    if element.get("kind") != "photo" or effects.get("cutout") != "ai":
+        return element
+    kept = {key: effects[key] for key in ("filter", "focus_x", "focus_y") if key in effects}
+    return {**element, "effects": {**kept, "cutout": "none", "fit": "cover", "mask": "rounded", "corner_radius": 0.05,
+                                   "shadow": 0.35}}
+
+
+CUTOUT_ARCHETYPES = {"sandwich", "diagonal", "sticker_pop"}  # ideas that only work with a cut-out subject
+
+
+def _allowed(content: Mapping[str, str], photos: list[str], cutout_ok: bool = True) -> list[str]:
     """Composition ideas this job's material supports."""
 
     names = [name for name in ARCHETYPES if photos or name not in PHOTO_ARCHETYPES]
+    if not cutout_ok:
+        names = [name for name in names if name not in CUTOUT_ARCHETYPES]
     # A giant backdrop word needs a short word: the optional "big" text, or a short headline.
     # Thai words are long and lose their shape when cropped, so a Thai headline never becomes the backdrop word.
     headline = str(content.get("headline", ""))
@@ -835,10 +852,93 @@ def _story_safe(elements: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return moved
 
 
+LOGO = "logo"
+LOGO_CORNERS = ("top-left", "top-right", "bottom-left", "bottom-right")
+LOGO_HEIGHT = 0.07  # of the short side
+LOGO_MAX_WIDTH = 0.28  # of the short side
+LOGO_CLEAR = 0.4  # clear space around the logo, as a share of its height
+
+
+def logo_box(variant: str, corner: str, aspect: float) -> dict[str, float]:
+    """Canvas-fraction box of the logo in ``corner``, sized to the logo's own aspect ratio, inside the safe margins."""
+
+    width, height = VARIANT_SIZES[variant]
+    unit = min(width, height)
+    box_h = unit * LOGO_HEIGHT
+    box_w = box_h * max(aspect, 0.2)
+    if box_w > unit * LOGO_MAX_WIDTH:
+        box_w = unit * LOGO_MAX_WIDTH
+        box_h = box_w / max(aspect, 0.2)
+    margin_x = unit * 0.05
+    margin_y = height * STORY_SAFE_TOP if height >= width * 1.7 else unit * 0.05
+    x = margin_x if corner.endswith("left") else width - margin_x - box_w
+    y = margin_y if corner.startswith("top") else height - margin_y - box_h
+    return {"x": round(x / width, 4), "y": round(y / height, 4), "w": round(box_w / width, 4), "h": round(box_h / height, 4)}
+
+
+def _clear_zone(box: Mapping[str, float], variant: str) -> tuple[float, float, float, float]:
+    width, height = VARIANT_SIZES[variant]
+    pad = box["h"] * height * LOGO_CLEAR
+    return (box["x"] - pad / width, box["y"] - pad / height, box["x"] + box["w"] + pad / width, box["y"] + box["h"] + pad / height)
+
+
+def _hits(zone: tuple[float, float, float, float], element: Mapping[str, Any]) -> bool:
+    box = element.get("box")
+    if not box:
+        return False
+    return not (box["x"] + box["w"] <= zone[0] or box["x"] >= zone[2] or box["y"] + box["h"] <= zone[1] or box["y"] >= zone[3])
+
+
+LOGO_MIN_CONTRAST = 2.2  # logo colour vs. what it sits on; below this it gets a plate
+
+
+def _faint_share(tones: LogoTones | None, backdrop: str) -> float:
+    """Share of the logo's pixels whose colour would barely stand out from ``backdrop``."""
+
+    return sum(share for colour, share in (tones or ()) if contrast(colour, backdrop) < LOGO_MIN_CONTRAST)
+
+
+def _needs_plate(logo_box: Mapping[str, float], variant: str, tones: LogoTones | None, backdrop: str | None,
+                 elements: list[dict[str, Any]]) -> bool:
+    """True when a quarter or more of the logo would vanish into the background colour, or it sits on a photo."""
+
+    zone = _clear_zone(logo_box, variant)
+    on_photo = any(e.get("kind") == "photo" and e.get("asset") != LOGO and _hits(zone, e) for e in elements)
+    return on_photo or bool(tones and backdrop and _faint_share(tones, backdrop) >= 0.25)
+
+
+def _plate(logo_box: Mapping[str, float], variant: str, tones: LogoTones | None) -> dict[str, Any]:
+    """A small rounded plate (white, or near-black for a light logo) just around the logo."""
+
+    fill = "#FFFFFF" if _faint_share(tones, "#FFFFFF") <= _faint_share(tones, "#151515") else "#151515"
+    width, height = VARIANT_SIZES[variant]
+    pad = logo_box["h"] * height * 0.28
+    box = {"x": round(logo_box["x"] - pad / width, 4), "y": round(logo_box["y"] - pad / height, 4),
+           "w": round(logo_box["w"] + 2 * pad / width, 4), "h": round(logo_box["h"] + 2 * pad / height, 4)}
+    return {"id": "logo-plate", "kind": "shape", "shape": "rect", "z": 15, "fill": fill, "radius": 0.012, "box": box}
+
+
+def place_logo(elements: list[dict[str, Any]], variant: str, preferred: str, aspect: float, locked: bool) -> dict[str, Any]:
+    """The logo element for one size: the preferred corner, or (unless the brand locks it) the first corner clear of text."""
+
+    corners = [preferred] if locked else [preferred, *[corner for corner in LOGO_CORNERS if corner != preferred]]
+    texts = [e for e in elements if e.get("kind") == "text" or (e.get("kind") == "shape" and str(e.get("id", "")).startswith("cta"))]
+    chosen = preferred
+    for corner in corners:
+        zone = _clear_zone(logo_box(variant, corner, aspect), variant)
+        if not any(_hits(zone, element) for element in texts):
+            chosen = corner
+            break
+    return {"id": "logo", "kind": "photo", "asset": LOGO, "z": 16, "box": logo_box(variant, chosen, aspect),
+            "effects": {"fit": "contain", "cutout": "none"}}
+
+
 def plan_layout(content: Mapping[str, str], photos: list[str], variants: list[str], brand: Mapping[str, str], seed: int,
-                archetype: str | None = None, style_colors: Mapping[str, str] | None = None) -> dict[str, Any]:
+                archetype: str | None = None, style_colors: Mapping[str, str] | None = None,
+                logo_aspect: float | None = None, logo_position: str | None = None,
+                logo_tone: LogoTones | None = None, cutout_ok: bool = True) -> dict[str, Any]:
     rng = random.Random(seed)
-    options = _allowed(content, photos)
+    options = _allowed(content, photos, cutout_ok)
     chosen = archetype or rng.choice(options)
     if chosen not in options:
         chosen = rng.choice(options)
@@ -852,14 +952,41 @@ def plan_layout(content: Mapping[str, str], photos: list[str], variants: list[st
     thai = any("฀" <= char <= "๿" for char in headline)
     fonts = rng.choice(PAIRS_THAI if thai else PAIRS_LATIN + PAIRS_THAI[:3])
     plan = Plan(archetype=chosen, seed=seed, scheme=scheme, palette=palette, fonts=fonts, knobs=_knobs(chosen, rng))
+    plan.knobs["logo_corner"] = random.Random(seed * 31 + 7).choice(LOGO_CORNERS)
     per_variant = {}
     for variant in variants:
         elements = GEOMETRY[chosen](plan, content, photos, variant)
         if plan.knobs.get("mirror"):
             elements = _mirror(elements)
+        if not cutout_ok:
+            elements = [_framed(e) for e in elements]
         if variant == "story":
             elements = _story_safe(elements)
-        per_variant[variant] = elements + _footer(plan, content, variant)
+        footer = _footer(plan, content, variant)
+        if logo_aspect:
+            locked = logo_position in LOGO_CORNERS
+            preferred = str(logo_position) if locked else plan.knobs["logo_corner"]
+            logo = place_logo(elements, variant, preferred, logo_aspect, locked)
+            zone = _clear_zone(logo["box"], variant)
+            if footer and _hits(zone, footer[0]):
+                # Small print gives way to the logo: it moves to the other bottom corner.
+                box = footer[0]["box"]
+                left = logo["box"]["x"] > 0.5
+                footer = [{**footer[0], "align": "left" if left else "right",
+                           "box": {**box, "x": round(1 - box["x"] - box["w"], 4) if left else box["x"]}}]
+            elements = elements + footer + [logo]
+        else:
+            elements = elements + footer
+        per_variant[variant] = elements
+    if logo_aspect:
+        # One decision for the whole design, so every size looks alike: a plate everywhere or nowhere.
+        def logo_of(items: list[dict[str, Any]]) -> dict[str, Any]:
+            return next(e for e in items if e.get("asset") == LOGO)
+
+        if any(_needs_plate(logo_of(items)["box"], variant, logo_tone, palette.get("bg"), items)
+               for variant, items in per_variant.items()):
+            for variant, items in per_variant.items():
+                items.insert(len(items) - 1, _plate(logo_of(items)["box"], variant, logo_tone))
     spec = {
         "schema_version": LAYOUT_SCHEMA, "archetype": chosen,
         "concept": f"{chosen.replace('_', ' ')}{' (mirrored)' if plan.knobs.get('mirror') else ''} · {scheme} · {fonts[0].split(':')[1]}",
@@ -867,6 +994,87 @@ def plan_layout(content: Mapping[str, str], photos: list[str], variants: list[st
     }
     spec["layout_id"] = layout_id(spec)
     return spec
+
+
+def add_logo(spec: dict[str, Any], variants: list[str], aspect: float, position: str | None = None,
+             tone: LogoTones | None = None) -> dict[str, Any]:
+    """``spec`` with the job's logo placed per size (any logo element the spec already had is replaced)."""
+
+    elements = [e for e in spec.get("elements", []) if not (e.get("kind") == "photo" and e.get("asset") == LOGO)
+                and e.get("id") != "logo-plate"]
+    boxes: dict[str, dict[str, float]] = {}
+    need_plate = False
+    backdrop = str((spec.get("palette") or {}).get("bg", "")) or None
+    if backdrop and not backdrop.startswith("#"):
+        backdrop = None
+    preferred = position if position in LOGO_CORNERS else "top-right"
+    for variant in variants:
+        view = []
+        for element in elements:
+            box = (element.get("boxes") or {}).get(variant) or element.get("box")
+            if box:
+                view.append({**element, "box": box})
+        placed = place_logo(view, variant, preferred, aspect, position in LOGO_CORNERS)
+        boxes[variant] = placed["box"]
+        need_plate = need_plate or _needs_plate(placed["box"], variant, tone, backdrop, view)
+    logo = {"id": "logo", "kind": "photo", "asset": LOGO, "z": 16, "boxes": boxes, "effects": {"fit": "contain", "cutout": "none"}}
+    extra: list[dict[str, Any]] = []
+    if need_plate:
+        plates = {variant: _plate(boxes[variant], variant, tone) for variant in variants}
+        first = next(iter(plates.values()))
+        extra.append({**{k: v for k, v in first.items() if k != "box"}, "boxes": {v: p["box"] for v, p in plates.items()}})
+    return {**spec, "elements": [*elements, *extra, logo]}
+
+
+LogoTones = tuple[tuple[str, float], ...]
+
+
+def logo_tones(base: Mapping[str, Any]) -> LogoTones | None:
+    """The logo's main colours (``#RRGGBB``) with their share of its visible pixels, largest first."""
+
+    name = (base.get("assets") or {}).get(LOGO)
+    if not name:
+        return None
+    from PIL import Image
+
+    try:
+        with Image.open(Path(str(base.get("asset_root", "."))) / str(name)) as image:
+            rgba = image.convert("RGBA").resize((96, 96))
+    except (OSError, ValueError):
+        return None
+    pixels: list[tuple[int, int, int]] = []
+    for pixel in rgba.get_flattened_data():
+        if isinstance(pixel, tuple) and len(pixel) == 4 and pixel[3] > 128:
+            pixels.append((int(pixel[0]), int(pixel[1]), int(pixel[2])))
+    if not pixels:
+        return None
+    swatch = Image.new("RGB", (len(pixels), 1))
+    swatch.putdata(pixels)
+    quantized = swatch.quantize(colors=4)
+    palette: list[int] = list(quantized.getpalette() or [])
+    tones: list[tuple[str, float]] = []
+    colors: list[tuple[int, int]] = [(int(n), int(i)) for n, i in (quantized.getcolors() or []) if isinstance(i, int)]
+    for count, index in sorted(colors, reverse=True):
+        r, g, b = palette[index * 3:index * 3 + 3]
+        tones.append((f"#{r:02X}{g:02X}{b:02X}", round(count / len(pixels), 3)))
+    return tuple(tones)
+
+
+def logo_aspect(base: Mapping[str, Any]) -> float | None:
+    """Width / height of the job's logo file, or ``None`` when the job has no logo (or it cannot be read)."""
+
+    name = (base.get("assets") or {}).get(LOGO)
+    if not name:
+        return None
+    from PIL import Image
+
+    try:
+        with Image.open(Path(str(base.get("asset_root", "."))) / str(name)) as image:
+            box = image.getchannel("A").getbbox() if "A" in image.getbands() else None
+            width, height = (box[2] - box[0], box[3] - box[1]) if box else image.size
+    except (OSError, ValueError):
+        return None
+    return round(width / max(height, 1), 3)
 
 
 @dataclass
@@ -886,7 +1094,7 @@ def _mean_score(scores: Mapping[str, Any]) -> float:
 
 def compose(base: Mapping[str, Any], variants: list[str], *, count: int = 3, seed: int | None = None, max_attempts: int = 120,
             avoid_history: bool = True, archetypes: list[str] | None = None, pool_factor: int = 3,
-            min_score: float = 60.0) -> ComposeResult:
+            min_score: float = 60.0, logo_position: str | None = None) -> ComposeResult:
     """The ``count`` best-scoring checked layouts that differ from each other and from the library's memory.
 
     Candidates are generated until a pool of ``count * pool_factor`` usable layouts exists (or attempts run
@@ -897,7 +1105,14 @@ def compose(base: Mapping[str, Any], variants: list[str], *, count: int = 3, see
     from .layouts import assess_layout
 
     content = {key: str(value) for key, value in (base.get("content") or {}).items() if str(value).strip()}
-    photos = sorted(base.get("assets") or {})
+    photos = [key for key in sorted(base.get("assets") or {}) if key != LOGO]  # the logo is never a hero photo
+    aspect = logo_aspect(base)
+    tone = logo_tones(base) if aspect else None
+    cutout_ok = True
+    if photos and base.get("asset_root"):
+        from .image_fx import cutout_suitability
+
+        cutout_ok, _why = cutout_suitability(Path(str(base["asset_root"])) / str(base["assets"][photos[0]]))
     start = seed if seed is not None else int(hashlib.sha256(repr(sorted(content.items())).encode()).hexdigest()[:8], 16)
     history = recent_fingerprints() if avoid_history else []
     style_colors = None
@@ -909,6 +1124,9 @@ def compose(base: Mapping[str, Any], variants: list[str], *, count: int = 3, see
             style_colors = get_art_style(str(style_id)).colors
         except ArtStyleError:
             style_colors = None  # an unknown style is reported by the render step
+    from .review import idea_penalties
+
+    penalties = idea_penalties()  # ideas people keep rejecting rank lower
     pool: list[tuple[float, dict[str, Any], dict[str, list[str]], dict[str, Any]]] = []
     rejected: dict[str, int] = {}
     tried: dict[str, int] = {}
@@ -917,11 +1135,11 @@ def compose(base: Mapping[str, Any], variants: list[str], *, count: int = 3, see
     while len(pool) < target and attempts < max_attempts:
         attempts += 1
         rng = random.Random(start + attempts * 7919)
-        names = archetypes or _allowed(content, photos)
+        names = archetypes or _allowed(content, photos, cutout_ok)
         least = min(tried.get(name, 0) for name in names)
         archetype = rng.choice([name for name in names if tried.get(name, 0) == least])  # spread ideas evenly
         tried[archetype] = tried.get(archetype, 0) + 1
-        spec = plan_layout(content, photos, variants, base.get("brand") or {}, start + attempts, archetype, style_colors)
+        spec = plan_layout(content, photos, variants, base.get("brand") or {}, start + attempts, archetype, style_colors, aspect, logo_position, tone, cutout_ok)
         _theme, fp, problems, scores = assess_layout(spec, base, variants)
         if problems:
             key = problems[0].split(":")[0]
@@ -936,7 +1154,7 @@ def compose(base: Mapping[str, Any], variants: list[str], *, count: int = 3, see
             continue
         pool.append((score, spec, fp, scores))
     chosen: list[tuple[float, dict[str, Any], dict[str, list[str]], dict[str, Any]]] = []
-    ranked = sorted(pool, key=lambda item: -item[0])
+    ranked = sorted(pool, key=lambda item: -(item[0] - penalties.get(str(item[1]["archetype"]), 0.0)))
     # First pass: the best option of each composition idea; second pass: fill up with the next best.
     for unique_ideas in (True, False):
         for candidate in ranked:

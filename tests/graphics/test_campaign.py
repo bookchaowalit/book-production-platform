@@ -35,7 +35,7 @@ def _isolated(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
 def plan_dir(tmp_path: Path) -> Path:
     folder = tmp_path / "plan"
     (folder / "photos").mkdir(parents=True)
-    for name in ("dog.png", "shop.jpg"):
+    for name in ("dog.png", "shop.jpg", "logo.png"):
         shutil.copy(PHOTOS / name, folder / "photos" / name)
     return folder
 
@@ -96,3 +96,16 @@ def test_cli_campaign_renders_posts_in_parallel(plan_dir: Path, tmp_path: Path, 
     assert code == 0 and printed["rendered"] == 4
     assert len(list((tmp_path / "out").glob("p*/*/*-square.png"))) == 4
     assert (tmp_path / "out" / "campaign-summary.json").is_file()
+
+
+def test_one_logo_sits_in_the_same_corner_of_every_post(plan_dir: Path, tmp_path: Path) -> None:
+    campaign = load_campaign(plan(logo="photos/logo.png", logo_position="bottom-left"), plan_dir)
+    summary = run_campaign(campaign, tmp_path / "out", seed=2, render=False)
+    assert summary["composed"] == summary["total"]
+
+    for path in (tmp_path / "layouts").glob("lay_*.json"):
+        spec = json.loads(path.read_text(encoding="utf-8"))
+        box = next(e for e in spec["elements"] if e.get("id") == "logo")["boxes"]["square"]
+        assert box["x"] < 0.5 and box["y"] > 0.5
+    with pytest.raises(CampaignError, match="logo_position"):
+        load_campaign(plan(logo="photos/logo.png", logo_position="middle"), plan_dir)

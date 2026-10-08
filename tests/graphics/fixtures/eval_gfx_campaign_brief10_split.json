@@ -1,0 +1,7 @@
+{
+ "suite": "EVAL-GFX-campaign-brief10",
+ "dev": [
+  "cb-th-01",
+  "cb-en-02"
+ ]
+}

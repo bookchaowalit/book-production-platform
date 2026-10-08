@@ -40,7 +40,7 @@ from .layouts import (
 )
 from .provider_config import ProviderConfig, ProviderConfigError, parse_provider_config
 
-DIRECTOR_VERSION = "graphics-art-director.v2"
+DIRECTOR_VERSION = "graphics-art-director.v3"
 _EXTRA_GUARD = re.compile(r"\.\./|<\s*script|javascript:|file:/|https?://|url\s*\(|\bon[a-z]+\s*=", re.IGNORECASE)
 
 SYSTEM_PROMPT = (
@@ -71,17 +71,21 @@ SYSTEM_PROMPT = (
     "once (the same photo may appear twice, e.g. a faded ghost behind and a cut-out in front); a cut-out is shown whole "
     "(fit contain), a framed photo uses fit cover with focus_x/focus_y on the subject. Texts must not overlap each "
     "other, must stay inside the canvas, and must fit: estimate lines from the text length. Never put a photo or opaque shape "
-    "over text. Inline emphasis already in the texts (*word*, **word**, ~word~) is kept as written."
+    "over text. Inline emphasis already in the texts (*word*, **word**, ~word~) is kept as written. When job.logo is set, the "
+    "engine places the brand logo in job.logo.corner (about 7% of the short side tall, with clear space around it); keep "
+    "every text out of that corner and do not add a logo element yourself."
 )
 
 
-def _job_view(base: Mapping[str, Any], variants: list[str], history: list[dict[str, Any]], look: str | None) -> dict[str, Any]:
+def _job_view(base: Mapping[str, Any], variants: list[str], history: list[dict[str, Any]], look: str | None,
+              logo_position: str | None = None) -> dict[str, Any]:
     content = {slot: text for slot, text in (base.get("content") or {}).items() if str(text).strip() and slot in TEXT_SLOTS}
     return {
         "sizes": variants,
         "texts": {slot: {"text": text, "characters": len(text), "thai": any("฀" <= char <= "๿" for char in text)}
                   for slot, text in content.items()},
-        "photos": sorted(base.get("assets") or {}),
+        "photos": [key for key in sorted(base.get("assets") or {}) if key != "logo"],
+        "logo": ({"placed_by_engine": True, "corner": logo_position or "top-right"} if (base.get("assets") or {}).get("logo") else None),
         "brand": base.get("brand") or {},
         "look": look or "",
         "recent_layouts": [{"concept": row.get("concept"), "map": (row.get("fingerprints") or {}).get(variants[0])}
@@ -149,15 +153,21 @@ class ArtDirector:
         return self.config.mode
 
     def design(self, base: Mapping[str, Any], variants: list[str], *, job_id: str, look: str | None = None,
-               locale: str = "th-TH") -> DirectorResult:
+               locale: str = "th-TH", logo_position: str | None = None) -> DirectorResult:
         """Propose, check, and (when ``save``) remember one composition (at most two model calls)."""
 
+        from .composer import add_logo, logo_aspect, logo_tones
+
         history = recent_fingerprints()
+        aspect = logo_aspect(base)
+        tone = logo_tones(base) if aspect else None
         state: dict[str, Any] = {}
 
         def accept(parsed: dict[str, Any]) -> bool:
             spec = {**{key: value for key, value in parsed.items() if key in ("concept", "palette", "background", "elements")},
                     "schema_version": LAYOUT_SCHEMA, "archetype": "art_director"}
+            if aspect:
+                spec = add_logo(spec, variants, aspect, logo_position or "top-right", tone)
             spec["layout_id"] = layout_id(spec)
             _theme, prints, problems = check_layout(spec, base, variants)
             if not problems:
@@ -176,7 +186,7 @@ class ArtDirector:
 
         guard = " ".join(str(text) for text in (base.get("content") or {}).values()) + " " + (look or "")
         user_content = (
-            f"Locale: {locale}\nJob:\n{json.dumps(_job_view(base, variants, history, look), ensure_ascii=False, separators=(',', ':'))}\n"
+            f"Locale: {locale}\nJob:\n{json.dumps(_job_view(base, variants, history, look, logo_position), ensure_ascii=False, separators=(',', ':'))}\n"
             "Design the layout JSON."
         )
         outcome = self.runner.propose(job_id=job_id, system_prompt=SYSTEM_PROMPT, user_content=user_content, guard_text=guard,

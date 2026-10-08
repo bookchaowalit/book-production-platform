@@ -40,3 +40,11 @@ def test_scattered_axes_and_edge_hugging_text_score_lower() -> None:
     clean, messy = score_ir(ir(CLEAR)), score_ir(ir(scattered))
     assert messy.parts["alignment"] < clean.parts["alignment"] and messy.parts["margins"] < clean.parts["margins"]
     assert messy.total < clean.total
+
+
+def test_a_long_empty_band_scores_lower_on_spread() -> None:
+    top_heavy = [{**text, "y": text["y"] - 250} for text in CLEAR]
+    story_empty = score_ir(ir(top_heavy, height=1920))
+    spread = score_ir(ir([{**text, "y": text["y"] + 400 * index} for index, text in enumerate(CLEAR)], height=1920))
+    assert story_empty.parts["spread"] < spread.parts["spread"]
+    assert "longest empty band" in story_empty.notes["spread"]

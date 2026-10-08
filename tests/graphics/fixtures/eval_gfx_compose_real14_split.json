@@ -1,0 +1,7 @@
+{
+ "suite": "EVAL-GFX-compose-real14",
+ "dev": [
+  "real-01-coffee-red",
+  "real-02-cappuccino-counter"
+ ]
+}

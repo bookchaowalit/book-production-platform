@@ -486,6 +486,21 @@ def layout_problems(ir: GraphicIR, behind_ids: set[str]) -> list[str]:
         elif (isinstance(node, ShapeNode) and node.kind in ("rect", "ellipse") and node.opacity >= 0.85
               and node.fill not in ("none",) and node.node_id != "bg"):
             opaque.append((node.node_id, _rect(node, dx, dy), order.get(layer, 0)))
+    for node, dx, dy, layer in _leaves(list(ir.nodes)):
+        if not (isinstance(node, ImageNode) and node.asset_key == "logo"):
+            continue
+        logo = _rect(node, dx, dy)
+        level = order.get(layer, 0)
+        pad = (logo[3] - logo[1]) * 0.4
+        zone = (logo[0] - pad, logo[1] - pad, logo[2] + pad, logo[3] + pad)
+        if logo[0] < 0 or logo[1] < 0 or logo[2] > width or logo[3] > height:
+            problems.append("logo_outside_canvas")
+        for name, box, _text_level in texts:
+            if _overlap(box, zone) > 0:
+                problems.append(f"logo_crowded:{name}")
+        for other, other_box, other_level in photos + opaque:
+            if other != node.node_id and other_level > level and _overlap(logo, other_box) > 0:
+                problems.append(f"logo_covered:{other}")
     if height >= width * 1.7:
         # Story apps draw their own UI over the top ~10% and bottom ~14%; only small print may sit there.
         for name, box, _level in texts:

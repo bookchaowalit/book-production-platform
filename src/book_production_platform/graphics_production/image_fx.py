@@ -128,6 +128,74 @@ def _cached_ai_cutout(source: Path, image: Image.Image) -> Image.Image:
     return result
 
 
+def _components(mask: list[list[bool]]) -> list[int]:
+    """Sizes of the 4-connected regions of True cells, largest first."""
+
+    height, width = len(mask), len(mask[0]) if mask else 0
+    seen = [[False] * width for _ in range(height)]
+    sizes: list[int] = []
+    for y0 in range(height):
+        for x0 in range(width):
+            if not mask[y0][x0] or seen[y0][x0]:
+                continue
+            stack, size = [(x0, y0)], 0
+            seen[y0][x0] = True
+            while stack:
+                x, y = stack.pop()
+                size += 1
+                for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                    if 0 <= nx < width and 0 <= ny < height and mask[ny][nx] and not seen[ny][nx]:
+                        seen[ny][nx] = True
+                        stack.append((nx, ny))
+            sizes.append(size)
+    return sorted(sizes, reverse=True)
+
+
+@lru_cache(maxsize=128)
+def _suitability(path: str, mtime: int, size: int, use_ai: bool) -> tuple[bool, str]:
+    del mtime, size  # cache key only
+    image = _open(Path(path))
+    cut = _cached_ai_cutout(Path(path), image) if use_ai else _plain_cutout(image, 28)
+    alpha = cut.getchannel("A").resize((160, max(1, round(160 * cut.height / max(cut.width, 1)))))
+    width, height = alpha.size
+    data = alpha.load()
+    assert data is not None
+    mask = [[int(data[x, y]) > 128 for x in range(width)] for y in range(height)]  # type: ignore[arg-type]
+    area = sum(sum(row) for row in mask)
+    share = area / (width * height)
+    if share < 0.06:
+        return False, f"subject_too_small:{share:.2f}"
+    if share > 0.8:
+        return False, f"no_background_to_remove:{share:.2f}"
+    top = sum(mask[0]) / width
+    left = sum(row[0] for row in mask) / height
+    right = sum(row[-1] for row in mask) / height
+    if top > 0.05 or left > 0.15 or right > 0.25:
+        return False, f"subject_cut_by_frame:top={top:.2f},left={left:.2f},right={right:.2f}"
+    sizes = _components(mask)
+    if sizes and sizes[0] < 0.7 * area:
+        return False, f"several_subjects:{len([s for s in sizes if s > 0.05 * area])}"
+    return True, f"ok:{share:.2f}"
+
+
+def cutout_suitability(path: str | Path) -> tuple[bool, str]:
+    """Whether a cut-out of this photo will look like one clean subject (and why not).
+
+    A cut-out sticker works for one subject on a background: a product, a pet, a person from
+    the waist up. It fails for a tiny subject in a wide scene, several separate people, a
+    subject the frame already crops at the top or sides, or a photo with nothing to remove.
+    Bottom-edge crops are fine (busts, a dog's chest). Uses the AI cut-out when installed,
+    else the plain one, and the on-disk cut-out cache.
+    """
+
+    source = Path(path)
+    try:
+        stat = source.stat()
+        return _suitability(str(source), stat.st_mtime_ns, stat.st_size, ai_cutout_available())
+    except (OSError, ImageEffectError, ValueError) as exc:
+        return False, f"unreadable:{type(exc).__name__}"
+
+
 def _ai_cutout(image: Image.Image) -> Image.Image:
     try:
         from rembg import (  # type: ignore[import-not-found,import-untyped,unused-ignore]
