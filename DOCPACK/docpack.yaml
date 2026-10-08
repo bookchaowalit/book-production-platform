@@ -1,0 +1,8 @@
+system_id: bookchaowalit/book-production-platform
+prefix: BPP
+brand: "BOOK PRODUCTION PLATFORM"
+subtitle: "สร้างงานผลิตจริง (กราฟิก 3D ตาราง CAD เสียง เกม BIM) แบบ deterministic ตรวจซ้ำได้"
+footer: "Book Production Platform — ฉบับร่างเพื่อพิจารณา"
+color: "#2f4b6e"
+audience: internal
+tier: L2
