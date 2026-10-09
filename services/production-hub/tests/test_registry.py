@@ -122,3 +122,8 @@ def test_unknown_tools_and_self_edges_are_reported() -> None:
 def test_cli_check_passes(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["check"]) == 0
     assert capsys.readouterr().out.startswith("OK: artifact.v1 schema valid;")
+
+
+def test_missing_catalog_names_the_workspace_override(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError, match="SOLO_EMPIRE_ROOT"):
+        load_catalog_tool_ids(tmp_path / "catalog" / "production-tools.yaml")
