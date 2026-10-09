@@ -1,0 +1,17 @@
+{
+  "schema_version": "data-viz-eval-split.v1",
+  "suite": "EVAL-DVZ-brief30",
+  "note": "Synthetic data only. Prompt changes may be tuned only against dev cases; held-out cases decide the gate.",
+  "dev": [
+    "s-en-01",
+    "s-th-01",
+    "s-en-02",
+    "c-en-01",
+    "c-th-01",
+    "c-en-02",
+    "amb-en-01",
+    "amb-th-01",
+    "adv-en-01",
+    "adv-th-01"
+  ]
+}

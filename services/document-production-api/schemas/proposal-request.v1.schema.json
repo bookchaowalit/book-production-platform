@@ -1,0 +1,224 @@
+{
+  "$defs": {
+    "Deliverable": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "Deliverable",
+      "type": "object"
+    },
+    "LineItemInput": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "quantity": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "title": "Quantity"
+        },
+        "unit_price": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "title": "Unit Price"
+        },
+        "tax_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "default": "0",
+          "title": "Tax Rate"
+        }
+      },
+      "required": [
+        "description",
+        "quantity",
+        "unit_price"
+      ],
+      "title": "LineItemInput",
+      "type": "object"
+    },
+    "Milestone": {
+      "additionalProperties": false,
+      "properties": {
+        "phase": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Phase",
+          "type": "string"
+        },
+        "duration": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Duration",
+          "type": "string"
+        }
+      },
+      "required": [
+        "phase",
+        "duration"
+      ],
+      "title": "Milestone",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Structured client proposal (no model calls).",
+  "properties": {
+    "schema_version": {
+      "const": "proposal-request.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "document_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Document Id",
+      "type": "string"
+    },
+    "title": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    },
+    "locale": {
+      "default": "th-TH",
+      "maxLength": 35,
+      "minLength": 2,
+      "title": "Locale",
+      "type": "string"
+    },
+    "currency": {
+      "maxLength": 12,
+      "minLength": 1,
+      "title": "Currency",
+      "type": "string"
+    },
+    "customer_name": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Customer Name",
+      "type": "string"
+    },
+    "issue_date": {
+      "format": "date",
+      "title": "Issue Date",
+      "type": "string"
+    },
+    "valid_until": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Valid Until"
+    },
+    "objective": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 20,
+      "title": "Objective",
+      "type": "array"
+    },
+    "scope": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 40,
+      "minItems": 1,
+      "title": "Scope",
+      "type": "array"
+    },
+    "deliverables": {
+      "items": {
+        "$ref": "#/$defs/Deliverable"
+      },
+      "maxItems": 40,
+      "title": "Deliverables",
+      "type": "array"
+    },
+    "timeline": {
+      "items": {
+        "$ref": "#/$defs/Milestone"
+      },
+      "maxItems": 20,
+      "title": "Timeline",
+      "type": "array"
+    },
+    "line_items": {
+      "items": {
+        "$ref": "#/$defs/LineItemInput"
+      },
+      "maxItems": 100,
+      "minItems": 1,
+      "title": "Line Items",
+      "type": "array"
+    },
+    "terms": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 20,
+      "title": "Terms",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "document_id",
+    "title",
+    "currency",
+    "customer_name",
+    "issue_date",
+    "scope",
+    "line_items"
+  ],
+  "title": "ProposalRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://solo-empire.local/schemas/document-production/proposal-request.v1.json"
+}

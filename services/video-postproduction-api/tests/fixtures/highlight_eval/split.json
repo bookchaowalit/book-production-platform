@@ -1,0 +1,15 @@
+{
+ "schema_version": "video-highlight-eval-split.v1",
+ "suite": "EVAL-VID-highlight",
+ "dev": [
+  "S01",
+  "S02",
+  "S06",
+  "C01",
+  "C02",
+  "C06",
+  "A01",
+  "A03",
+  "X01"
+ ]
+}

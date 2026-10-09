@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <title>Solo Empire Video Studio</title>
+    <link rel="stylesheet" href="/launcher.css">
+    <script src="/launcher.js" defer></script>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div class="brand" aria-label="Solo Empire Video Studio">
+          <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+          <span class="brand-name">SOLO EMPIRE <span>VIDEO STUDIO</span></span>
+        </div>
+        <span class="local-badge"><span class="local-dot"></span> ทำงานบนเครื่องนี้</span>
+      </header>
+
+      <section class="content" aria-live="polite" aria-atomic="true">
+        <div class="status-symbol" id="statusSymbol" aria-hidden="true">
+          <span class="symbol-ring"></span>
+          <span class="symbol-core"></span>
+        </div>
+        <p class="eyebrow" id="phaseLabel">กำลังเตรียมแอป</p>
+        <h1 id="statusTitle">กำลังตรวจสอบระบบ</h1>
+        <p class="status-copy" id="statusCopy">ตรวจสอบ Docker Desktop และบริการของ Video Studio</p>
+
+        <div class="service-card" aria-label="สถานะบริการ">
+          <div class="service-heading"><span>บริการ</span><span id="serviceSummary">กำลังตรวจสอบ</span></div>
+          <ul class="service-list" id="serviceList">
+            <li data-service="postgres"><span class="service-led"></span><span>ฐานข้อมูล</span><span class="service-state">รอตรวจสอบ</span></li>
+            <li data-service="redis"><span class="service-led"></span><span>คิวงาน</span><span class="service-state">รอตรวจสอบ</span></li>
+            <li data-service="api"><span class="service-led"></span><span>API</span><span class="service-state">รอตรวจสอบ</span></li>
+            <li data-service="worker"><span class="service-led"></span><span>ประมวลผล</span><span class="service-state">รอตรวจสอบ</span></li>
+            <li data-service="web"><span class="service-led"></span><span>หน้า Studio</span><span class="service-state">รอตรวจสอบ</span></li>
+          </ul>
+        </div>
+
+        <div class="actions">
+          <button class="button button-primary" id="startButton" type="button" hidden>เริ่ม Video Studio</button>
+          <button class="button button-primary" id="recoverButton" type="button" hidden>กู้คืนบริการ</button>
+          <p class="help-link" id="dockerHelp" hidden>เปิดเมนู Video Studio แล้วเลือก “วิธีติดตั้ง Docker Desktop” <span aria-hidden="true">↗</span></p>
+        </div>
+        <p class="privacy-note"><span aria-hidden="true">◈</span> โปรเจกต์และไฟล์ของคุณยังอยู่ใน Docker volumes เดิม</p>
+      </section>
+
+      <footer class="footer"><span>LOCAL VIDEO WORKSPACE</span><span>v0.1.4</span></footer>
+    </main>
+  </body>
+</html>

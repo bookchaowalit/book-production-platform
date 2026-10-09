@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://solo-empire.local/schemas/production-hub/brand-kit.v1.schema.json",
+  "title": "Production Hub brand kit",
+  "description": "One brand's shared colors, fonts, logos, and tone. Fonts and logos reference registered artifact ids, never local paths.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "brand_id", "name", "colors", "fonts"],
+  "properties": {
+    "schema_version": {"const": "brand-kit.v1"},
+    "brand_id": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$", "maxLength": 64},
+    "name": {"type": "string", "minLength": 1, "maxLength": 120},
+    "colors": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primary", "text", "background"],
+      "properties": {
+        "primary": {"$ref": "#/$defs/hex"},
+        "secondary": {"$ref": "#/$defs/hex"},
+        "accent": {"$ref": "#/$defs/hex"},
+        "text": {"$ref": "#/$defs/hex"},
+        "background": {"$ref": "#/$defs/hex"}
+      }
+    },
+    "fonts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["heading", "body"],
+      "properties": {
+        "heading": {"$ref": "#/$defs/font"},
+        "body": {"$ref": "#/$defs/font"}
+      }
+    },
+    "logos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["role", "artifact_id"],
+        "properties": {
+          "role": {"enum": ["primary", "mark", "monochrome", "inverse"]},
+          "artifact_id": {"$ref": "#/$defs/artifact_id"}
+        }
+      }
+    },
+    "tone": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "voice": {"type": "string", "maxLength": 500},
+        "language": {"type": "string", "pattern": "^[a-z]{2}(?:-[A-Z]{2})?$"},
+        "forbidden_words": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
+      }
+    }
+  },
+  "$defs": {
+    "hex": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
+    "artifact_id": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "font": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["family"],
+      "properties": {
+        "family": {"type": "string", "minLength": 1, "maxLength": 120},
+        "artifact_id": {"$ref": "#/$defs/artifact_id"}
+      }
+    }
+  }
+}

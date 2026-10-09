@@ -1,0 +1,81 @@
+# Which artifact kinds each cataloged production tool produces and consumes.
+# `produces`/`consumes` describe shipped behavior; `planned_*` lists kinds a
+# planned handoff (registry/handoffs.yaml) still needs. Tool ids must match
+# catalog/production-tools.yaml exactly.
+schema_version: tool-io.v1
+tools:
+  documents-v1a:
+    produces: [document.docx, document.pdf, qa.manifest]
+    consumes: [document.scan, transcript, dataset.table, chart.svg, cad.fcstd]
+    planned_produces: [dataset.table]
+    planned_consumes: [workbook.xlsx, brand.kit]
+  data-viz-v1a:
+    produces: [dataset.table, chart.svg]
+    consumes: [dataset.table]
+    planned_produces: [chart.png]
+    planned_consumes: []
+  marketing-v1a:
+    produces: [campaign.package, copy.text, qa.manifest]
+    consumes: [captions.srt]
+    planned_produces: []
+    planned_consumes: [brand.kit]
+  web-v1a:
+    produces: [web.page, qa.manifest]
+    consumes: [copy.text, brand.kit, graphic.png]
+    planned_produces: []
+    planned_consumes: []
+  workflow-v1a:
+    produces: [workflow.plan]
+    consumes: []
+    planned_produces: []
+    planned_consumes: []
+  video-studio:
+    produces: [transcript, edl, video.render, captions.srt, captions.vtt, audio.track]
+    consumes: [video.source, audio.master, graphic.png]
+    planned_produces: []
+    planned_consumes: [brand.kit]
+  audio-batch-v1a:
+    produces: [audio.track, qa.manifest]
+    consumes: [audio.track]
+    planned_produces: []
+    planned_consumes: []
+  scene3d-v1a:
+    produces: [scene3d.blend, image.render, qa.manifest]
+    consumes: [model3d.glb, cad.stl]
+    planned_produces: []
+    planned_consumes: []
+  graphics-v1a:
+    produces: [graphic.svg, graphic.png, graphic.pdf]
+    consumes: [image.render, chart.svg, copy.text, brand.kit]
+    planned_produces: []
+    planned_consumes: []
+  spreadsheet-v1a:
+    produces: [workbook.xlsx]
+    consumes: [dataset.table, bim.takeoff]
+    planned_produces: []
+    planned_consumes: []
+  data-pipeline-v1a:
+    produces: [sql.pipeline, qa.manifest]
+    consumes: []
+    planned_produces: []
+    planned_consumes: []
+  cad-v1a:
+    produces: [cad.fcstd, cad.step, cad.stl, image.render, qa.manifest]
+    consumes: []
+    planned_produces: [cad.drawing.pdf]
+    planned_consumes: []
+  bim-v1a:
+    produces: [bim.takeoff, qa.manifest]
+    consumes: [bim.ifc]
+    planned_produces: []
+    planned_consumes: []
+  audio-master-v1a:
+    produces: [audio.master, qa.manifest]
+    consumes: [audio.track]
+    planned_produces: []
+    planned_consumes: []
+  game-v1a:
+    produces: [game.unity-project, qa.manifest]
+    consumes: [audio.master]
+    planned_produces: [game.build]
+    planned_consumes: [model3d.glb]

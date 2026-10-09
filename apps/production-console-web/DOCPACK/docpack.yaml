@@ -1,0 +1,8 @@
+system_id: production-console-web
+prefix: PCW
+brand: "PRODUCTION CONSOLE"
+subtitle: "หน้าเว็บในเครื่องสำหรับคลังไฟล์งานผลิต lineage การส่งต่อ การตรวจงาน และแพ็กเกจส่งมอบบน Production Hub"
+footer: "Production Console — ฉบับร่างเพื่อพิจารณา"
+color: "#2f5d50"
+audience: internal
+tier: L1

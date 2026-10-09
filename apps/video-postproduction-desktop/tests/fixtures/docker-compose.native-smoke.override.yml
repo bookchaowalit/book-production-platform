@@ -1,0 +1,22 @@
+# Fixed manual-smoke contract; keep identity, loopback ports, and origins
+# in sync with scripts/smoke-runtime.js.
+name: video-postproduction-native-smoke-test
+services:
+  api:
+    image: video-postproduction-api:native-smoke-test
+    # Isolated API host port; the paired web smoke origin is 127.0.0.1:13400.
+    ports: !override
+      - "127.0.0.1:18000:8000"
+    environment:
+      CORS_ALLOWED_ORIGINS: http://127.0.0.1:13400
+  worker:
+    image: video-postproduction-api:native-smoke-test
+  web:
+    image: video-postproduction-web:native-smoke-test
+    ports: !override
+      - "127.0.0.1:13400:3000"
+    build:
+      args:
+        NEXT_PUBLIC_VIDEO_POSTPRODUCTION_API_ORIGIN: http://127.0.0.1:18000
+    environment:
+      NEXT_PUBLIC_VIDEO_POSTPRODUCTION_API_ORIGIN: http://127.0.0.1:18000

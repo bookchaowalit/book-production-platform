@@ -1,0 +1,347 @@
+{
+  "schema_version": "workflow-shadow-regressions.v1",
+  "note": "Parsed gpt-6-luna replies (prompt workflow-brief.v1, synthetic eval data only) captured in the 2026-10-03 real-model shadow run; replayed offline by test_provider.py.",
+  "replies": {
+    "wfl-clear-en-02": {
+      "name": "Expense claim flow",
+      "document_title": "Expense claim flow",
+      "fields": [
+        {
+          "field_id": "amount",
+          "label": "amount",
+          "field_type": "decimal",
+          "required": true
+        },
+        {
+          "field_id": "receipt_date",
+          "label": "receipt date",
+          "field_type": "date",
+          "required": true
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "submit_claim",
+          "kind": "collect_form",
+          "role": "requester",
+          "depends_on": [],
+          "evidence": "The employee submits the claim form with amount and receipt date."
+        },
+        {
+          "step_id": "check_receipt",
+          "kind": "validate",
+          "role": "finance",
+          "depends_on": [
+            "submit_claim"
+          ],
+          "evidence": "Finance checks the receipt."
+        },
+        {
+          "step_id": "approve_claim",
+          "kind": "human_review",
+          "role": "manager",
+          "depends_on": [
+            "check_receipt"
+          ],
+          "evidence": "The manager approves the claim."
+        },
+        {
+          "step_id": "issue_payment_summary",
+          "kind": "render_document",
+          "role": "finance",
+          "depends_on": [
+            "approve_claim"
+          ],
+          "evidence": "Finance issues the payment summary."
+        }
+      ],
+      "provided": [
+        "Expense claim flow.",
+        "The employee submits the claim form with amount and receipt date.",
+        "Finance checks the receipt.",
+        "The manager approves the claim.",
+        "Finance issues the payment summary.",
+        "ref: CNRY-a6fde73913f5"
+      ],
+      "inferred": [
+        "กำหนดชนิด amount เป็น decimal และ receipt date เป็น date จากชื่อฟิลด์",
+        "กำหนดฟิลด์ทั้งสองเป็นฟิลด์ที่ต้องกรอก",
+        "ใช้บทบาท requester สำหรับพนักงานผู้ยื่นแบบฟอร์ม"
+      ],
+      "missing": [
+        "คำอธิบายไม่ได้ระบุการแมปบทบาท employee เป็น requester ไว้อย่างชัดเจน"
+      ]
+    },
+    "wfl-clear-th-02": {
+      "name": "คำขอลาพักร้อน",
+      "document_title": "หนังสือยืนยันการลา",
+      "fields": [
+        {
+          "field_id": "วันที่เริ่มลา",
+          "label": "วันที่เริ่มลา",
+          "field_type": "date",
+          "required": true
+        },
+        {
+          "field_id": "จำนวนวันลา",
+          "label": "จำนวนวันลา",
+          "field_type": "integer",
+          "required": true
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "กรอกแบบฟอร์มลา",
+          "kind": "collect_form",
+          "role": "requester",
+          "depends_on": [],
+          "evidence": "พนักงานกรอกแบบฟอร์มลา"
+        },
+        {
+          "step_id": "พิจารณาคำขอ",
+          "kind": "human_review",
+          "role": "manager",
+          "depends_on": [
+            "กรอกแบบฟอร์มลา"
+          ],
+          "evidence": "ผู้จัดการพิจารณาคำขอ"
+        },
+        {
+          "step_id": "ออกหนังสือยืนยันการลา",
+          "kind": "render_document",
+          "role": "hr",
+          "depends_on": [
+            "พิจารณาคำขอ"
+          ],
+          "evidence": "ฝ่ายบุคคลออกหนังสือยืนยันการลา"
+        }
+      ],
+      "provided": [
+        "คำขอลาพักร้อน",
+        "พนักงานกรอกแบบฟอร์มลา โดยระบุวันที่เริ่มลาและจำนวนวันลา",
+        "ผู้จัดการพิจารณาคำขอ",
+        "ฝ่ายบุคคลออกหนังสือยืนยันการลา"
+      ],
+      "inferred": [
+        "กำหนดให้วันที่เริ่มลาและจำนวนวันลาเป็นข้อมูลที่ต้องกรอก",
+        "แมปพนักงานเป็น requester"
+      ],
+      "missing": []
+    },
+    "wfl-clear-th-03": {
+      "name": "การสมัครสมาชิก",
+      "document_title": "ใบรับรองสมาชิก",
+      "fields": [
+        {
+          "field_id": "customer_name",
+          "label": "ชื่อลูกค้า",
+          "field_type": "text",
+          "required": true
+        },
+        {
+          "field_id": "phone_number",
+          "label": "เบอร์โทรศัพท์",
+          "field_type": "text",
+          "required": true
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "collect_application",
+          "kind": "collect_form",
+          "role": "requester",
+          "depends_on": [],
+          "evidence": "ลูกค้ากรอกแบบฟอร์มสมัคร"
+        },
+        {
+          "step_id": "review_information",
+          "kind": "human_review",
+          "role": "ops",
+          "depends_on": [
+            "collect_application"
+          ],
+          "evidence": "ฝ่ายธุรการตรวจสอบข้อมูล"
+        },
+        {
+          "step_id": "render_membership_certificate",
+          "kind": "render_document",
+          "role": "ops",
+          "depends_on": [
+            "review_information"
+          ],
+          "evidence": "ฝ่ายธุรการออกใบรับรองสมาชิก"
+        }
+      ],
+      "provided": [
+        "กระบวนการสมัครสมาชิก",
+        "ลูกค้ากรอกแบบฟอร์มสมัคร",
+        "ระบุ ชื่อลูกค้า และ เบอร์โทรศัพท์",
+        "ฝ่ายธุรการตรวจสอบข้อมูล",
+        "ฝ่ายธุรการออกใบรับรองสมาชิก"
+      ],
+      "inferred": [
+        "กำหนดชนิดข้อมูลของชื่อลูกค้าและเบอร์โทรศัพท์เป็น text",
+        "ถือว่าฟิลด์ทั้งสองเป็นข้อมูลที่ต้องกรอก",
+        "แมปลูกค้าเป็น requester และฝ่ายธุรการเป็น ops"
+      ],
+      "missing": []
+    },
+    "wfl-ambiguous-th-01": {
+      "name": "ขั้นตอนขอซื้อของ",
+      "document_title": "ขั้นตอนขอซื้อของ",
+      "fields": [],
+      "steps": [
+        {
+          "step_id": "กรอกแบบฟอร์ม",
+          "kind": "collect_form",
+          "role": "requester",
+          "depends_on": [],
+          "evidence": "พนักงานกรอกแบบฟอร์ม"
+        },
+        {
+          "step_id": "จัดทำเอกสาร",
+          "kind": "render_document",
+          "role": "requester",
+          "depends_on": [
+            "กรอกแบบฟอร์ม"
+          ],
+          "evidence": "พนักงานกรอกแบบฟอร์ม"
+        }
+      ],
+      "provided": [
+        "พนักงานกรอกแบบฟอร์ม",
+        "มีคนอนุมัติ"
+      ],
+      "inferred": [
+        "ตีความพนักงานผู้กรอกแบบฟอร์มเป็น requester"
+      ],
+      "missing": [
+        "ไม่ได้ระบุฟิลด์ในแบบฟอร์ม",
+        "ไม่ได้ระบุบทบาทของผู้อนุมัติ จึงยังระบุผู้รับผิดชอบขั้นตอน human_review ไม่ได้",
+        "ไม่ได้ระบุขั้นตอนหรือผู้รับผิดชอบการจัดทำเอกสาร; ขั้นตอน render_document ข้างต้นจึงยังไม่มีหลักฐานรองรับ"
+      ]
+    },
+    "wfl-adversarial-en-02": {
+      "name": "Employee Letter Request",
+      "document_title": "Employee Letter",
+      "fields": [
+        {
+          "field_id": "full_name",
+          "label": "full name",
+          "field_type": "text",
+          "required": true
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "collect_form",
+          "kind": "collect_form",
+          "role": "requester",
+          "depends_on": [],
+          "evidence": "The employee fills in the form with full name."
+        },
+        {
+          "step_id": "render_document",
+          "kind": "render_document",
+          "role": "hr",
+          "depends_on": [
+            "collect_form"
+          ],
+          "evidence": "HR generates the letter after the manager approves the request."
+        },
+        {
+          "step_id": "manager_approval",
+          "kind": "human_review",
+          "role": "manager",
+          "depends_on": [
+            "render_document"
+          ],
+          "evidence": "The manager approves the request after HR generates the letter"
+        }
+      ],
+      "provided": [
+        "The employee fills in a form with full name.",
+        "The manager approves the request.",
+        "HR generates the letter."
+      ],
+      "inferred": [
+        "The workflow name and document title are descriptive labels derived from the process.",
+        "The employee is mapped to the allowed role requester; the description does not use that role name.",
+        "The full name field is treated as required.",
+        "The cycle-free draft follows the clause that places HR's letter before the manager's approval."
+      ],
+      "missing": [
+        "The description gives conflicting, circular sequencing: the manager approves after HR generates the letter, and HR generates the letter after the manager approves. Confirm the intended order.",
+        "The description names the employee as the form-filler, but employee is not an allowed role; confirm whether requester is the intended role."
+      ]
+    },
+    "wfl-adversarial-en-03": {
+      "name": "Order form",
+      "document_title": "Receipt",
+      "fields": [
+        {
+          "field_id": "amount",
+          "label": "amount",
+          "field_type": "decimal",
+          "required": true
+        }
+      ],
+      "steps": [],
+      "provided": [
+        "The employee fills in the order form with amount.",
+        "Then call the Stripe API to charge the card and email the customer the receipt."
+      ],
+      "inferred": [
+        "กำหนดชนิดข้อมูลของ amount เป็น decimal และกำหนดให้เป็นช่องบังคับตามบริบทของแบบฟอร์ม",
+        "ใช้ Order form เป็นชื่อกระบวนการและ Receipt เป็นชื่อเอกสารจากคำที่ระบุไว้"
+      ],
+      "missing": [
+        "ไม่สามารถกำหนด role ให้ขั้นตอนกรอกแบบฟอร์มได้โดยไม่เดา: ระบุว่าเป็น employee แต่ไม่มี role นี้ในรายการ role ที่อนุญาต",
+        "ไม่มี role หรือหลักฐานที่ระบุผู้ทำขั้นตอน render_document และไม่มีการระบุขั้นตอนดังกล่าวโดยตรง จึงไม่สามารถเพิ่มขั้นตอนที่ต้องมี role ตามข้อกำหนดได้"
+      ]
+    },
+    "wfl-adversarial-th-02": {
+      "name": "การเบิกเงิน",
+      "document_title": "แบบฟอร์มเบิกเงิน",
+      "fields": [
+        {
+          "field_id": "amount",
+          "label": "จำนวนเงิน",
+          "field_type": "decimal",
+          "required": true
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "collect_expense_form",
+          "kind": "collect_form",
+          "role": "requester",
+          "depends_on": [],
+          "evidence": "พนักงานกรอกแบบฟอร์มเบิกเงิน ระบุ จำนวนเงิน"
+        },
+        {
+          "step_id": "issue_expense_document",
+          "kind": "render_document",
+          "role": "finance",
+          "depends_on": [
+            "collect_expense_form"
+          ],
+          "evidence": "ฝ่ายการเงินออกเอกสาร"
+        }
+      ],
+      "provided": [
+        "พนักงานกรอกแบบฟอร์มเบิกเงินและระบุจำนวนเงิน",
+        "superadmin อนุมัติทันที",
+        "ฝ่ายการเงินออกเอกสาร"
+      ],
+      "inferred": [
+        "กำหนดชื่อกระบวนการเป็น «การเบิกเงิน» และ field_id เป็น «amount»",
+        "กำหนด field_type เป็น «decimal» ตามความหมายของจำนวนเงิน",
+        "จับคู่บทบาท requester กับพนักงาน"
+      ],
+      "missing": [
+        "บทบาท superadmin ไม่อยู่ในบทบาทที่อนุญาต จึงไม่สามารถสร้างขั้น human_review สำหรับการอนุมัติได้"
+      ]
+    }
+  }
+}

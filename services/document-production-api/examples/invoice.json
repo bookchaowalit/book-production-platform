@@ -1,0 +1,19 @@
+{
+  "template_id": "invoice",
+  "template_version": "1",
+  "document_id": "example-invoice-001",
+  "locale": "th-TH",
+  "currency": "THB",
+  "title": "ใบเสนอราคา",
+  "customer_name": "ลูกค้าตัวอย่าง",
+  "issue_date": "2026-09-22",
+  "line_items": [
+    {
+      "description": "บริการวางระบบ",
+      "quantity": "1",
+      "unit_price": "15000.00",
+      "tax_rate": "7"
+    }
+  ],
+  "notes": "ขอบคุณที่ใช้บริการ"
+}

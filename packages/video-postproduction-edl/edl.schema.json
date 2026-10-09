@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://solo-empire.local/schemas/video-postproduction/edl.v1.json",
+  "title": "AI Post-Production Edit Decision List",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "project_id",
+    "source_assets",
+    "timeline",
+    "assets",
+    "output",
+    "capabilities"
+  ],
+  "properties": {
+    "version": {"const": 1},
+    "project_id": {"type": "string", "format": "uuid"},
+    "source_assets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/sourceAsset"}
+    },
+    "timeline": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/timelineSegment"}
+    },
+    "assets": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/assetReference"}
+    },
+    "output": {"$ref": "#/$defs/output"},
+    "capabilities": {"$ref": "#/$defs/capabilities"}
+  },
+  "$defs": {
+    "uuid": {"type": "string", "format": "uuid"},
+    "sourceAsset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["asset_id", "storage_key", "duration"],
+      "properties": {
+        "asset_id": {"$ref": "#/$defs/uuid"},
+        "storage_key": {"type": "string", "minLength": 1},
+        "duration": {"type": "number", "minimum": 0}
+      }
+    },
+    "sourceRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["asset_id", "start", "end"],
+      "properties": {
+        "asset_id": {"$ref": "#/$defs/uuid"},
+        "start": {"type": "number", "minimum": 0},
+        "end": {"type": "number", "exclusiveMinimum": 0}
+      }
+    },
+    "reframe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "aspect_ratio"],
+      "properties": {
+        "mode": {"enum": ["center", "active_speaker"]},
+        "aspect_ratio": {"enum": ["9:16", "16:9", "1:1"]}
+      }
+    },
+    "visual": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "asset_refs"],
+      "properties": {
+        "kind": {"enum": ["a_roll", "asset", "stock", "graphic", "generated_video"]},
+        "reframe": {"$ref": "#/$defs/reframe"},
+        "asset_refs": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "captions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "source", "format", "preset"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "source": {"enum": ["transcript", "manual"]},
+        "format": {"enum": ["srt", "ass"]},
+        "preset": {"enum": ["minimal", "bold", "karaoke", "emphasis"]}
+      }
+    },
+    "operations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operations"],
+      "properties": {"operations": {"type": "array", "items": {"type": "object"}}}
+    },
+    "timelineSegment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "source", "visual", "captions", "audio", "color", "provenance"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "source": {"$ref": "#/$defs/sourceRange"},
+        "visual": {"$ref": "#/$defs/visual"},
+        "captions": {"$ref": "#/$defs/captions"},
+        "audio": {"$ref": "#/$defs/operations"},
+        "color": {"$ref": "#/$defs/operations"},
+        "provenance": {"type": "object"}
+      }
+    },
+    "assetReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "provenance"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "kind": {"enum": ["asset", "stock", "graphic", "generated_video", "music", "sfx"]},
+        "storage_key": {"type": ["string", "null"]},
+        "provenance": {"type": "object"}
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height", "fps", "format"],
+      "properties": {
+        "width": {"type": "integer", "exclusiveMinimum": 0},
+        "height": {"type": "integer", "exclusiveMinimum": 0},
+        "fps": {"type": "number", "exclusiveMinimum": 0},
+        "format": {"const": "mp4"},
+        "render_profile": {"enum": ["vertical_centered", "source"], "default": "vertical_centered"}
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required"],
+      "properties": {"required": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}}
+    }
+  }
+}

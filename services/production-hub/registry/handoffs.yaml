@@ -1,0 +1,144 @@
+# Cross-tool handoff edges. `implemented` edges run today and must cite a
+# request contract and evidence file; `planned` edges are the Production Hub
+# backlog (spec 2026-09-30 §3.4) and may use request_contract: tbd.
+# from_tool `external` means the kind enters from outside the catalog (for
+# example a client-supplied GLB). to_tool `production-hub` is the Hub itself.
+schema_version: handoffs.v1
+handoffs:
+  - id: T6.1-scene-to-graphics
+    from_tool: scene3d-v1a
+    from_kind: image.render
+    to_tool: graphics-v1a
+    request_contract: scene-render-batch.v1
+    status: implemented
+    evidence: docs/superpowers/plans/2026-09-26-production-tools-roadmap.md
+  - id: T6.2-video-to-audio
+    from_tool: video-studio
+    from_kind: audio.track
+    to_tool: audio-batch-v1a
+    request_contract: audio-batch.v1
+    status: implemented
+    evidence: services/video-postproduction/README.md
+  - id: T6.2-transcript-to-documents
+    from_tool: video-studio
+    from_kind: transcript
+    to_tool: documents-v1a
+    request_contract: transcript-artifact.v1
+    status: implemented
+    evidence: services/video-postproduction/README.md
+  - id: T6.3-dataset-to-spreadsheet
+    from_tool: data-viz-v1a
+    from_kind: dataset.table
+    to_tool: spreadsheet-v1a
+    request_contract: workbook-request.v1
+    status: implemented
+    evidence: services/production-pipelines/README.md
+  - id: T6.3-dataset-to-documents
+    from_tool: data-viz-v1a
+    from_kind: dataset.table
+    to_tool: documents-v1a
+    request_contract: report-document-request.v1
+    status: implemented
+    evidence: services/production-pipelines/README.md
+  - id: E1-master-to-video
+    from_tool: audio-master-v1a
+    from_kind: audio.master
+    to_tool: video-studio
+    request_contract: video-remux.v1
+    status: implemented
+    evidence: services/video-postproduction/README.md
+  - id: E2-captions-to-marketing
+    from_tool: video-studio
+    from_kind: captions.srt
+    to_tool: marketing-v1a
+    request_contract: campaign-request.v1
+    status: implemented
+    evidence: docs/superpowers/specs/2026-09-30-production-hub-and-tool-coverage-design.md
+  - id: E3-graphic-to-video
+    from_tool: graphics-v1a
+    from_kind: graphic.png
+    to_tool: video-studio
+    request_contract: video-overlay.v1
+    status: implemented
+    evidence: services/video-postproduction/README.md
+  - id: E4-chart-to-graphics
+    from_tool: data-viz-v1a
+    from_kind: chart.svg
+    to_tool: graphics-v1a
+    request_contract: graphics-batch.v1
+    status: implemented
+    evidence: docs/superpowers/specs/2026-09-30-production-hub-and-tool-coverage-design.md
+  - id: E5-chart-to-documents
+    from_tool: data-viz-v1a
+    from_kind: chart.svg
+    to_tool: documents-v1a
+    request_contract: report-document-request.v1
+    status: implemented
+    evidence: docs/superpowers/specs/2026-09-30-production-hub-and-tool-coverage-design.md
+  - id: E6-copy-to-graphics
+    from_tool: marketing-v1a
+    from_kind: copy.text
+    to_tool: graphics-v1a
+    request_contract: graphics-batch.v1
+    status: implemented
+    evidence: docs/superpowers/specs/2026-09-30-production-hub-and-tool-coverage-design.md
+  - id: E7a-copy-to-web
+    from_tool: marketing-v1a
+    from_kind: copy.text
+    to_tool: web-v1a
+    request_contract: page-request.v1
+    status: implemented
+    evidence: docs/superpowers/specs/2026-09-30-production-hub-and-tool-coverage-design.md
+  - id: E7b-graphic-to-web
+    from_tool: graphics-v1a
+    from_kind: graphic.png
+    to_tool: web-v1a
+    request_contract: page-request.v1
+    status: implemented
+    evidence: docs/superpowers/specs/2026-09-30-production-hub-and-tool-coverage-design.md
+  - id: E8-ocr-table-to-data
+    from_tool: documents-v1a
+    from_kind: dataset.table
+    to_tool: data-viz-v1a
+    request_contract: tbd
+    status: planned
+  - id: E9-cad-to-scene
+    from_tool: cad-v1a
+    from_kind: cad.stl
+    to_tool: scene3d-v1a
+    request_contract: scene-ir.v1
+    status: implemented
+    evidence: docs/superpowers/specs/2026-09-30-production-hub-and-tool-coverage-design.md
+  - id: E10-cad-to-documents
+    from_tool: cad-v1a
+    from_kind: cad.fcstd
+    to_tool: documents-v1a
+    request_contract: spec-sheet-request.v1
+    status: implemented
+    evidence: docs/superpowers/specs/2026-09-30-production-hub-and-tool-coverage-design.md
+  - id: E11-takeoff-to-spreadsheet
+    from_tool: bim-v1a
+    from_kind: bim.takeoff
+    to_tool: spreadsheet-v1a
+    request_contract: workbook-request.v1
+    status: implemented
+    evidence: docs/superpowers/specs/2026-09-30-production-hub-and-tool-coverage-design.md
+  - id: E12a-model-to-game
+    from_tool: external
+    from_kind: model3d.glb
+    to_tool: game-v1a
+    request_contract: tbd
+    status: planned
+  - id: E12b-audio-to-game
+    from_tool: audio-master-v1a
+    from_kind: audio.master
+    to_tool: game-v1a
+    request_contract: game-ir.v2
+    status: implemented
+    evidence: docs/superpowers/specs/2026-09-30-production-hub-flows-and-game-assets-design.md
+  - id: E13-workflow-to-hub
+    from_tool: workflow-v1a
+    from_kind: workflow.plan
+    to_tool: production-hub
+    request_contract: tbd
+    status: planned

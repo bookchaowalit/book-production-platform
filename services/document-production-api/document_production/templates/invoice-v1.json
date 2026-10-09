@@ -1,0 +1,6 @@
+{
+  "template_id": "invoice",
+  "template_version": "1",
+  "recipe": "invoice-v1",
+  "outputs": ["docx", "pdf"]
+}

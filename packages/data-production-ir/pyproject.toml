@@ -1,0 +1,8 @@
+[project]
+name = "solo-empire-data-production-ir"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = ["pydantic>=2.13.5,<3.0"]
+
+[tool.pytest.ini_options]
+addopts = "-q"

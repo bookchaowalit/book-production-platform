@@ -1,0 +1,8 @@
+system_id: video-postproduction-desktop
+prefix: VPD
+brand: "VIDEO STUDIO DESKTOP"
+subtitle: "แอป Windows (Electron) สำหรับเปิดและดูแล runtime ของ Video Post-production แบบ local-first"
+footer: "Solo Empire Video Studio — ฉบับร่างเพื่อพิจารณา"
+color: "#3a3a6a"
+audience: internal
+tier: L1

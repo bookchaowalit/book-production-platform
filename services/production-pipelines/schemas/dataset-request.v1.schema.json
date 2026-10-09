@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:solo-empire:production-pipelines:dataset-request.v1",
+  "title": "DatasetRequest v1 (consumer-side boundary validator)",
+  "description": "Consumer-side structural validation of the dataset-request.v1 payloads this orchestrator emits for the Data + Data Viz stages. The owning contract lives in packages/data-production-ir (pydantic models); this copy only validates the shape this pipeline emits and does not transfer ownership. Upstream semantic rules (typed value parsing, transform column checks) are enforced by the receiving service.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "dataset_id", "csv_text"],
+  "properties": {
+    "schema_version": {"const": "dataset-request.v1"},
+    "dataset_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$"},
+    "title": {"type": "string", "minLength": 1, "maxLength": 200},
+    "csv_text": {"type": "string", "minLength": 1, "maxLength": 2000000},
+    "delimiter": {"enum": [",", ";", "\t"]},
+    "columns": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "label", "data_type"],
+        "properties": {
+          "key": {"type": "string", "minLength": 1},
+          "label": {"type": "string", "minLength": 1},
+          "data_type": {"enum": ["text", "integer", "decimal", "date", "boolean"]},
+          "required": {"type": "boolean"},
+          "source_name": {"type": ["string", "null"], "minLength": 1}
+        }
+      }
+    },
+    "transforms": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["op"],
+        "properties": {
+          "op": {"enum": ["trim_text", "fill_null", "filter_equals", "sort_by"]},
+          "column": {"type": ["string", "null"]},
+          "value": {},
+          "direction": {"enum": ["asc", "desc"]}
+        }
+      }
+    },
+    "chart": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["x_column"],
+      "properties": {
+        "chart_type": {"enum": ["bar", "line"]},
+        "x_column": {"type": "string", "minLength": 1},
+        "y_column": {"type": ["string", "null"]},
+        "aggregation": {"enum": ["sum", "count", "avg"]},
+        "title": {"type": "string"},
+        "x_axis_label": {"type": ["string", "null"], "minLength": 1},
+        "y_axis_label": {"type": ["string", "null"], "minLength": 1},
+        "value_unit": {"type": ["string", "null"], "minLength": 1},
+        "width": {"type": "integer", "minimum": 240, "maximum": 4096},
+        "height": {"type": "integer", "minimum": 180, "maximum": 4096}
+      }
+    },
+    "source_ref": {"type": "string", "minLength": 1}
+  }
+}

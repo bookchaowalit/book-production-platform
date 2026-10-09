@@ -4,6 +4,23 @@
 adapter และ engine ที่ตรวจสอบซ้ำได้ ใช้กฎ โปรแกรม และ API กับงานที่ทำซ้ำได้
 แล้วเรียกโมเดลเฉพาะขั้นที่ต้องใช้ความสามารถเชิงกำเนิดจริง ๆ
 
+## โครงสร้าง repository
+
+- `src/book_production_platform/` — engine ที่เรียกผ่าน `book-production` CLI
+  (scene, graphics, game, spreadsheet, audio, cad, data, bim)
+- `services/` — production API และ runtime ที่รันแยกได้ ย้ายมาจาก Solo Empire
+  root เมื่อ 2026-10-09 (documents, data-viz, marketing, web, workflow,
+  video post-production, production hub, production pipelines)
+- `packages/` — IR และ library ที่ `services/` ติดตั้งตรง ๆ; `brief-adapter-kit`,
+  `production-trace` และ `file-intake` มีสำเนาใน `src/` ที่
+  `tests/test_vendored_packages_parity.py` ตรวจว่าตรงกัน
+- `apps/` — หน้าเว็บและแอป desktop ของ production (production console,
+  video studio web/desktop)
+
+แต่ละ service และ package มี `pyproject.toml`/`package.json` และเทสต์ของตัวเอง
+รันจากโฟลเดอร์นั้น production hub อ่าน `catalog/production-tools.yaml` จาก
+Solo Empire workspace ที่ครอบ checkout นี้อยู่ หรือจาก `SOLO_EMPIRE_ROOT`
+
 ## Doctor — ตรวจ runtime และความพร้อมของแต่ละ product
 
 `book-production doctor` ตรวจ runtime ในเครื่องแบบ offline (python,

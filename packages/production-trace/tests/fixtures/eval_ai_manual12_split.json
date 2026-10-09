@@ -1,0 +1,8 @@
+{
+ "suite": "EVAL-MANUAL-12",
+ "dev": [
+  "man-c-01",
+  "man-a-01",
+  "man-x-01"
+ ]
+}

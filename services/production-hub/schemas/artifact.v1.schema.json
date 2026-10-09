@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://solo-empire.local/schemas/production-hub/artifact.v1.schema.json",
+  "title": "Production Hub artifact record",
+  "description": "One content-addressed file known to the Production Hub. Paths are relative; lineage points at input artifact ids.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_id",
+    "kind",
+    "media_type",
+    "byte_size",
+    "filename",
+    "producer",
+    "lineage",
+    "qa",
+    "privacy_class",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "artifact.v1"},
+    "artifact_id": {"$ref": "#/$defs/artifact_id"},
+    "kind": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$",
+      "maxLength": 64
+    },
+    "media_type": {
+      "type": "string",
+      "pattern": "^[a-z]+/[A-Za-z0-9.+-]+$",
+      "maxLength": 128
+    },
+    "byte_size": {"type": "integer", "minimum": 0},
+    "filename": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^[^/\\\\:]+$"
+    },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool_id", "tool_version", "job_id"],
+      "properties": {
+        "tool_id": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
+        "tool_version": {"type": "string", "minLength": 1, "maxLength": 64},
+        "recipe_version": {"type": "string", "minLength": 1, "maxLength": 64},
+        "job_id": {"type": "string", "minLength": 1, "maxLength": 128}
+      }
+    },
+    "lineage": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/artifact_id"}
+    },
+    "project_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "brand_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "qa": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {"enum": ["accepted", "rejected", "needs_review"]},
+        "manifest_ref": {"type": "string", "minLength": 1, "maxLength": 512}
+      }
+    },
+    "privacy_class": {"enum": ["public", "internal", "client-confidential", "personal"]},
+    "attributes": {"type": "object"},
+    "created_at": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "artifact_id": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

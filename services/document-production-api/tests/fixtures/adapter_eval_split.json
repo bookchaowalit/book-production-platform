@@ -1,0 +1,17 @@
+{
+  "schema_version": "documents-eval-split.v1",
+  "suite": "EVAL-DOC-brief60",
+  "note": "Prompt changes may be tuned only against dev cases; held-out cases decide the gate.",
+  "dev": [
+    "clear-en-01",
+    "clear-th-01",
+    "amb-en-01",
+    "amb-th-01",
+    "adv-en-injection",
+    "adv-th-injection",
+    "ft-clear-en-01",
+    "ft-clear-th-01",
+    "ft-amb-en-01",
+    "ft-amb-th-01"
+  ]
+}

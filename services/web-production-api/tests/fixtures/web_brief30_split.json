@@ -1,0 +1,39 @@
+{
+  "schema_version": "web-eval-split.v1",
+  "suite": "EVAL-WEB-brief30",
+  "note": "Prompt changes may be tuned only against dev cases; held-out cases decide the gate.",
+  "dev": [
+    "web-structured-en-01",
+    "web-structured-th-01",
+    "web-structured-en-02",
+    "web-clear-en-01",
+    "web-clear-th-01",
+    "web-clear-en-02",
+    "web-ambiguous-en-01",
+    "web-ambiguous-th-01",
+    "web-adversarial-en-01",
+    "web-adversarial-th-01"
+  ],
+  "held_out": [
+    "web-structured-en-03",
+    "web-structured-en-04",
+    "web-structured-en-05",
+    "web-structured-th-02",
+    "web-structured-th-03",
+    "web-structured-th-04",
+    "web-structured-th-05",
+    "web-clear-en-03",
+    "web-clear-en-04",
+    "web-clear-en-05",
+    "web-clear-th-02",
+    "web-clear-th-03",
+    "web-clear-th-04",
+    "web-clear-th-05",
+    "web-ambiguous-en-02",
+    "web-ambiguous-th-02",
+    "web-ambiguous-th-03",
+    "web-adversarial-en-02",
+    "web-adversarial-en-03",
+    "web-adversarial-th-02"
+  ]
+}

@@ -1,0 +1,242 @@
+# Everything-as-Spec format registry (spec 2026-09-30-everything-as-spec §3).
+#
+# domains:  what a domain covers and the highest automation level (L0-L6) any
+#           converter into it may reach; L5+ always needs a human decision.
+# formats:  file formats by id. text = authored (people/agents edit it, lives
+#           in git) | generated (text a tool writes; diff it, never hand-edit)
+#           | binary. roles = source | ir | artifact. kinds = Production Hub
+#           artifact kinds stored in this format.
+# effects:  what happens in the world when an artifact is used; reachable only
+#           through an L6 converter.
+schema_version: formats.v1
+
+levels:
+  L0: read
+  L1: generate
+  L2: simulate
+  L3: validate
+  L4: prepare an action package
+  L5: human approval
+  L6: execute in the world
+
+domains:
+  documents: {label: เอกสาร, max_level: L6}
+  presentation: {label: สไลด์, max_level: L4}
+  diagrams: {label: ไดอะแกรม, max_level: L4}
+  graphics: {label: กราฟิกและภาพ, max_level: L4}
+  typography: {label: ฟอนต์และแบรนด์, max_level: L4}
+  data: {label: ข้อมูลและกราฟ, max_level: L4}
+  spreadsheets: {label: ตารางคำนวณ, max_level: L4}
+  web: {label: เว็บ, max_level: L6}
+  software: {label: ซอฟต์แวร์และแอป, max_level: L6}
+  api: {label: สัญญา API, max_level: L4}
+  database: {label: ฐานข้อมูล, max_level: L6}
+  infrastructure: {label: Infra และ Cloud, max_level: L6}
+  ci: {label: CI/CD, max_level: L6}
+  workflow: {label: Workflow และ automation, max_level: L6}
+  agents: {label: Agent และ AI, max_level: L4}
+  audio: {label: เสียงและดนตรี, max_level: L4}
+  video: {label: วิดีโอและแอนิเมชัน, max_level: L4}
+  three-d: {label: 3D, max_level: L4}
+  cad: {label: CAD, max_level: L4}
+  bim: {label: BIM และอาคาร, max_level: L4}
+  games: {label: เกมและโลกเสมือน, max_level: L4}
+  gpu: {label: Shader และ GPU, max_level: L4}
+  gis: {label: GIS และแผนที่, max_level: L4}
+  business: {label: ธุรกิจและบัญชี, max_level: L4, note: ไม่สั่งจ่ายเงินหรือยื่นภาษีเอง — เตรียมไฟล์ให้คนส่ง}
+  marketing: {label: การตลาด, max_level: L6, note: เผยแพร่ได้หลังคนอนุมัติทีละครั้ง}
+  knowledge: {label: คลังความรู้, max_level: L4}
+  localization: {label: หลายภาษา, max_level: L4}
+  security: {label: Security และ policy, max_level: L4}
+  observability: {label: Monitoring, max_level: L4}
+  fabrication: {label: "ผลิตชิ้นงาน (3D print, CNC, laser, ป้าย, ปัก)", max_level: L6}
+  electronics: {label: อิเล็กทรอนิกส์และ PCB, max_level: L6, note: สั่งผลิตคือการใช้เงิน ต้องอนุมัติ}
+  firmware: {label: Firmware และ IoT, max_level: L6, note: flash อุปกรณ์ต้องอนุมัติทีละครั้ง}
+  home: {label: บ้านอัจฉริยะ, max_level: L6}
+  hardware-design: {label: FPGA และชิป, max_level: L2, note: จำลองเท่านั้น}
+  robotics: {label: หุ่นยนต์, max_level: L2, note: จำลองเท่านั้นจนมี design gate ด้านความปลอดภัย}
+  industrial: {label: โรงงานและ PLC, max_level: L2, note: จำลองเท่านั้น}
+  vehicles: {label: โดรนและยานยนต์, max_level: L2, note: จำลองเท่านั้น (กฎหมายการบินและความปลอดภัย)}
+  simulation: {label: Simulation วิศวกรรม, max_level: L2}
+  ml: {label: Machine learning, max_level: L4}
+  science: {label: วิทยาศาสตร์, max_level: L0, note: อ่านและวิเคราะห์เท่านั้น ไม่ต่อไปถึงการสังเคราะห์}
+  finance-institutional: {label: การเงินสถาบัน, max_level: L0, note: อ่านและรายงานเท่านั้น ไม่เทรดหรือโอน}
+
+formats:
+  # --- documents / publishing
+  markdown: {domain: documents, ext: [.md], media: text/markdown, text: authored, roles: [source], kinds: [workflow.plan]}
+  typst: {domain: documents, ext: [.typ], media: text/x-typst, text: authored, roles: [source]}
+  latex: {domain: documents, ext: [.tex], media: application/x-tex, text: authored, roles: [source]}
+  asciidoc: {domain: documents, ext: [.adoc], media: text/asciidoc, text: authored, roles: [source]}
+  document-request: {domain: documents, ext: [.json], media: application/json, text: authored, roles: [source], note: invoice/quotation/proposal/report/spec-sheet request contracts}
+  document-ir: {domain: documents, ext: [.json], media: application/json, text: generated, roles: [ir]}
+  transcript: {domain: documents, ext: [.json], media: application/json, text: generated, roles: [ir], kinds: [transcript]}
+  html: {domain: web, ext: [.html, .htm], media: text/html, text: authored, roles: [source, artifact], kinds: [web.page]}
+  pdf: {domain: documents, ext: [.pdf], media: application/pdf, text: binary, roles: [artifact], kinds: [document.pdf, graphic.pdf, cad.drawing.pdf, document.scan]}
+  docx: {domain: documents, ext: [.docx], media: application/vnd.openxmlformats-officedocument.wordprocessingml.document, text: generated, roles: [artifact], kinds: [document.docx], note: zipped XML}
+  epub: {domain: documents, ext: [.epub], media: application/epub+zip, text: generated, roles: [artifact]}
+  # --- presentation / diagrams
+  marp: {domain: presentation, ext: [.md], media: text/markdown, text: authored, roles: [source]}
+  pptx: {domain: presentation, ext: [.pptx], media: application/vnd.openxmlformats-officedocument.presentationml.presentation, text: generated, roles: [artifact]}
+  mermaid: {domain: diagrams, ext: [.mmd], media: text/vnd.mermaid, text: authored, roles: [source]}
+  d2: {domain: diagrams, ext: [.d2], media: text/plain, text: authored, roles: [source]}
+  plantuml: {domain: diagrams, ext: [.puml], media: text/plain, text: authored, roles: [source]}
+  graphviz: {domain: diagrams, ext: [.dot, .gv], media: text/vnd.graphviz, text: authored, roles: [source]}
+  # --- graphics / images / typography
+  graphics-request: {domain: graphics, ext: [.json], media: application/json, text: authored, roles: [source], note: graphics-batch.v1}
+  svg: {domain: graphics, ext: [.svg], media: image/svg+xml, text: generated, roles: [source, artifact], kinds: [chart.svg, graphic.svg]}
+  png: {domain: graphics, ext: [.png], media: image/png, text: binary, roles: [artifact], kinds: [chart.png, graphic.png, image.render, document.scan]}
+  jpeg: {domain: graphics, ext: [.jpg, .jpeg], media: image/jpeg, text: binary, roles: [artifact], kinds: [graphic.png, document.scan]}
+  webp: {domain: graphics, ext: [.webp], media: image/webp, text: binary, roles: [artifact]}
+  tiff: {domain: graphics, ext: [.tif, .tiff], media: image/tiff, text: binary, roles: [artifact], kinds: [document.scan]}
+  brand-kit: {domain: typography, ext: [.json], media: application/json, text: authored, roles: [source], kinds: [brand.kit], note: brand-kit.v1}
+  design-tokens: {domain: typography, ext: [.json], media: application/json, text: authored, roles: [source]}
+  font: {domain: typography, ext: [.ttf, .otf, .woff2], media: font/ttf, text: binary, roles: [artifact], kinds: [font.file]}
+  # --- data / spreadsheets
+  csv: {domain: data, ext: [.csv, .tsv], media: text/csv, text: authored, roles: [source, artifact], kinds: [dataset.table, bim.takeoff]}
+  jsonl: {domain: data, ext: [.jsonl], media: application/jsonl, text: generated, roles: [source, artifact]}
+  sql: {domain: database, ext: [.sql], media: application/sql, text: authored, roles: [source], kinds: [sql.pipeline]}
+  vega-lite: {domain: data, ext: [.vl.json], media: application/json, text: authored, roles: [source]}
+  pipeline-request: {domain: data, ext: [.json], media: application/json, text: authored, roles: [source], note: data pipeline spec}
+  data-job: {domain: data, ext: [.json], media: application/json, text: authored, roles: [source], note: data-viz job request}
+  parquet: {domain: data, ext: [.parquet], media: application/vnd.apache.parquet, text: binary, roles: [artifact]}
+  workbook-request: {domain: spreadsheets, ext: [.json], media: application/json, text: authored, roles: [source], note: workbook-request.v1}
+  xlsx: {domain: spreadsheets, ext: [.xlsx], media: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, text: generated, roles: [artifact], kinds: [workbook.xlsx]}
+  takeoff-json: {domain: bim, ext: [.json], media: application/json, text: generated, roles: [artifact], kinds: [bim.takeoff]}
+  # --- web / software / api / infra
+  page-request: {domain: web, ext: [.json], media: application/json, text: authored, roles: [source], note: page-request.v1}
+  css: {domain: web, ext: [.css, .scss], media: text/css, text: authored, roles: [source, artifact], kinds: [web.page]}
+  tsx: {domain: web, ext: [.tsx, .jsx, .vue, .svelte], media: text/plain, text: authored, roles: [source]}
+  web-bundle: {domain: web, ext: [.zip], media: application/zip, text: binary, roles: [artifact], kinds: [web.page]}
+  program-source: {domain: software, ext: [.py, .ts, .js, .go, .rs, .cs, .java, .kt, .swift, .dart, .lua], media: text/plain, text: authored, roles: [source]}
+  shell: {domain: software, ext: [.sh, .ps1, .bat], media: text/plain, text: authored, roles: [source]}
+  executable: {domain: software, ext: [.exe, .dll, .so, .dylib, .apk], media: application/octet-stream, text: binary, roles: [artifact]}
+  wasm: {domain: software, ext: [.wasm], media: application/wasm, text: binary, roles: [artifact]}
+  container-image: {domain: software, ext: [.tar], media: application/vnd.oci.image.layer.v1.tar, text: binary, roles: [artifact]}
+  openapi: {domain: api, ext: [.openapi.yaml, .openapi.json], media: application/yaml, text: authored, roles: [source]}
+  json-schema: {domain: api, ext: [.schema.json], media: application/schema+json, text: authored, roles: [source]}
+  graphql: {domain: api, ext: [.graphql], media: application/graphql, text: authored, roles: [source]}
+  protobuf: {domain: api, ext: [.proto], media: text/plain, text: authored, roles: [source]}
+  terraform: {domain: infrastructure, ext: [.tf, .hcl], media: text/plain, text: authored, roles: [source]}
+  terraform-plan: {domain: infrastructure, ext: [.tfplan.json], media: application/json, text: generated, roles: [ir]}
+  dockerfile: {domain: infrastructure, ext: [Dockerfile, .dockerfile], media: text/plain, text: authored, roles: [source]}
+  compose: {domain: infrastructure, ext: [compose.yaml, docker-compose.yml], media: application/yaml, text: authored, roles: [source]}
+  kubernetes: {domain: infrastructure, ext: [.yaml], media: application/yaml, text: authored, roles: [source], note: "manifests, Helm templates"}
+  ansible: {domain: infrastructure, ext: [.yml], media: application/yaml, text: authored, roles: [source]}
+  nix: {domain: infrastructure, ext: [.nix], media: text/plain, text: authored, roles: [source]}
+  ci-workflow: {domain: ci, ext: [.github/workflows/*.yml, .gitlab-ci.yml], media: application/yaml, text: authored, roles: [source]}
+  # --- workflow / agents / knowledge / localization / security / observability
+  workflow-ir: {domain: workflow, ext: [.json], media: application/json, text: authored, roles: [source], kinds: [workflow.plan]}
+  product-spec: {domain: workflow, ext: [product.yaml], media: application/yaml, text: authored, roles: [source], note: product.v1}
+  hub-flow: {domain: workflow, ext: [.json], media: application/json, text: authored, roles: [source], note: hub-flow.v1}
+  bpmn: {domain: workflow, ext: [.bpmn], media: application/xml, text: generated, roles: [source]}
+  agent-instructions: {domain: agents, ext: [SKILL.md, AGENTS.md, .prompt.md], media: text/markdown, text: authored, roles: [source]}
+  eval-suite: {domain: agents, ext: [.yaml], media: application/yaml, text: authored, roles: [source]}
+  rdf: {domain: knowledge, ext: [.ttl, .jsonld], media: text/turtle, text: authored, roles: [source, artifact]}
+  notebook: {domain: knowledge, ext: [.ipynb], media: application/x-ipynb+json, text: generated, roles: [source]}
+  gettext: {domain: localization, ext: [.po, .xliff, .arb], media: text/x-gettext-translation, text: authored, roles: [source]}
+  rego: {domain: security, ext: [.rego], media: text/plain, text: authored, roles: [source]}
+  detection-rules: {domain: security, ext: [.yar, .rules, .sigma.yml], media: text/plain, text: authored, roles: [source]}
+  sbom: {domain: security, ext: [.cdx.json, .spdx.json], media: application/json, text: generated, roles: [artifact]}
+  monitoring-config: {domain: observability, ext: [.rules.yml, .dashboard.json], media: application/yaml, text: authored, roles: [source]}
+  # --- audio / video
+  audio-batch: {domain: audio, ext: [.json], media: application/json, text: authored, roles: [source], note: audio-batch.v1}
+  ssml: {domain: audio, ext: [.ssml], media: application/ssml+xml, text: authored, roles: [source]}
+  midi: {domain: audio, ext: [.mid], media: audio/midi, text: binary, roles: [source, artifact]}
+  music-notation: {domain: audio, ext: [.musicxml, .abc, .ly], media: application/vnd.recordare.musicxml+xml, text: authored, roles: [source]}
+  wav: {domain: audio, ext: [.wav], media: audio/wav, text: binary, roles: [artifact], kinds: [audio.track, audio.master]}
+  flac: {domain: audio, ext: [.flac], media: audio/flac, text: binary, roles: [artifact], kinds: [audio.track]}
+  mp3: {domain: audio, ext: [.mp3], media: audio/mpeg, text: binary, roles: [artifact]}
+  ogg: {domain: audio, ext: [.ogg], media: audio/ogg, text: binary, roles: [artifact]}
+  edl: {domain: video, ext: [.json], media: application/json, text: authored, roles: [source], kinds: [edl]}
+  otio: {domain: video, ext: [.otio], media: application/json, text: generated, roles: [source]}
+  srt: {domain: video, ext: [.srt], media: application/x-subrip, text: generated, roles: [source, artifact], kinds: [captions.srt]}
+  vtt: {domain: video, ext: [.vtt], media: text/vtt, text: generated, roles: [artifact], kinds: [captions.vtt]}
+  lottie: {domain: video, ext: [.json], media: application/json, text: generated, roles: [source, artifact]}
+  remotion: {domain: video, ext: [.tsx], media: text/plain, text: authored, roles: [source]}
+  manim: {domain: video, ext: [.py], media: text/x-python, text: authored, roles: [source]}
+  video-request: {domain: video, ext: [.json], media: application/json, text: authored, roles: [source], note: "video-remux.v1, video-overlay.v1"}
+  mp4: {domain: video, ext: [.mp4, .mov, .webm, .mkv], media: video/mp4, text: binary, roles: [source, artifact], kinds: [video.source, video.render]}
+  # --- marketing
+  campaign-request: {domain: marketing, ext: [.json], media: application/json, text: authored, roles: [source], note: campaign-request.v1}
+  campaign-package: {domain: marketing, ext: [.json], media: application/json, text: generated, roles: [artifact], kinds: [campaign.package]}
+  copy-text: {domain: marketing, ext: [.txt], media: text/plain, text: generated, roles: [artifact], kinds: [copy.text]}
+  mjml: {domain: marketing, ext: [.mjml], media: text/plain, text: authored, roles: [source]}
+  # --- 3D / CAD / BIM / games / GPU / GIS
+  scene-ir: {domain: three-d, ext: [.json], media: application/json, text: authored, roles: [source], note: scene-ir.v1}
+  blender-script: {domain: three-d, ext: [.py], media: text/x-python, text: authored, roles: [source]}
+  usd: {domain: three-d, ext: [.usda, .usd, .usdz], media: model/vnd.usda, text: generated, roles: [artifact]}
+  gltf: {domain: three-d, ext: [.gltf], media: model/gltf+json, text: generated, roles: [artifact]}
+  glb: {domain: three-d, ext: [.glb], media: model/gltf-binary, text: binary, roles: [artifact], kinds: [model3d.glb]}
+  blend: {domain: three-d, ext: [.blend], media: application/x-blender, text: binary, roles: [artifact], kinds: [scene3d.blend]}
+  obj: {domain: three-d, ext: [.obj, .ply], media: model/obj, text: generated, roles: [artifact]}
+  cad-request: {domain: cad, ext: [.json], media: application/json, text: authored, roles: [source], note: parametric part request}
+  cadquery: {domain: cad, ext: [.py], media: text/x-python, text: authored, roles: [source], note: CadQuery / build123d}
+  openscad: {domain: cad, ext: [.scad], media: text/plain, text: authored, roles: [source]}
+  fcstd: {domain: cad, ext: [.fcstd], media: application/x-freecad, text: binary, roles: [artifact], kinds: [cad.fcstd]}
+  step: {domain: cad, ext: [.step, .stp], media: model/step, text: generated, roles: [artifact], kinds: [cad.step]}
+  stl: {domain: cad, ext: [.stl], media: model/stl, text: binary, roles: [artifact], kinds: [cad.stl]}
+  three-mf: {domain: fabrication, ext: [.3mf], media: model/3mf, text: generated, roles: [artifact]}
+  dxf: {domain: cad, ext: [.dxf], media: image/vnd.dxf, text: generated, roles: [source, artifact]}
+  ifc: {domain: bim, ext: [.ifc], media: application/x-step, text: generated, roles: [source, artifact], kinds: [bim.ifc]}
+  ifcopenshell-script: {domain: bim, ext: [.py], media: text/x-python, text: authored, roles: [source]}
+  gbxml: {domain: bim, ext: [.gbxml, .xml], media: application/xml, text: generated, roles: [artifact]}
+  game-ir: {domain: games, ext: [.json], media: application/json, text: authored, roles: [source], note: "game-ir.v1, game-ir.v2"}
+  unity-project: {domain: games, ext: [.zip], media: application/zip, text: generated, roles: [artifact], kinds: [game.unity-project], note: scenes are Unity YAML}
+  webgl-build: {domain: games, ext: [.zip], media: application/zip, text: binary, roles: [artifact], kinds: [game.build]}
+  level-data: {domain: games, ext: [.tmj, .ldtk, .tscn], media: application/json, text: authored, roles: [source]}
+  shader: {domain: gpu, ext: [.glsl, .wgsl, .hlsl, .metal, .cu], media: text/plain, text: authored, roles: [source]}
+  geojson: {domain: gis, ext: [.geojson, .kml, .gpx], media: application/geo+json, text: authored, roles: [source, artifact]}
+  vector-tiles: {domain: gis, ext: [.pmtiles, .mbtiles], media: application/octet-stream, text: binary, roles: [artifact]}
+  # --- business
+  ledger: {domain: business, ext: [.beancount, .journal], media: text/plain, text: authored, roles: [source]}
+  business-yaml: {domain: business, ext: [.yaml], media: application/yaml, text: authored, roles: [source], note: "pricing, products, customers"}
+  e-tax-invoice: {domain: business, ext: [.xml], media: application/xml, text: generated, roles: [artifact], note: ETDA e-Tax invoice}
+  promptpay-qr: {domain: business, ext: [.txt], media: text/plain, text: generated, roles: [artifact], note: EMVCo payload}
+  icalendar: {domain: business, ext: [.ics], media: text/calendar, text: generated, roles: [artifact]}
+  vcard: {domain: business, ext: [.vcf], media: text/vcard, text: generated, roles: [artifact]}
+  # --- fabrication / electronics / firmware / home
+  slicer-profile: {domain: fabrication, ext: [.ini, .json], media: text/plain, text: authored, roles: [source]}
+  gcode: {domain: fabrication, ext: [.gcode, .bgcode, .nc, .tap], media: text/x-gcode, text: generated, roles: [artifact]}
+  hpgl: {domain: fabrication, ext: [.plt], media: application/vnd.hp-hpgl, text: generated, roles: [artifact]}
+  zpl: {domain: fabrication, ext: [.zpl], media: text/plain, text: generated, roles: [artifact], note: label printers}
+  escpos: {domain: fabrication, ext: [.bin], media: application/octet-stream, text: binary, roles: [artifact], note: receipt printers}
+  embroidery: {domain: fabrication, ext: [.dst, .pes], media: application/octet-stream, text: binary, roles: [artifact]}
+  circuit-code: {domain: electronics, ext: [.py, .ato], media: text/plain, text: authored, roles: [source], note: SKiDL / atopile}
+  kicad: {domain: electronics, ext: [.kicad_sch, .kicad_pcb, .kicad_pro], media: text/plain, text: generated, roles: [source, ir]}
+  spice: {domain: electronics, ext: [.cir, .sp], media: text/plain, text: authored, roles: [source]}
+  fab-package: {domain: electronics, ext: [.gbr, .drl, .pos, .csv, .zip], media: application/zip, text: generated, roles: [artifact], note: "Gerber, drill, BOM, CPL"}
+  firmware-source: {domain: firmware, ext: [.c, .cpp, .h, .rs, .ino, .dts], media: text/plain, text: authored, roles: [source]}
+  esphome: {domain: firmware, ext: [.yaml], media: application/yaml, text: authored, roles: [source]}
+  firmware-image: {domain: firmware, ext: [.bin, .hex, .uf2, .elf], media: application/octet-stream, text: binary, roles: [artifact]}
+  home-automation: {domain: home, ext: [.yaml], media: application/yaml, text: authored, roles: [source], note: Home Assistant}
+  # --- restricted domains (simulate or analyse only)
+  hdl: {domain: hardware-design, ext: [.v, .sv, .vhd], media: text/plain, text: authored, roles: [source]}
+  hdl-constraints: {domain: hardware-design, ext: [.xdc, .pcf, .sdc], media: text/plain, text: authored, roles: [source]}
+  waveform: {domain: hardware-design, ext: [.vcd, .fst], media: text/plain, text: generated, roles: [artifact]}
+  robot-description: {domain: robotics, ext: [.urdf, .xacro, .sdf, .mjcf], media: application/xml, text: authored, roles: [source]}
+  plc-program: {domain: industrial, ext: [.st, .scl], media: text/plain, text: authored, roles: [source]}
+  mission-plan: {domain: vehicles, ext: [.plan, .waypoints], media: application/json, text: authored, roles: [source]}
+  simulation-model: {domain: simulation, ext: [.mo, .inp, .sif, .idf], media: text/plain, text: authored, roles: [source]}
+  simulation-result: {domain: simulation, ext: [.csv, .vtu], media: text/csv, text: generated, roles: [artifact]}
+  ml-model: {domain: ml, ext: [.onnx, .safetensors, .gguf, .pt], media: application/octet-stream, text: binary, roles: [artifact]}
+  science-data: {domain: science, ext: [.fasta, .fastq, .vcf, .pdb, .cif, .smi, .sbml], media: text/plain, text: generated, roles: [source]}
+  finance-report: {domain: finance-institutional, ext: [.xbrl, .xml], media: application/xml, text: generated, roles: [source]}
+  # --- hub packaging
+  qa-manifest: {domain: workflow, ext: [.json], media: application/json, text: generated, roles: [artifact], kinds: [qa.manifest]}
+  delivery-package: {domain: workflow, ext: [.zip], media: application/zip, text: binary, roles: [artifact], kinds: [delivery.package]}
+  report-json: {domain: data, ext: [.json], media: application/json, text: generated, roles: [artifact], kinds: [dataset.table, sql.pipeline, copy.text]}
+
+effects:
+  effect.document-sent: {domain: documents, description: เอกสารถึงผู้รับภายนอก}
+  effect.website-live: {domain: web, description: เว็บเปิดให้คนภายนอกเข้าได้}
+  effect.service-running: {domain: software, description: service ทำงานบนเครื่องหรือ cloud}
+  effect.cloud-resources: {domain: infrastructure, description: สร้างหรือแก้ทรัพยากร cloud จริง}
+  effect.database-migrated: {domain: database, description: schema ฐานข้อมูลจริงเปลี่ยน}
+  effect.post-published: {domain: marketing, description: โพสต์หรืออีเมลถึงผู้ชม}
+  effect.printed-part: {domain: fabrication, description: ชิ้นงานจากเครื่องพิมพ์ 3D}
+  effect.machined-part: {domain: fabrication, description: ชิ้นงานจาก CNC หรือ laser}
+  effect.label-printed: {domain: fabrication, description: ป้ายหรือใบเสร็จพิมพ์ออกมา}
+  effect.pcb-ordered: {domain: electronics, description: สั่งผลิต PCB (ใช้เงิน)}
+  effect.device-flashed: {domain: firmware, description: firmware ลงอุปกรณ์จริง}
+  effect.home-device-switched: {domain: home, description: อุปกรณ์ในบ้านเปิดหรือปิด}

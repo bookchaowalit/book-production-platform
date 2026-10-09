@@ -1,0 +1,119 @@
+# Artifact kind vocabulary (artifact.v1 `kind`). Each kind lists the media
+# types a record of that kind may carry. Add a kind here before any tool,
+# handoff, or ingest adapter uses it.
+schema_version: artifact-kinds.v1
+kinds:
+  document.docx:
+    description: Editable Word document
+    media_types: [application/vnd.openxmlformats-officedocument.wordprocessingml.document]
+  document.pdf:
+    description: Final PDF document
+    media_types: [application/pdf]
+  document.scan:
+    description: Scanned page or image used as document import input
+    media_types: [application/pdf, image/png, image/jpeg, image/tiff]
+  dataset.table:
+    description: Typed tabular dataset
+    media_types: [text/csv, application/json]
+  chart.svg:
+    description: Vector chart
+    media_types: [image/svg+xml]
+  chart.png:
+    description: Raster chart
+    media_types: [image/png]
+  workbook.xlsx:
+    description: Editable spreadsheet workbook
+    media_types: [application/vnd.openxmlformats-officedocument.spreadsheetml.sheet]
+  sql.pipeline:
+    description: Compiled read-only SQL pipeline with parameters
+    media_types: [application/sql, application/json]
+  campaign.package:
+    description: Marketing campaign package
+    media_types: [application/json]
+  copy.text:
+    description: Approved copy for one channel or slot
+    media_types: [text/plain, application/json]
+  web.page:
+    description: Static landing page file (HTML, its stylesheet, a bundled hero image, or a zipped bundle)
+    media_types: [text/html, text/css, image/png, image/jpeg, image/webp, application/zip]
+  workflow.plan:
+    description: Validated workflow DAG and its plan document
+    media_types: [application/json, text/markdown]
+  video.source:
+    description: Original uploaded video
+    media_types: [video/mp4, video/quicktime, video/webm, video/x-matroska]
+  video.render:
+    description: Rendered video output
+    media_types: [video/mp4]
+  transcript:
+    description: Normalized transcript (transcript-artifact.v1)
+    media_types: [application/json]
+  captions.srt:
+    description: SubRip captions
+    media_types: [application/x-subrip, text/plain]
+  captions.vtt:
+    description: WebVTT captions
+    media_types: [text/vtt]
+  edl:
+    description: Edit decision list (edl.v1)
+    media_types: [application/json]
+  audio.track:
+    description: Processed or extracted audio track
+    media_types: [audio/wav, audio/flac]
+  audio.master:
+    description: Mastered audio (24-bit/48 kHz)
+    media_types: [audio/wav]
+  model3d.glb:
+    description: Self-contained 3D model
+    media_types: [model/gltf-binary]
+  scene3d.blend:
+    description: Editable Blender scene
+    media_types: [application/x-blender]
+  image.render:
+    description: Rendered raster image from a 3D or CAD engine
+    media_types: [image/png]
+  graphic.svg:
+    description: Editable graphic
+    media_types: [image/svg+xml]
+  graphic.png:
+    description: Raster graphic for screens
+    media_types: [image/png, image/jpeg]
+  graphic.pdf:
+    description: Print-ready graphic
+    media_types: [application/pdf]
+  cad.fcstd:
+    description: Editable FreeCAD part
+    media_types: [application/x-freecad]
+  cad.step:
+    description: STEP exchange model
+    media_types: [model/step]
+  cad.stl:
+    description: STL mesh
+    media_types: [model/stl]
+  cad.drawing.pdf:
+    description: 2D engineering drawing
+    media_types: [application/pdf]
+  bim.ifc:
+    description: IFC building model
+    media_types: [application/x-step]
+  bim.takeoff:
+    description: Quantity takeoff table
+    media_types: [application/json, text/csv]
+  game.unity-project:
+    description: Native Unity project folder archive
+    media_types: [application/zip]
+  game.build:
+    description: Playable game build
+    media_types: [application/zip]
+  brand.kit:
+    description: Shared brand kit (brand-kit.v1 JSON)
+    media_types: [application/json]
+  font.file:
+    description: Font file referenced by a brand kit
+    media_types: [font/ttf, font/otf, font/woff2]
+  delivery.package:
+    description: Client delivery zip with delivery-manifest.json
+    media_types: [application/zip]
+  qa.manifest:
+    description: Tool QA or job manifest
+    media_types: [application/json]

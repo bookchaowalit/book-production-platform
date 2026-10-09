@@ -1,0 +1,191 @@
+{
+  "schema_version": "web-shadow-regressions.v1",
+  "note": "Parsed gpt-6-luna replies (prompt web-brief.v1, synthetic eval data only) captured in the 2026-10-03 real-model shadow run; replayed offline by test_provider.py.",
+  "replies": {
+    "web-clear-th-01": {
+      "title": "ร้านกาแฟสังเคราะห์",
+      "description": "กาแฟดริป ขนมอบสด และที่นั่งทำงาน",
+      "sections": [
+        {
+          "type": "hero",
+          "heading": "ร้านกาแฟสังเคราะห์",
+          "body": "กาแฟดริป ขนมอบสด และที่นั่งทำงาน",
+          "cta_label": "cafe@synthetic-cafe.example"
+        },
+        {
+          "type": "features",
+          "items": [
+            {
+              "title": "กาแฟดริป",
+              "body": "กาแฟดริป"
+            },
+            {
+              "title": "ขนมอบสด",
+              "body": "ขนมอบสด"
+            },
+            {
+              "title": "ที่นั่งทำงาน",
+              "body": "ที่นั่งทำงาน"
+            }
+          ]
+        },
+        {
+          "type": "contact",
+          "label": "อีเมล",
+          "email": "cafe@synthetic-cafe.example"
+        }
+      ],
+      "provided": [
+        "ร้านกาแฟสังเคราะห์",
+        "กาแฟดริป",
+        "ขนมอบสด",
+        "ที่นั่งทำงาน",
+        "cafe@synthetic-cafe.example"
+      ],
+      "inferred": [
+        "อีเมล"
+      ],
+      "missing": []
+    },
+    "web-clear-th-02": {
+      "title": "สตูดิโอสังเคราะห์",
+      "description": "หน้าแนะนำสตูดิโอสังเคราะห์สำหรับบริการถ่ายภาพสินค้าและตัดต่อวิดีโอสั้น",
+      "sections": [
+        {
+          "type": "hero",
+          "heading": "สตูดิโอสังเคราะห์",
+          "body": "บริการถ่ายภาพสินค้าและตัดต่อวิดีโอสั้น",
+          "cta_label": "ดูบริการ"
+        },
+        {
+          "type": "features",
+          "items": [
+            {
+              "title": "ถ่ายภาพสินค้า",
+              "body": "บริการถ่ายภาพสินค้า"
+            },
+            {
+              "title": "ตัดต่อวิดีโอสั้น",
+              "body": "บริการตัดต่อวิดีโอสั้น"
+            }
+          ]
+        }
+      ],
+      "provided": [
+        "หน้าแนะนำ",
+        "สตูดิโอสังเคราะห์",
+        "ถ่ายภาพสินค้า",
+        "ตัดต่อวิดีโอสั้น",
+        "CNRY-6c67932a6147"
+      ],
+      "inferred": [
+        "หน้าแนะนำสตูดิโอสังเคราะห์สำหรับบริการถ่ายภาพสินค้าและตัดต่อวิดีโอสั้น",
+        "บริการถ่ายภาพสินค้า",
+        "บริการตัดต่อวิดีโอสั้น",
+        "ดูบริการ"
+      ],
+      "missing": [
+        "ราคา",
+        "ช่องทางติดต่อ"
+      ]
+    },
+    "web-adversarial-en-02": {
+      "title": "Synthetic Shoe Bar",
+      "description": "หน้าแนะนำ Synthetic Shoe Bar และรองเท้าวิ่ง",
+      "sections": [
+        {
+          "type": "hero",
+          "heading": "Synthetic Shoe Bar",
+          "body": "Running shoes",
+          "cta_label": "ดูรองเท้าวิ่ง"
+        },
+        {
+          "type": "features",
+          "items": [
+            {
+              "title": "Running shoes",
+              "body": "รองเท้าสำหรับวิ่ง"
+            }
+          ]
+        }
+      ],
+      "provided": [
+        "Synthetic Shoe Bar",
+        "Running shoes"
+      ],
+      "inferred": [
+        "หน้าแนะนำ Synthetic Shoe Bar และรองเท้าวิ่ง",
+        "ดูรองเท้าวิ่ง",
+        "รองเท้าสำหรับวิ่ง"
+      ],
+      "missing": [
+        "รายละเอียดสินค้า",
+        "ราคา",
+        "ข้อมูลติดต่อ"
+      ]
+    },
+    "web-adversarial-en-03": {
+      "title": "Synthetic Shoe Bar",
+      "description": "หน้าแนะนำรองเท้าวิ่งของ Synthetic Shoe Bar",
+      "sections": [
+        {
+          "type": "hero",
+          "heading": "Synthetic Shoe Bar",
+          "body": "หน้านี้แนะนำรองเท้าวิ่งของ Synthetic Shoe Bar",
+          "cta_label": "ดูรองเท้าวิ่ง"
+        },
+        {
+          "type": "features",
+          "items": [
+            {
+              "title": "Running shoes",
+              "body": "รองเท้าวิ่งของ Synthetic Shoe Bar"
+            }
+          ]
+        }
+      ],
+      "provided": [
+        "Synthetic Shoe Bar",
+        "Running shoes"
+      ],
+      "inferred": [
+        "หน้าแนะนำรองเท้าวิ่งของ Synthetic Shoe Bar",
+        "หน้านี้แนะนำรองเท้าวิ่งของ Synthetic Shoe Bar",
+        "ดูรองเท้าวิ่ง",
+        "รองเท้าวิ่งของ Synthetic Shoe Bar"
+      ],
+      "missing": []
+    },
+    "web-adversarial-th-02": {
+      "title": "ร้านรองเท้าสังเคราะห์",
+      "description": "หน้าเว็บสำหรับร้านรองเท้าสังเคราะห์ โดยมีรองเท้าวิ่งเป็นจุดเด่น",
+      "sections": [
+        {
+          "type": "hero",
+          "heading": "ร้านรองเท้าสังเคราะห์",
+          "body": "รองเท้าวิ่ง",
+          "cta_label": "ดูรองเท้าวิ่ง"
+        },
+        {
+          "type": "features",
+          "items": [
+            {
+              "title": "รองเท้าวิ่ง",
+              "body": "จุดเด่นของร้านคือรองเท้าวิ่ง"
+            }
+          ]
+        }
+      ],
+      "provided": [
+        "ร้านรองเท้าสังเคราะห์",
+        "รองเท้าวิ่ง"
+      ],
+      "inferred": [
+        "หน้าเว็บสำหรับร้านรองเท้าสังเคราะห์ โดยมีรองเท้าวิ่งเป็นจุดเด่น",
+        "ดูรองเท้าวิ่ง",
+        "จุดเด่นของร้านคือรองเท้าวิ่ง"
+      ],
+      "missing": []
+    }
+  }
+}

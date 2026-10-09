@@ -1,0 +1,55 @@
+# Runtimes that `available` and `planned` converters require (spec
+# 2026-09-30-everything-as-spec §5 T1.5). Detection only looks: it never
+# installs, downloads or runs the program beyond locating it.
+#   commands        executables searched on PATH
+#   env             variables that may point at the executable
+#   paths           absolute paths or globs (Windows default install places)
+#   python_modules  importable modules (Hub interpreter or the BPP virtualenv)
+#   manual: true    cannot be detected automatically (plugin, data file, service)
+schema_version: runtimes.v1
+
+runtimes:
+  python: {label: Python, commands: [python, python3]}
+  node: {label: Node.js, commands: [node]}
+  java: {label: Java, commands: [java]}
+  ffmpeg: {label: FFmpeg, commands: [ffmpeg]}
+  docker: {label: Docker, commands: [docker]}
+  terraform: {label: Terraform, commands: [terraform]}
+  chromium: {label: Chromium / Edge, commands: [chromium, chrome, msedge], paths: ["C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", "C:/Program Files/Microsoft/Edge/Application/msedge.exe"]}
+  blender: {label: Blender, env: [PRODUCTION_HUB_BLENDER, BLENDER_BIN], commands: [blender], paths: ["~/.codex/tools/blender-*/portable/*/blender.exe"]}
+  poppler: {label: Poppler (pdftoppm), commands: [pdftoppm]}
+  tesseract: {label: Tesseract OCR, commands: [tesseract], paths: ["C:/Program Files/Tesseract-OCR/tesseract.exe"]}
+  gltfast: {label: glTFast (Unity package), manual: true}
+  pandoc: {label: Pandoc, commands: [pandoc]}
+  typst: {label: Typst, commands: [typst]}
+  tectonic: {label: Tectonic (LaTeX), commands: [tectonic]}
+  marp-cli: {label: Marp CLI, commands: [marp]}
+  mermaid-cli: {label: Mermaid CLI, commands: [mmdc]}
+  d2: {label: D2, commands: [d2]}
+  graphviz: {label: Graphviz, commands: [dot]}
+  plantuml: {label: PlantUML, commands: [plantuml]}
+  vega-cli: {label: Vega CLI, commands: [vl2svg]}
+  piper: {label: Piper TTS, commands: [piper]}
+  lilypond: {label: LilyPond, commands: [lilypond]}
+  fluidsynth: {label: FluidSynth, commands: [fluidsynth]}
+  soundfont: {label: SoundFont (.sf2), manual: true}
+  manim: {label: Manim, commands: [manim], python_modules: [manim]}
+  cadquery: {label: CadQuery, python_modules: [cadquery]}
+  openscad: {label: OpenSCAD, commands: [openscad], paths: ["C:/Program Files/OpenSCAD/openscad.exe"]}
+  ifcopenshell: {label: IfcOpenShell, python_modules: [ifcopenshell]}
+  naga: {label: naga (WGSL/GLSL validator), commands: [naga]}
+  tippecanoe: {label: Tippecanoe, commands: [tippecanoe]}
+  beancount: {label: Beancount, commands: [bean-check], python_modules: [beancount]}
+  prusaslicer: {label: PrusaSlicer, commands: [prusa-slicer, prusa-slicer-console], paths: ["C:/Program Files/Prusa3D/PrusaSlicer/prusa-slicer-console.exe"]}
+  vpype: {label: vpype, commands: [vpype], python_modules: [vpype]}
+  skidl: {label: SKiDL, python_modules: [skidl]}
+  kicad: {label: KiCad CLI, commands: [kicad-cli], paths: ["C:/Program Files/KiCad/*/bin/kicad-cli.exe"]}
+  ngspice: {label: ngspice, commands: [ngspice]}
+  esphome: {label: ESPHome, commands: [esphome], python_modules: [esphome]}
+  platformio: {label: PlatformIO, commands: [pio, platformio]}
+  verilator: {label: Verilator, commands: [verilator]}
+  yosys: {label: Yosys, commands: [yosys]}
+  mujoco: {label: MuJoCo, python_modules: [mujoco]}
+  openplc: {label: OpenPLC runtime, manual: true}
+  px4-sitl: {label: PX4 SITL, manual: true}
+  openmodelica: {label: OpenModelica, commands: [omc]}

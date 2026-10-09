@@ -1,0 +1,162 @@
+{
+  "$defs": {
+    "ReportArtifactRef": {
+      "additionalProperties": false,
+      "description": "Reference to one artifact produced by an upstream pipeline stage.",
+      "properties": {
+        "name": {
+          "maxLength": 255,
+          "minLength": 1,
+          "pattern": "^[^/\\\\:]+$",
+          "title": "Name",
+          "type": "string"
+        },
+        "media_type": {
+          "maxLength": 120,
+          "minLength": 3,
+          "title": "Media Type",
+          "type": "string"
+        },
+        "content_hash": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Content Hash",
+          "type": "string"
+        },
+        "byte_size": {
+          "minimum": 1,
+          "title": "Byte Size",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "media_type",
+        "content_hash",
+        "byte_size"
+      ],
+      "title": "ReportArtifactRef",
+      "type": "object"
+    },
+    "SpecRow": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "value": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Value",
+          "type": "string"
+        },
+        "unit": {
+          "default": "",
+          "maxLength": 40,
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "value"
+      ],
+      "title": "SpecRow",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Structured request for a specification sheet (no totals, no model calls).",
+  "properties": {
+    "schema_version": {
+      "const": "spec-sheet-request.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "document_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Document Id",
+      "type": "string"
+    },
+    "title": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    },
+    "locale": {
+      "default": "th-TH",
+      "maxLength": 35,
+      "minLength": 2,
+      "title": "Locale",
+      "type": "string"
+    },
+    "customer_name": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Customer Name",
+      "type": "string"
+    },
+    "issue_date": {
+      "format": "date",
+      "title": "Issue Date",
+      "type": "string"
+    },
+    "subject": {
+      "description": "part or product the sheet describes",
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Subject",
+      "type": "string"
+    },
+    "summary_lines": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 40,
+      "title": "Summary Lines",
+      "type": "array"
+    },
+    "specs": {
+      "items": {
+        "$ref": "#/$defs/SpecRow"
+      },
+      "maxItems": 200,
+      "minItems": 1,
+      "title": "Specs",
+      "type": "array"
+    },
+    "images": {
+      "items": {
+        "$ref": "#/$defs/ReportArtifactRef"
+      },
+      "maxItems": 10,
+      "title": "Images",
+      "type": "array"
+    },
+    "notes": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 40,
+      "title": "Notes",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "document_id",
+    "title",
+    "customer_name",
+    "issue_date",
+    "subject",
+    "specs"
+  ],
+  "title": "SpecSheetRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://solo-empire.local/schemas/document-production/spec-sheet-request.v1.json"
+}

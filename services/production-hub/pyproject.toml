@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "solo-empire-production-hub"
+version = "0.1.0"
+description = "Shared artifact contract and cross-tool handoff registry for the production tools (Production Hub H0)"
+requires-python = ">=3.11"
+dependencies = [
+  "jsonschema>=4.23,<5",
+  "pyyaml>=6.0,<7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3,<10", "mypy>=1.13,<3", "ruff>=0.8,<1", "types-PyYAML>=6.0,<7"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["jsonschema.*", "yaml.*"]
+ignore_missing_imports = true

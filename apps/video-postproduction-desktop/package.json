@@ -1,0 +1,30 @@
+{
+  "name": "solo-empire-video-postproduction-desktop",
+  "productName": "Solo Empire Video Studio",
+  "version": "0.1.4",
+  "private": true,
+  "type": "commonjs",
+  "author": "Solo Empire",
+  "description": "Windows desktop shell for the local-first video post-production studio.",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron-forge start",
+    "test": "node --test",
+    "typecheck": "tsc --noEmit",
+    "stage:runtime": "node scripts/stage-runtime.js",
+    "smoke:launcher": "electron scripts/smoke-launcher.cjs",
+    "smoke:runtime": "node scripts/smoke-runtime.js",
+    "make": "npm run typecheck && npm test && npm run smoke:launcher && npm run stage:runtime && electron-forge make",
+    "verify:artifacts": "node scripts/verify-artifacts.js"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "7.11.2",
+    "@electron-forge/maker-squirrel": "7.11.2",
+    "@types/node": "26.6.2",
+    "electron": "44.4.5",
+    "typescript": "7.0.2"
+  },
+  "dependencies": {
+    "electron-squirrel-startup": "1.0.1"
+  }
+}

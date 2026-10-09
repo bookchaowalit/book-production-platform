@@ -1,0 +1,8 @@
+system_id: video-postproduction-web
+prefix: VPW
+brand: "VIDEO POST-PRODUCTION"
+subtitle: "หน้าควบคุมสำหรับ AI video post-production engine แบบ local-first"
+footer: "Video Post-production Web — ฉบับร่างเพื่อพิจารณา"
+color: "#1f4e79"
+audience: internal
+tier: L1

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:solo-empire:video-postproduction:transcript-artifact.v1",
+  "title": "TranscriptArtifact v1",
+  "description": "Verbatim, deterministic transcript artifact produced by video post-production. Published artifacts never contain absolute local paths; source_name is a bare file name. Segment ordering (end_seconds > start_seconds) is a semantic rule enforced by the validator in addition to this structural schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "transcript_id", "segments"],
+  "properties": {
+    "schema_version": {"const": "transcript-artifact.v1"},
+    "transcript_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$"},
+    "language": {"type": ["string", "null"], "minLength": 2, "maxLength": 35},
+    "duration_seconds": {"type": ["number", "null"], "minimum": 0},
+    "source_tool": {"type": ["string", "null"], "minLength": 1, "maxLength": 120},
+    "source_name": {"type": ["string", "null"], "minLength": 1, "maxLength": 255, "pattern": "^[^/\\\\:]*$"},
+    "segments": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["start_seconds", "end_seconds", "text"],
+        "properties": {
+          "start_seconds": {"type": "number", "minimum": 0},
+          "end_seconds": {"type": "number"},
+          "text": {"type": "string", "minLength": 1, "maxLength": 2000},
+          "speaker": {"type": ["string", "null"], "minLength": 1, "maxLength": 120}
+        }
+      }
+    }
+  }
+}

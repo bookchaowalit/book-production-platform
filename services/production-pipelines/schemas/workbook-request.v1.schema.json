@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:solo-empire:production-pipelines:workbook-request.v1",
+  "title": "WorkbookRequest v1 (consumer-side boundary validator)",
+  "description": "Consumer-side structural validation of the workbook-request.v1 payload this orchestrator emits for the Spreadsheet stage. The owning contract lives in the book-production-platform repository (spreadsheet_ir); this copy only validates the shape this pipeline emits and does not transfer ownership. Upstream semantic rules (typed value parsing, formula allowlist) are enforced by the receiving service.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "workbook_id", "tables"],
+  "properties": {
+    "schema_version": {"const": "workbook-request.v1"},
+    "workbook_id": {"type": "string", "minLength": 1},
+    "title": {"type": "string"},
+    "locale": {"type": "string", "minLength": 2},
+    "tables": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "columns", "rows"],
+        "properties": {
+          "name": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+          "columns": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["key", "label", "data_type"],
+              "properties": {
+                "key": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+                "label": {"type": "string", "minLength": 1},
+                "data_type": {"enum": ["text", "integer", "decimal", "date", "boolean"]},
+                "required": {"type": "boolean"}
+              }
+            }
+          },
+          "rows": {
+            "type": "array",
+            "maxItems": 1000,
+            "items": {"type": "object"}
+          },
+          "source_ref": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "formulas": {"type": "array", "maxItems": 0},
+    "template_parameters": {"type": "object"}
+  }
+}

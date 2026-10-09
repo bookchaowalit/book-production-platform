@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "project_id": "00000000-0000-0000-0000-000000000001",
+  "source_assets": [
+    {
+      "asset_id": "00000000-0000-0000-0000-000000000002",
+      "storage_key": "projects/project-1/original/asset-1.mp4",
+      "duration": 120.0
+    }
+  ],
+  "timeline": [
+    {
+      "id": "segment_0001",
+      "source": {
+        "asset_id": "00000000-0000-0000-0000-000000000002",
+        "start": 0.0,
+        "end": 10.0
+      },
+      "visual": {
+        "kind": "a_roll",
+        "reframe": {"mode": "center", "aspect_ratio": "9:16"},
+        "asset_refs": []
+      },
+      "captions": {
+        "enabled": true,
+        "source": "transcript",
+        "format": "ass",
+        "preset": "minimal"
+      },
+      "audio": {"operations": []},
+      "color": {"operations": []},
+      "provenance": {"reason": "initial source range"}
+    }
+  ],
+  "assets": [],
+  "output": {"width": 1080, "height": 1920, "fps": 30, "format": "mp4", "render_profile": "vertical_centered"},
+  "capabilities": {"required": ["cut", "captions", "center_reframe"]}
+}

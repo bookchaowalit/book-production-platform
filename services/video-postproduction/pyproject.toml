@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "solo-empire-video-postpipeline"
+version = "0.1.0"
+description = "Local-first deterministic video post-production pipeline tools (T6.2)"
+requires-python = ">=3.11"
+dependencies = [
+  "jsonschema>=4.23,<5",
+  "pydantic>=2.8,<3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3,<10", "mypy>=1.13,<3", "ruff>=0.8,<1"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+# tests/test_compose.py predates this package configuration; its import order
+# is intentionally left untouched.
+[tool.ruff.lint.per-file-ignores]
+"tests/test_compose.py" = ["I001"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = "jsonschema.*"
+ignore_missing_imports = true

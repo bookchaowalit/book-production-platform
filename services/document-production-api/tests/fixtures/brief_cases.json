@@ -1,0 +1,47 @@
+[
+  {
+    "id": "en-clear",
+    "expected": "accepted",
+    "request": {
+      "document_id": "brief-en-clear",
+      "locale": "en-US",
+      "brief": "title: Synthetic invoice\ncustomer: Synthetic customer A\ndate: 2026-09-22\ncurrency: USD\nitem: Consulting | 2 | 10.00 | 7"
+    }
+  },
+  {
+    "id": "th-clear",
+    "expected": "accepted",
+    "request": {
+      "document_id": "brief-th-clear",
+      "locale": "th-TH",
+      "brief": "หัวข้อ: ใบแจ้งหนี้สังเคราะห์\nลูกค้า: ลูกค้าสังเคราะห์ B\nวันที่: 22/09/2026\nสกุลเงิน: บาท\nรายการ: บริการ | 1 | 100.00 | 7"
+    }
+  },
+  {
+    "id": "missing-fields",
+    "expected": "needs_input",
+    "request": {"document_id": "brief-missing", "brief": "title: Missing customer and item"}
+  },
+  {
+    "id": "invalid-item",
+    "expected": "needs_input",
+    "request": {
+      "document_id": "brief-invalid-item",
+      "brief": "title: Invalid item\ncustomer: Synthetic customer C\ndate: 2026-09-22\ncurrency: USD\nitem: Service | many | 10 | 0"
+    }
+  },
+  {
+    "id": "duplicate-field",
+    "expected": "needs_input",
+    "request": {
+      "document_id": "brief-duplicate",
+      "brief": "title: First\ntitle: Second\ncustomer: Synthetic customer D\ndate: 2026-09-22\ncurrency: USD\nitem: Service | 1 | 10 | 0"
+    }
+  },
+  {
+    "id": "oversized-adversarial",
+    "expected": "rejected",
+    "request": {"document_id": "brief-oversized", "brief": "word "},
+    "brief_repeat": 8001
+  }
+]

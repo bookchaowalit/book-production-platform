@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:solo-empire:document-production:report-document-request.v1",
+  "title": "ReportDocumentRequest v1",
+  "description": "Structured request for the deterministic tabular report template rendered by the Documents service (T6.3 monthly report pipeline). The last table column must be numeric and totals.subtotal must equal its Decimal sum; totals.grand_total must equal subtotal + tax_total. These semantic rules are enforced by the receiving validator in addition to this structural schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_id", "title", "currency", "customer_name", "issue_date", "table", "totals"],
+  "properties": {
+    "schema_version": {"const": "report-document-request.v1"},
+    "document_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "title": {"type": "string", "minLength": 1, "maxLength": 200},
+    "locale": {"type": "string", "minLength": 2, "maxLength": 35},
+    "currency": {"type": "string", "minLength": 1, "maxLength": 12},
+    "customer_name": {"type": "string", "minLength": 1, "maxLength": 200},
+    "issue_date": {"type": "string", "format": "date"},
+    "summary_lines": {
+      "type": "array",
+      "maxItems": 40,
+      "items": {"type": "string", "minLength": 1, "maxLength": 2000}
+    },
+    "table": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["headers", "rows"],
+      "properties": {
+        "headers": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 12,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "rows": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1000,
+          "items": {
+            "type": "array",
+            "items": {"type": "string"}
+          }
+        }
+      }
+    },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subtotal", "tax_total", "grand_total"],
+      "properties": {
+        "subtotal": {"type": "string", "minLength": 1, "maxLength": 80},
+        "tax_total": {"type": "string", "minLength": 1, "maxLength": 80},
+        "grand_total": {"type": "string", "minLength": 1, "maxLength": 80}
+      }
+    },
+    "charts": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {"$ref": "#/$defs/artifactRef"}
+    },
+    "workbook": {"$ref": "#/$defs/artifactRef"}
+  },
+  "$defs": {
+    "artifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "media_type", "content_hash", "byte_size"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 255, "pattern": "^[^/\\\\:]+$"},
+        "media_type": {"type": "string", "minLength": 3, "maxLength": 120},
+        "content_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "byte_size": {"type": "integer", "minimum": 1}
+      }
+    }
+  }
+}

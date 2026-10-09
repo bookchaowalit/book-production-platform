@@ -1,0 +1,121 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-video}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-local-only}
+      POSTGRES_DB: ${POSTGRES_DB:-video_postproduction}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  api:
+    image: video-postproduction-api:local
+    build:
+      context: ../..
+      dockerfile: services/video-postproduction-api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-video}:${POSTGRES_PASSWORD:-change-me-local-only}@postgres:5432/${POSTGRES_DB:-video_postproduction}
+      REDIS_URL: redis://redis:6379/0
+      STORAGE_ROOT: /app/storage
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-2147483648}
+      ALLOWED_VIDEO_MIME_TYPES: ${ALLOWED_VIDEO_MIME_TYPES:-video/mp4,video/quicktime,video/webm,video/x-matroska}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3400,http://127.0.0.1:3400}
+      TRANSCRIPTION_PROVIDER: ${TRANSCRIPTION_PROVIDER:-faster_whisper}
+      TRANSCRIPTION_LANGUAGE: ${TRANSCRIPTION_LANGUAGE:-}
+      WHISPER_MODEL: ${WHISPER_MODEL:-small}
+      WHISPER_DEVICE: ${WHISPER_DEVICE:-cpu}
+      OPENAI_COMPATIBLE_BASE_URL: ${OPENAI_COMPATIBLE_BASE_URL:-}
+      OPENAI_COMPATIBLE_TRANSCRIPTION_MODEL: ${OPENAI_COMPATIBLE_TRANSCRIPTION_MODEL:-gpt-4o-mini-transcribe}
+      VIDEO_EDITOR_API_TOKEN: ${VIDEO_EDITOR_API_TOKEN:-}
+      JOB_LEASE_SECONDS: ${JOB_LEASE_SECONDS:-900}
+      MAX_STAGE_ATTEMPTS: ${MAX_STAGE_ATTEMPTS:-3}
+    volumes:
+      - video_storage:/app/storage
+      - whisper_cache:/root/.cache/huggingface
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >-
+      sh -c "alembic -c /app/video-postproduction-api/alembic.ini upgrade head
+      && uvicorn video_postproduction.main:app --host 0.0.0.0 --port 8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      start_period: 25s
+      retries: 6
+
+  worker:
+    image: video-postproduction-api:local
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-video}:${POSTGRES_PASSWORD:-change-me-local-only}@postgres:5432/${POSTGRES_DB:-video_postproduction}
+      REDIS_URL: redis://redis:6379/0
+      STORAGE_ROOT: /app/storage
+      TRANSCRIPTION_PROVIDER: ${TRANSCRIPTION_PROVIDER:-faster_whisper}
+      TRANSCRIPTION_LANGUAGE: ${TRANSCRIPTION_LANGUAGE:-}
+      WHISPER_MODEL: ${WHISPER_MODEL:-small}
+      WHISPER_DEVICE: ${WHISPER_DEVICE:-cpu}
+      OPENAI_COMPATIBLE_BASE_URL: ${OPENAI_COMPATIBLE_BASE_URL:-}
+      OPENAI_COMPATIBLE_TRANSCRIPTION_MODEL: ${OPENAI_COMPATIBLE_TRANSCRIPTION_MODEL:-gpt-4o-mini-transcribe}
+      JOB_LEASE_SECONDS: ${JOB_LEASE_SECONDS:-900}
+      MAX_STAGE_ATTEMPTS: ${MAX_STAGE_ATTEMPTS:-3}
+    volumes:
+      - video_storage:/app/storage
+      - whisper_cache:/root/.cache/huggingface
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["celery", "-A", "video_postproduction.jobs.tasks.celery_app", "worker", "--loglevel=INFO", "--concurrency=1"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import redis; redis.Redis.from_url('redis://redis:6379/0').ping()"]
+      interval: 10s
+      timeout: 5s
+      start_period: 25s
+      retries: 6
+
+  web:
+    build:
+      context: ../..
+      dockerfile: services/video-postproduction/Dockerfile.web
+      args:
+        NEXT_PUBLIC_VIDEO_POSTPRODUCTION_API_ORIGIN: ${NEXT_PUBLIC_VIDEO_POSTPRODUCTION_API_ORIGIN:-http://localhost:8000}
+    environment:
+      NEXT_PUBLIC_VIDEO_POSTPRODUCTION_API_ORIGIN: ${NEXT_PUBLIC_VIDEO_POSTPRODUCTION_API_ORIGIN:-http://localhost:8000}
+    ports:
+      - "127.0.0.1:3400:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/ >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      start_period: 25s
+      retries: 6
+
+volumes:
+  postgres_data:
+  redis_data:
+  video_storage:
+  whisper_cache:

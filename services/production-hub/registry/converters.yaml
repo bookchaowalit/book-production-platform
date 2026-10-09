@@ -1,0 +1,122 @@
+# Everything-as-Spec conversion graph (spec 2026-09-30-everything-as-spec §4).
+#
+# Each converter turns one of `from` (any one is enough; `with` lists optional
+# extra inputs) into every format or effect in `to`.
+#   status  implemented = runs in Solo-Empire today (tool is a catalog tool or
+#                         production-hub; `handoff` links the Hub edge)
+#           available   = a free/open tool can do it; not integrated yet and
+#                         `requires` names the runtime that must be approved
+#           planned     = on the roadmap (Hub handoff or tool feature)
+#   level   L1 generate, L2 simulate, L3 validate, L4 prepare an action package,
+#           L6 execute in the world. L6 needs `approval: human` and can never
+#           exceed the target domain's max_level.
+schema_version: converters.v1
+
+converters:
+  # --- implemented inside Solo-Empire tools
+  - {id: documents-render, from: [document-request], to: [document-ir, pdf, docx], tool: documents-v1a, level: L1, status: implemented}
+  - {id: transcript-to-documents, from: [transcript], to: [pdf, docx], tool: documents-v1a, level: L1, status: implemented, handoff: T6.2-transcript-to-documents}
+  - {id: dataset-to-documents, from: [csv], to: [pdf, docx], tool: documents-v1a, level: L1, status: implemented, handoff: T6.3-dataset-to-documents}
+  - {id: chart-to-documents, from: [svg], with: [report-json], to: [pdf, docx], tool: documents-v1a, level: L1, status: implemented, handoff: E5-chart-to-documents}
+  - {id: cad-to-documents, from: [fcstd], with: [qa-manifest, png], to: [pdf], tool: documents-v1a, level: L1, status: implemented, handoff: E10-cad-to-documents}
+  - {id: graphics-render, from: [graphics-request], to: [svg, png], tool: graphics-v1a, level: L1, status: implemented}
+  - {id: graphics-print-export, from: [svg], to: [png, pdf], tool: graphics-v1a, level: L1, status: implemented}
+  - {id: render-to-graphics, from: [png], to: [svg, png], tool: graphics-v1a, level: L1, status: implemented, handoff: T6.1-scene-to-graphics}
+  - {id: chart-to-graphics, from: [svg], to: [svg, png], tool: graphics-v1a, level: L1, status: implemented, handoff: E4-chart-to-graphics}
+  - {id: copy-to-graphics, from: [copy-text], to: [svg, png], tool: graphics-v1a, level: L1, status: implemented, handoff: E6-copy-to-graphics}
+  - {id: hub-rasterize, from: [svg], to: [png], tool: production-hub, level: L1, status: implemented, note: headless Edge}
+  - {id: data-viz, from: [data-job, csv], to: [csv, svg], tool: data-viz-v1a, level: L1, status: implemented}
+  - {id: data-pipeline, from: [pipeline-request], to: [sql], tool: data-pipeline-v1a, level: L1, status: implemented, note: compiles a read-only SQL pipeline}
+  - {id: workbook-build, from: [workbook-request], to: [xlsx], tool: spreadsheet-v1a, level: L1, status: implemented}
+  - {id: dataset-to-spreadsheet, from: [csv], to: [xlsx], tool: spreadsheet-v1a, level: L1, status: implemented, handoff: T6.3-dataset-to-spreadsheet}
+  - {id: takeoff-to-spreadsheet, from: [takeoff-json], to: [xlsx], tool: spreadsheet-v1a, level: L1, status: implemented, handoff: E11-takeoff-to-spreadsheet}
+  - {id: campaign-build, from: [campaign-request], to: [campaign-package, copy-text], tool: marketing-v1a, level: L1, status: implemented}
+  - {id: captions-to-marketing, from: [srt], to: [campaign-package, copy-text], tool: marketing-v1a, level: L1, status: implemented, handoff: E2-captions-to-marketing}
+  - {id: page-build, from: [page-request], to: [html, css, web-bundle], tool: web-v1a, level: L1, status: implemented}
+  - {id: copy-to-web, from: [copy-text], to: [html, css], tool: web-v1a, level: L1, status: implemented, handoff: E7a-copy-to-web}
+  - {id: graphic-to-web, from: [png], with: [copy-text], to: [html, css], tool: web-v1a, level: L1, status: implemented, handoff: E7b-graphic-to-web}
+  - {id: workflow-plan, from: [workflow-ir], to: [markdown], tool: workflow-v1a, level: L1, status: implemented}
+  - {id: video-subtitles, from: [mp4], to: [srt, vtt, transcript], tool: video-studio, level: L1, status: implemented}
+  - {id: video-edit, from: [edl], with: [mp4], to: [mp4], tool: video-studio, level: L1, status: implemented}
+  - {id: master-to-video, from: [wav], with: [mp4], to: [mp4], tool: video-studio, level: L1, status: implemented, handoff: E1-master-to-video}
+  - {id: graphic-to-video, from: [png], with: [mp4], to: [mp4], tool: video-studio, level: L1, status: implemented, handoff: E3-graphic-to-video}
+  - {id: audio-batch, from: [audio-batch], to: [wav], tool: audio-batch-v1a, level: L1, status: implemented}
+  - {id: track-to-audio-batch, from: [wav, flac], to: [wav], tool: audio-batch-v1a, level: L1, status: implemented, handoff: T6.2-video-to-audio}
+  - {id: audio-master, from: [wav, flac], to: [wav], tool: audio-master-v1a, level: L1, status: implemented}
+  - {id: scene-compose, from: [scene-ir], with: [glb], to: [png, blend], tool: scene3d-v1a, level: L1, status: implemented}
+  - {id: stl-to-glb, from: [stl], to: [glb], tool: production-hub, level: L1, status: implemented, note: Blender converts mm STL to m GLB inside E9}
+  - {id: cad-to-scene, from: [stl], to: [png, blend], tool: scene3d-v1a, level: L1, status: implemented, handoff: E9-cad-to-scene}
+  - {id: cad-part, from: [cad-request], to: [fcstd, step, stl, png], tool: cad-v1a, level: L1, status: implemented}
+  - {id: bim-takeoff, from: [ifc], to: [takeoff-json, csv], tool: bim-v1a, level: L1, status: implemented}
+  - {id: game-build, from: [game-ir], to: [unity-project], tool: game-v1a, level: L1, status: implemented}
+  - {id: audio-to-game, from: [wav], to: [unity-project], tool: game-v1a, level: L1, status: implemented, handoff: E12b-audio-to-game}
+  - {id: hub-flow-run, from: [hub-flow], to: [qa-manifest], tool: production-hub, level: L1, status: implemented, note: runs handoffs with review gates}
+  - {id: hub-package, from: [pdf, docx, png, svg, xlsx, html, mp4, wav, glb, unity-project], to: [delivery-package], tool: production-hub, level: L4, status: implemented, note: approved files only}
+
+  # --- planned Hub edges and tool features
+  - {id: ocr-table, from: [pdf, png, tiff], to: [csv], tool: documents-v1a, level: L1, status: planned, handoff: E8-ocr-table-to-data, requires: [poppler, tesseract]}
+  - {id: model-to-game, from: [glb], to: [unity-project], tool: game-v1a, level: L1, status: planned, handoff: E12a-model-to-game, requires: [gltfast]}
+  - {id: workflow-to-hub, from: [workflow-ir], to: [hub-flow], tool: workflow-v1a, level: L1, status: planned, handoff: E13-workflow-to-hub}
+  - {id: game-webgl, from: [unity-project], to: [webgl-build], tool: game-v1a, level: L1, status: planned}
+  - {id: video-multi-aspect, from: [edl], with: [mp4], to: [mp4], tool: video-studio, level: L1, status: planned}
+  - {id: markdown-to-document, from: [markdown, typst], to: [document-ir, pdf, docx], tool: documents-v1a, level: L1, status: planned}
+  - {id: e-tax-invoice, from: [document-request], to: [e-tax-invoice], tool: documents-v1a, level: L1, status: planned}
+  - {id: promptpay-qr, from: [business-yaml], to: [promptpay-qr, png], tool: documents-v1a, level: L1, status: planned}
+  - {id: product-build, from: [product-spec], to: [hub-flow], tool: production-hub, level: L1, status: implemented, note: product.v1 compiled to hub-flow.v1 and run}
+
+  # --- available open-source converters (need an approved runtime)
+  - {id: pandoc, from: [markdown, asciidoc, html], to: [pdf, docx, epub, html], tool: pandoc, level: L1, status: available, requires: [pandoc]}
+  - {id: typst, from: [typst], to: [pdf, svg, png], tool: typst, level: L1, status: available, requires: [typst]}
+  - {id: latex, from: [latex], to: [pdf], tool: tectonic, level: L1, status: available, requires: [tectonic]}
+  - {id: marp, from: [marp], to: [pptx, pdf, html], tool: marp-cli, level: L1, status: available, requires: [marp-cli]}
+  - {id: mermaid, from: [mermaid], to: [svg, png], tool: mermaid-cli, level: L1, status: available, requires: [mermaid-cli]}
+  - {id: d2, from: [d2], to: [svg, png], tool: d2, level: L1, status: available, requires: [d2]}
+  - {id: graphviz, from: [graphviz], to: [svg, png, pdf], tool: graphviz, level: L1, status: available, requires: [graphviz]}
+  - {id: plantuml, from: [plantuml], to: [svg, png], tool: plantuml, level: L1, status: available, requires: [plantuml, java]}
+  - {id: vega-lite, from: [vega-lite], to: [svg, png], tool: vega-cli, level: L1, status: available, requires: [vega-cli]}
+  - {id: web-bundle, from: [tsx, css], to: [web-bundle], tool: vite, level: L1, status: available, requires: [node]}
+  - {id: container-build, from: [dockerfile], to: [container-image], tool: docker-build, level: L1, status: available, requires: [docker]}
+  - {id: terraform-plan, from: [terraform], to: [terraform-plan], tool: terraform, level: L2, status: available, requires: [terraform]}
+  - {id: openapi-docs, from: [openapi, json-schema], to: [html], tool: redocly, level: L1, status: available, requires: [node]}
+  - {id: tts, from: [ssml, markdown], to: [wav], tool: piper, level: L1, status: available, requires: [piper]}
+  - {id: engrave, from: [music-notation], to: [pdf, midi], tool: lilypond, level: L1, status: available, requires: [lilypond]}
+  - {id: synth, from: [midi], to: [wav], tool: fluidsynth, level: L1, status: available, requires: [fluidsynth, soundfont]}
+  - {id: audio-encode, from: [wav], to: [mp3, ogg, flac], tool: ffmpeg, level: L1, status: available, requires: [ffmpeg]}
+  - {id: remotion, from: [remotion], to: [mp4], tool: remotion, level: L1, status: available, requires: [node, chromium]}
+  - {id: manim, from: [manim], to: [mp4], tool: manim, level: L1, status: available, requires: [manim]}
+  - {id: blender-script, from: [blender-script], to: [glb, png, blend], tool: blender, level: L1, status: available, requires: [blender]}
+  - {id: cadquery, from: [cadquery], to: [step, stl, three-mf, dxf], tool: cadquery, level: L1, status: available, requires: [cadquery]}
+  - {id: openscad, from: [openscad], to: [stl, three-mf, dxf], tool: openscad, level: L1, status: available, requires: [openscad]}
+  - {id: ifc-script, from: [ifcopenshell-script], to: [ifc], tool: ifcopenshell, level: L1, status: available, requires: [ifcopenshell]}
+  - {id: glb-export, from: [step, stl, obj], to: [glb, gltf], tool: blender, level: L1, status: available, requires: [blender]}
+  - {id: shader-validate, from: [shader], to: [shader], tool: naga, level: L3, status: available, requires: [naga]}
+  - {id: vector-tiles, from: [geojson], to: [vector-tiles], tool: tippecanoe, level: L1, status: available, requires: [tippecanoe]}
+  - {id: ledger-report, from: [ledger], to: [csv], tool: beancount, level: L1, status: available, requires: [beancount]}
+  - {id: calendar-card, from: [business-yaml], to: [icalendar, vcard], tool: production-hub, level: L1, status: available, requires: [python]}
+  - {id: slice, from: [stl, three-mf], with: [slicer-profile], to: [gcode], tool: prusaslicer, level: L4, status: available, requires: [prusaslicer]}
+  - {id: plot-path, from: [svg, dxf], to: [hpgl, gcode], tool: vpype, level: L4, status: available, requires: [vpype]}
+  - {id: label, from: [business-yaml], to: [zpl], tool: production-hub, level: L4, status: available, requires: [python]}
+  - {id: circuit-code, from: [circuit-code], to: [kicad], tool: skidl, level: L1, status: available, requires: [skidl, kicad]}
+  - {id: kicad-fab, from: [kicad], to: [fab-package, step], tool: kicad-cli, level: L4, status: available, requires: [kicad], note: runs ERC/DRC first}
+  - {id: spice, from: [spice], to: [simulation-result], tool: ngspice, level: L2, status: available, requires: [ngspice]}
+  - {id: esphome, from: [esphome], to: [firmware-image], tool: esphome, level: L4, status: available, requires: [esphome]}
+  - {id: firmware-build, from: [firmware-source], to: [firmware-image], tool: platformio, level: L4, status: available, requires: [platformio]}
+  - {id: hdl-sim, from: [hdl], with: [hdl-constraints], to: [waveform], tool: verilator, level: L2, status: available, requires: [verilator, yosys]}
+  - {id: robot-sim, from: [robot-description], to: [simulation-result], tool: mujoco, level: L2, status: available, requires: [mujoco]}
+  - {id: plc-sim, from: [plc-program], to: [simulation-result], tool: openplc-runtime, level: L2, status: available, requires: [openplc]}
+  - {id: mission-sim, from: [mission-plan], to: [simulation-result], tool: px4-sitl, level: L2, status: available, requires: [px4-sitl]}
+  - {id: engineering-sim, from: [simulation-model], to: [simulation-result], tool: openmodelica, level: L2, status: available, requires: [openmodelica]}
+
+  # --- effects: always a human decision, never automatic
+  - {id: publish-site, from: [web-bundle, html], to: [effect.website-live], tool: static-host, level: L6, status: planned, approval: human}
+  - {id: send-document, from: [pdf], to: [effect.document-sent], tool: email, level: L6, status: planned, approval: human}
+  - {id: publish-post, from: [campaign-package, copy-text], to: [effect.post-published], tool: scheduler, level: L6, status: planned, approval: human}
+  - {id: terraform-apply, from: [terraform-plan], to: [effect.cloud-resources], tool: terraform, level: L6, status: available, approval: human, requires: [terraform]}
+  - {id: migrate-database, from: [sql], to: [effect.database-migrated], tool: migrator, level: L6, status: available, approval: human}
+  - {id: run-service, from: [container-image], to: [effect.service-running], tool: docker, level: L6, status: available, approval: human, requires: [docker]}
+  - {id: print-3d, from: [gcode], to: [effect.printed-part], tool: printer-api, level: L6, status: planned, approval: human}
+  - {id: machine-part, from: [gcode, hpgl], to: [effect.machined-part], tool: cnc-sender, level: L6, status: planned, approval: human}
+  - {id: print-label, from: [zpl, escpos], to: [effect.label-printed], tool: printer-api, level: L6, status: planned, approval: human}
+  - {id: order-pcb, from: [fab-package], to: [effect.pcb-ordered], tool: pcb-fab-order, level: L6, status: planned, approval: human}
+  - {id: flash-device, from: [firmware-image], to: [effect.device-flashed], tool: flasher, level: L6, status: planned, approval: human}
+  - {id: switch-home-device, from: [home-automation], to: [effect.home-device-switched], tool: home-assistant, level: L6, status: planned, approval: human}

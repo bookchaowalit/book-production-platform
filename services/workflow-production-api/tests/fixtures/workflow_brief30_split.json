@@ -1,0 +1,39 @@
+{
+  "schema_version": "workflow-eval-split.v1",
+  "suite": "EVAL-WFL-brief30",
+  "note": "Prompt changes may be tuned only against dev cases; held-out cases decide the gate.",
+  "dev": [
+    "wfl-structured-en-01",
+    "wfl-structured-th-01",
+    "wfl-structured-en-02",
+    "wfl-clear-en-01",
+    "wfl-clear-th-01",
+    "wfl-clear-en-02",
+    "wfl-ambiguous-en-01",
+    "wfl-ambiguous-th-01",
+    "wfl-adversarial-en-01",
+    "wfl-adversarial-th-01"
+  ],
+  "held_out": [
+    "wfl-structured-en-03",
+    "wfl-structured-en-04",
+    "wfl-structured-en-05",
+    "wfl-structured-th-02",
+    "wfl-structured-th-03",
+    "wfl-structured-th-04",
+    "wfl-structured-th-05",
+    "wfl-clear-en-03",
+    "wfl-clear-en-04",
+    "wfl-clear-en-05",
+    "wfl-clear-th-02",
+    "wfl-clear-th-03",
+    "wfl-clear-th-04",
+    "wfl-clear-th-05",
+    "wfl-ambiguous-en-02",
+    "wfl-ambiguous-th-02",
+    "wfl-ambiguous-th-03",
+    "wfl-adversarial-en-02",
+    "wfl-adversarial-en-03",
+    "wfl-adversarial-th-02"
+  ]
+}
