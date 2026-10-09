@@ -25,11 +25,10 @@ related: 00-overview.md, 02-architecture.md, 03-nfr-security.md
 ```bash
 cd apps/video-postproduction-desktop
 npm ci
-npm run typecheck          # หรือ task video-postproduction:desktop:typecheck
-npm test                   # หรือ task video-postproduction:desktop:test
+npm run typecheck
+npm test
 npm run make               # typecheck + test + smoke:launcher + stage:runtime + electron-forge make
 npm run verify:artifacts   # ตรวจ Setup.exe / nupkg / RELEASES และ sha256
-# หรือ task video-postproduction:desktop:make -- <args>
 ```
 
 ผลลัพธ์อยู่ที่ `dist/forge-out/make/squirrel.windows/x64` ช่องทางเผยแพร่ให้ผู้ใช้ **[ต้องยืนยัน]**
@@ -78,5 +77,5 @@ shell ไม่มีข้อมูลต้องสำรอง ข้อม�
 ## แหล่งข้อมูล
 
 - `apps/video-postproduction-desktop/package.json`, `apps/video-postproduction-desktop/forge.config.js`, `apps/video-postproduction-desktop/src/runtime/constants.js`, `apps/video-postproduction-desktop/src/runtime/manager.js`
-- `infra/tasks/products.yml` (`video-postproduction:desktop:test`, `:typecheck`, `:make`)
+- `package.json` scripts (`npm test`, `npm run typecheck`, `npm run make`)
 - `services/video-postproduction/README.md`
