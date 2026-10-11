@@ -55,7 +55,7 @@ def load_catalog_tool_ids(catalog_path: Path = CATALOG_PATH) -> list[str]:
     if not catalog_path.is_file():
         raise FileNotFoundError(
             f"production tools catalog not found at {catalog_path}; "
-            "set SOLO_EMPIRE_ROOT to the Solo Empire workspace that holds catalog/production-tools.yaml"
+            "set SOLO_EMPIRE_ROOT to the Solo Empire workspace that holds repository-catalog/registries/production-tools.yaml"
         )
     data = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
     return [str(tool["id"]) for tool in data["tools"]]
