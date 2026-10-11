@@ -9,8 +9,9 @@
 # probes local runtimes; runtime probing belongs to `book-production doctor`
 # (roadmap T5.2) inside the owning repository.
 #
-# cli_entry_point and evidence paths are relative to this repository root;
-# cli_command and paths inside notes or input_schema run from owning_repo.
+# owning_repo is a GitHub repository (bookchaowalit/<repo>). cli_entry_point and a
+# path input_schema are relative to that repository; evidence paths are relative to
+# this repository. cli_command and paths inside notes run from owning_repo.
 schema_version: solo-empire.production-tools.v1
 catalog_path: catalog/production-tools.yaml
 dashboard_page: dashboard/PRODUCTION-TOOLS.md
@@ -36,8 +37,8 @@ tools:
   # --- Book Production Platform: services/ (moved from the root 2026-10-09) ---
   - id: documents-v1a
     name: Documents V1A.1 + V1C Scan Import
-    owning_repo: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform
-    cli_entry_point: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/services/document-production-api/document_production/cli.py
+    owning_repo: bookchaowalit/book-production-platform
+    cli_entry_point: services/document-production-api/document_production/cli.py
     cli_command: "python -m document_production.cli render|smoke|scan"
     input_schema: DocumentRequest (document render) / ScanImportRequest typed models (scan source is a PDF, DOCX, or PNG/JPEG/TIFF/WebP image)
     outputs:
@@ -63,8 +64,8 @@ tools:
 
   - id: data-viz-v1a
     name: Data + Data Viz V1A (CSV Cleaner → Chart Builder)
-    owning_repo: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform
-    cli_entry_point: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/services/data-production-api/data_production/cli.py
+    owning_repo: bookchaowalit/book-production-platform
+    cli_entry_point: services/data-production-api/data_production/cli.py
     cli_command: "python -m data_production.cli build --input request.json --output .runtime/data-job"
     input_schema: DatasetIR request (typed CSV + schema, ChartIR), or a CSV/TSV/XLSX file read by packages/file-intake
     outputs:
@@ -84,8 +85,8 @@ tools:
 
   - id: marketing-v1a
     name: Marketing V1A Campaign Package
-    owning_repo: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform
-    cli_entry_point: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/services/marketing-production-api/marketing_production/cli.py
+    owning_repo: bookchaowalit/book-production-platform
+    cli_entry_point: services/marketing-production-api/marketing_production/cli.py
     cli_command: "python -m marketing_production.cli build"
     input_schema: CampaignIR structured request
     outputs:
@@ -104,8 +105,8 @@ tools:
 
   - id: web-v1a
     name: Web V1A Landing Builder
-    owning_repo: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform
-    cli_entry_point: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/services/web-production-api/web_production/cli.py
+    owning_repo: bookchaowalit/book-production-platform
+    cli_entry_point: services/web-production-api/web_production/cli.py
     cli_command: "python -m web_production.cli build"
     input_schema: bounded page spec (WebPageIR)
     outputs:
@@ -124,8 +125,8 @@ tools:
 
   - id: workflow-v1a
     name: Workflow V1A Plan Builder
-    owning_repo: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform
-    cli_entry_point: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/services/workflow-production-api/workflow_production/cli.py
+    owning_repo: bookchaowalit/book-production-platform
+    cli_entry_point: services/workflow-production-api/workflow_production/cli.py
     cli_command: "python -m workflow_production.cli build"
     input_schema: typed form + bounded DAG (WorkflowIR)
     outputs:
@@ -144,8 +145,8 @@ tools:
 
   - id: video-studio
     name: Video Post-Production Studio (desktop installer v0.1.4 candidate)
-    owning_repo: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform
-    cli_entry_point: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/services/video-postproduction/docker-compose.yml
+    owning_repo: bookchaowalit/book-production-platform
+    cli_entry_point: services/video-postproduction/docker-compose.yml
     cli_command: "docker compose -f services/video-postproduction/docker-compose.yml up --build"
     input_schema: media upload + project job via local API (video_postproduction schemas)
     outputs:
@@ -174,14 +175,14 @@ tools:
       - docs/superpowers/plans/2026-09-26-production-tools-roadmap.md#t4-ตรวจความทนทานของ-video-studio
       - docs/superpowers/plans/2026-09-29-video-v1c-production-readiness.md
       - docs/superpowers/plans/2026-09-23-video-postproduction-native-desktop.md
-      - projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/services/video-postproduction/README.md
+      - services/video-postproduction/README.md
 
   - id: audio-batch-v1a
     name: Book Audio Production (Audio V1A loudness + trim batch)
-    owning_repo: projects/product/engineering/book-dev/github/bookchaowalit/private/book-apps/tools/book-audio-production
-    cli_entry_point: projects/product/engineering/book-dev/github/bookchaowalit/private/book-apps/tools/book-audio-production/src/book_audio_production/cli.py
+    owning_repo: bookchaowalit/book-audio-production
+    cli_entry_point: src/book_audio_production/cli.py
     cli_command: "book-audio --batch batch.json"
-    input_schema: projects/product/engineering/book-dev/github/bookchaowalit/private/book-apps/tools/book-audio-production/schemas/audio-batch.v1.schema.json
+    input_schema: schemas/audio-batch.v1.schema.json
     outputs:
       - FLAC or 24-bit PCM WAV per track
       - batch result manifest
@@ -201,8 +202,8 @@ tools:
   # --- book-production-platform (nested product repository) ---
   - id: scene3d-v1a
     name: 3D Product Scene Composer V1A
-    owning_repo: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform
-    cli_entry_point: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/src/book_production_platform/scene3d/runtime.py
+    owning_repo: bookchaowalit/book-production-platform
+    cli_entry_point: src/book_production_platform/scene3d/runtime.py
     cli_command: "book-production scene compose|benchmark"
     input_schema: SceneIR (scene-ir.v1) + local self-contained GLB
     outputs:
@@ -224,8 +225,8 @@ tools:
 
   - id: graphics-v1a
     name: Graphics V1A Template Batch
-    owning_repo: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform
-    cli_entry_point: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/src/book_production_platform/graphics_production/cli.py
+    owning_repo: bookchaowalit/book-production-platform
+    cli_entry_point: src/book_production_platform/graphics_production/cli.py
     cli_command: "book-production graphics batch"
     input_schema: GraphicIR batch request (JSON + brand tokens + local assets) naming a data-defined theme (graphics_production/themes)
     outputs:
@@ -249,8 +250,8 @@ tools:
 
   - id: spreadsheet-v1a
     name: Spreadsheet V1A Workbook Builder
-    owning_repo: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform
-    cli_entry_point: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/src/book_production_platform/spreadsheet_production/cli.py
+    owning_repo: bookchaowalit/book-production-platform
+    cli_entry_point: src/book_production_platform/spreadsheet_production/cli.py
     cli_command: "book-production spreadsheet build|benchmark"
     input_schema: WorkbookIR (typed tables + template parameters), or a CSV/TSV/XLSX file via spreadsheet from-file / brief
     outputs:
@@ -270,8 +271,8 @@ tools:
 
   - id: data-pipeline-v1a
     name: Data SQL/Pipeline Builder V1A
-    owning_repo: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform
-    cli_entry_point: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/src/book_production_platform/data_pipeline/cli.py
+    owning_repo: bookchaowalit/book-production-platform
+    cli_entry_point: src/book_production_platform/data_pipeline/cli.py
     cli_command: "book-production data pipeline build"
     input_schema: pipeline-request.v1 operation graph
     outputs:
@@ -296,10 +297,10 @@ tools:
 
   - id: cad-v1a
     name: CAD Parametric Part Generator V1A
-    owning_repo: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform
-    cli_entry_point: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/src/book_production_platform/cad_production/cli.py
+    owning_repo: bookchaowalit/book-production-platform
+    cli_entry_point: src/book_production_platform/cad_production/cli.py
     cli_command: "book-production cad build|benchmark"
-    input_schema: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/src/book_production_platform/cad_ir/part-ir.v1.schema.json
+    input_schema: src/book_production_platform/cad_ir/part-ir.v1.schema.json
     outputs:
       - part.FCStd
       - part.step
@@ -322,10 +323,10 @@ tools:
 
   - id: bim-v1a
     name: BIM Quantity Takeoff V1A
-    owning_repo: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform
-    cli_entry_point: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/src/book_production_platform/bim_production/cli.py
+    owning_repo: bookchaowalit/book-production-platform
+    cli_entry_point: src/book_production_platform/bim_production/cli.py
     cli_command: "book-production bim takeoff|benchmark"
-    input_schema: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/src/book_production_platform/bim_ir/bim-takeoff.v1.schema.json
+    input_schema: src/book_production_platform/bim_ir/bim-takeoff.v1.schema.json
     outputs:
       - takeoff.json
       - takeoff.csv
@@ -345,10 +346,10 @@ tools:
 
   - id: audio-master-v1a
     name: Audio Master V1A (single-track mastering)
-    owning_repo: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform
-    cli_entry_point: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/src/book_production_platform/audio_production/cli.py
+    owning_repo: bookchaowalit/book-production-platform
+    cli_entry_point: src/book_production_platform/audio_production/cli.py
     cli_command: "book-production audio master"
-    input_schema: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/src/book_production_platform/audio_ir/audio-ir.v1.schema.json
+    input_schema: src/book_production_platform/audio_ir/audio-ir.v1.schema.json
     outputs:
       - master.wav (24-bit/48 kHz)
       - qa-manifest.json
@@ -361,15 +362,15 @@ tools:
       Numerical loudness/true-peak QA passes, but the product README records
       that human listening review remains a separate product gate.
     evidence:
-      - projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/README.md#audio-master-v1a
+      - README.md#audio-master-v1a
       - docs/superpowers/plans/2026-09-26-production-tools-roadmap.md#t3-audio--ด่านให้คนฟังตรวจ
 
   - id: game-v1a
     name: Game Scene Prototype Builder V1A
-    owning_repo: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform
-    cli_entry_point: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/src/book_production_platform/game_production/cli.py
+    owning_repo: bookchaowalit/book-production-platform
+    cli_entry_point: src/book_production_platform/game_production/cli.py
     cli_command: "book-production game build|export|benchmark"
-    input_schema: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/src/book_production_platform/game_ir/game-ir.v1.schema.json
+    input_schema: src/book_production_platform/game_ir/game-ir.v1.schema.json
     outputs:
       - native Unity project
       - gameplay-trace.json
@@ -391,5 +392,5 @@ tools:
       V1B AI brief adapter (2026-10-03): GameIR layouts with an entity allowlist and
       reachability check; EVAL-GAM-brief30 IR-level gate passes; Unity gate pending.
     evidence:
-      - projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/README.md#game-scene-prototype-builder-v1a
+      - README.md#game-scene-prototype-builder-v1a
       - docs/superpowers/plans/2026-09-24-game-scene-prototype-builder-v1a.md
