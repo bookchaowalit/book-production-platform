@@ -24,18 +24,18 @@
 1. ใช้ Python environment ของโปรเจกต์ (คำสั่ง `book-production` อยู่ในนั้น)
 
    ```bash
-   source /home/bookchaowalit/solo-empire/.runtime/venv-platform/bin/activate
+   source .runtime/venv-platform/bin/activate
    ```
 
 2. ติดตั้งฟอนต์ที่ธีมใช้ (จาก Google Fonts, ใบอนุญาต OFL ใช้งานเชิงพาณิชย์ได้) ไม่งั้น Affinity และภาพ PNG จะใช้ฟอนต์อื่นแทน:
    **Sarabun, Kanit, Mitr, Chakra Petch, Trirong, Itim, Sriracha** (ไทย) และ **Anton, Bungee, Limelight,
    Monoton, Press Start 2P, Special Elite, Playfair Display, Space Mono** (ลาติน) ชุดนี้อยู่ใน
-   `/home/bookchaowalit/solo-empire/.runtime/fonts` แล้ว ดับเบิลคลิกติดตั้งในเครื่องที่ใช้ Affinity
+   `.runtime/fonts` แล้ว ดับเบิลคลิกติดตั้งในเครื่องที่ใช้ Affinity
 3. ตัวทำภาพ PNG: ถ้ามี Chrome/Edge ระบบใช้ให้เอง ถ้าไม่มีจะใช้ `resvg-py`
    (`pip install .[preview]`) ถ้าฟอนต์อยู่นอกโฟลเดอร์ระบบ ให้บอกที่อยู่:
 
    ```bash
-   export GRAPHICS_PRODUCTION_FONT_DIRS=/home/bookchaowalit/solo-empire/.runtime/fonts
+   export GRAPHICS_PRODUCTION_FONT_DIRS=.runtime/fonts
    export GRAPHICS_PRODUCTION_FALLBACK_FONT=Sarabun
    ```
 
@@ -140,7 +140,7 @@ book-production graphics edit --request work/synthwave-portrait.request.json \
 book-production graphics edit --request work/synthwave-portrait.request.json \
   --instruction "เปลี่ยนเป็นสไตล์ ice ซ่อนดาว และขยายดวงอาทิตย์ 15%" \
   --output v2 --job-id solo-ai-1 \
-  --provider-config /home/bookchaowalit/solo-empire/.runtime/provider-configs/graphics-edit.json
+  --provider-config .runtime/provider-configs/graphics-edit.json
 ```
 
 สั่งต่อจากผลเดิม: ส่ง `v2/design-request.json` เป็น `--request` แล้วตั้ง `--job-id` ใหม่ทุกครั้ง
@@ -166,7 +166,7 @@ AI เห็นแค่รายการค่าที่ปรับได�
 
 ```bash
 book-production graphics edit-shadow \
-  --provider-config /home/bookchaowalit/solo-empire/.runtime/provider-configs/graphics-edit.json \
+  --provider-config .runtime/provider-configs/graphics-edit.json \
   --cases tests/graphics/fixtures/eval_gfx_edit24.json \
   --split tests/graphics/fixtures/eval_gfx_edit24_split.json --output edit-shadow.json
 ```
@@ -176,8 +176,8 @@ book-production graphics edit-shadow \
 
 ```bash
 book-production graphics edit-shadow \
-  --provider-config /home/bookchaowalit/solo-empire/.runtime/provider-configs/graphics-edit.json \
-  --style-provider-config /home/bookchaowalit/solo-empire/.runtime/provider-configs/graphics-art-style.json \
+  --provider-config .runtime/provider-configs/graphics-edit.json \
+  --style-provider-config .runtime/provider-configs/graphics-art-style.json \
   --cases tests/graphics/fixtures/eval_gfx_edit_art20.json \
   --split tests/graphics/fixtures/eval_gfx_edit_art20_split.json --output edit-art-shadow.json
 ```
@@ -225,10 +225,10 @@ AI เลือกสี ฟอนต์ และของตกแต่งจ
 และลองทำภาพจริง 3 แบบก่อนเก็บเข้าคลัง ถ้าไม่ผ่านจะให้ AI แก้หนึ่งรอบ ถ้ายังไม่ผ่านจะไม่บันทึก:
 
 ```bash
-export GRAPHICS_PRODUCTION_STYLE_DIR=/home/bookchaowalit/solo-empire/.runtime/graphics-styles
+export GRAPHICS_PRODUCTION_STYLE_DIR=.runtime/graphics-styles
 book-production graphics style-create --description "งานวัดไทย ไฟกระพริบ สีสด" \
   --job-id style-temple-1 --output style-preview \
-  --provider-config /home/bookchaowalit/solo-empire/.runtime/provider-configs/graphics-art-style.json
+  --provider-config .runtime/provider-configs/graphics-art-style.json
 ```
 
 style ที่ได้จะอยู่ในคลังและใช้แบบเดียวกับ style ในตัว ถ้าส่ง `--style-provider-config` ให้คำสั่ง `edit`
@@ -273,7 +273,7 @@ book-production graphics make --theme grand_opening --variant portrait \
 "ให้รูปพื้นหลังเป็นขาวดำจาง ๆ" ถ้ารูป `front` บังตัวหนังสือเกิน 15% ระบบจะถามกลับ (`photo_covers_text`) แทนการทำต่อ
 
 การตัดพื้นหลังแบบ `ai` ต้องติดตั้งครั้งเดียว (`pip install .[cutout]`) และโหลดโมเดลมาเก็บไว้ในเครื่อง
-(`U2NET_HOME=/home/bookchaowalit/solo-empire/.runtime/u2net`) ถ้าไม่มีจะใช้ `plain` แทนและบันทึกไว้ใน trace
+(`U2NET_HOME=.runtime/u2net`) ถ้าไม่มีจะใช้ `plain` แทนและบันทึกไว้ใน trace
 รูปที่แต่งแล้วฝังใน SVG เป็น PNG ขนาดเท่ากรอบ ถ้าจะแก้ต่อใน Affinity ให้ใช้รูปต้นฉบับ
 โดยทำตามขั้นตอนใน `MANUAL-STEPS.md` (มีขั้นตอนลบพื้นหลัง ครอป มาสก์ ฟิลเตอร์ ขอบ และเงาของแต่ละรูป)
 

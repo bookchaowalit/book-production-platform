@@ -18,8 +18,8 @@ adapter และ engine ที่ตรวจสอบซ้ำได้ ใช
   video studio web/desktop)
 
 แต่ละ service และ package มี `pyproject.toml`/`package.json` และเทสต์ของตัวเอง
-รันจากโฟลเดอร์นั้น production hub อ่าน `catalog/production-tools.yaml` จาก
-Solo Empire workspace ที่ครอบ checkout นี้อยู่ หรือจาก `SOLO_EMPIRE_ROOT`
+รันจากโฟลเดอร์นั้น production hub อ่าน `catalog/production-tools.yaml` ใน repo นี้
+(repo เป็นเจ้าของ catalog; solo-empire อ่านไฟล์นี้จาก checkout ข้างเคียง)
 
 ## Doctor — ตรวจ runtime และความพร้อมของแต่ละ product
 

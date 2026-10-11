@@ -1,0 +1,395 @@
+# Production tools catalog — single source of truth (roadmap T5.1).
+# Every tool records its owning repo, a real CLI entry point, input schema,
+# output artifacts, required runtimes, gate status, and evidence references.
+# The generated dashboard page is dashboard/PRODUCTION-TOOLS.md; regenerate it
+# with `task production-tools:write` and verify drift with
+# `task production-tools:check` (infra/scripts/utils/production_tools_catalog_guard.py).
+#
+# Gate statuses are filled ONLY from recorded evidence. This guard never
+# probes local runtimes; runtime probing belongs to `book-production doctor`
+# (roadmap T5.2) inside the owning repository.
+#
+# cli_entry_point and evidence paths are relative to this repository root;
+# cli_command and paths inside notes or input_schema run from owning_repo.
+schema_version: solo-empire.production-tools.v1
+catalog_path: catalog/production-tools.yaml
+dashboard_page: dashboard/PRODUCTION-TOOLS.md
+runtime_vocabulary:
+  - blender
+  - ffmpeg
+  - freecadcmd
+  - unity
+gate_statuses:
+  accepted: synthetic acceptance gate passed
+  pilot-ready: deterministic gate passed; human/visual gate pending
+  needs-human-gate: waiting for a recorded human review gate (listening/visual/fresh-install smoke)
+  blocked: cannot proceed until an external dependency is resolved
+  experimental: implementation exists without a recorded acceptance gate
+notes: >-
+  Enumeration (2026-09-26) found 15 production tools with real entry points
+  and recorded evidence, not the 13 approximated in the roadmap overview.
+  Documents V1A.1 and Documents V1C Scan Import share one service and CLI and
+  are one entry; the two audio tools are separate products in separate
+  repositories (batch preparation vs single-track mastering).
+
+tools:
+  # --- Book Production Platform: services/ (moved from the root 2026-10-09) ---
+  - id: documents-v1a
+    name: Documents V1A.1 + V1C Scan Import
+    owning_repo: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform
+    cli_entry_point: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/services/document-production-api/document_production/cli.py
+    cli_command: "python -m document_production.cli render|smoke|scan"
+    input_schema: DocumentRequest (document render) / ScanImportRequest typed models (scan source is a PDF, DOCX, or PNG/JPEG/TIFF/WebP image)
+    outputs:
+      - DOCX
+      - PDF
+      - QA manifest
+      - scan import proposals + QA manifest
+    runtimes: []
+    gate_status: pilot-ready
+    boundary_modules: []
+    notes: >-
+      V1A.1 hardening accepted (pytest 83 passed, ruff, strict mypy, smoke
+      fresh + replayed, root commit 1dcf44b9). Visual golden evidence is still
+      pending. V1C Scan Import passed its synthetic gate; real Poppler +
+      Tesseract OCR runtime is not installed or verified on this host.
+      V1B AI brief adapter (2026-10-03): real Central AI Gateway adapter on packages/brief-
+      adapter-kit, fail-closed config with rate card and per-job/day/month caps, grounding,
+      brief-shadow evaluator; mode stays shadow until the owner approves a rate card and a
+      held-out shadow run passes.
+    evidence:
+      - docs/superpowers/plans/2026-09-26-production-tools-roadmap.md#t2-documents-v1a1--เสริมความทนทาน
+      - docs/superpowers/plans/2026-09-22-production-platform-next-products.md#14-documents-v1c-scan-import--synthetic-gate-evidence-2026-09-24
+
+  - id: data-viz-v1a
+    name: Data + Data Viz V1A (CSV Cleaner → Chart Builder)
+    owning_repo: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform
+    cli_entry_point: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/services/data-production-api/data_production/cli.py
+    cli_command: "python -m data_production.cli build --input request.json --output .runtime/data-job"
+    input_schema: DatasetIR request (typed CSV + schema, ChartIR), or a CSV/TSV/XLSX file read by packages/file-intake
+    outputs:
+      - cleaned.csv
+      - chart.svg
+      - report.json
+    runtimes: []
+    gate_status: accepted
+    notes: >-
+      V1B AI brief adapter (2026-10-03): column mapping and chart type/aggregation from
+      allowlists via brief-adapter-kit; EVAL-DVZ-brief30 offline gate passes; shadow-only
+      until owner config.
+    boundary_modules: []
+    evidence:
+      - docs/superpowers/plans/2026-09-22-production-platform-next-products.md#15-data--data-viz-v1a-axis-follow-up--synthetic-gate-evidence-2026-09-24
+      - docs/superpowers/plans/2026-09-22-data-viz-v1a.md
+
+  - id: marketing-v1a
+    name: Marketing V1A Campaign Package
+    owning_repo: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform
+    cli_entry_point: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/services/marketing-production-api/marketing_production/cli.py
+    cli_command: "python -m marketing_production.cli build"
+    input_schema: CampaignIR structured request
+    outputs:
+      - campaign package JSON
+      - manifest
+    runtimes: []
+    gate_status: accepted
+    notes: >-
+      V1B AI brief adapter (2026-10-03): per-channel copy proposals with length, forbidden-
+      word, and claim-evidence checks; EVAL-MKT-brief40 offline gate passes; shadow-only until
+      owner config.
+    boundary_modules: []
+    evidence:
+      - docs/superpowers/plans/2026-09-22-production-platform-next-products.md#10-marketing-v1a-pilot-evidence--2026-09-22
+      - docs/superpowers/plans/2026-09-22-marketing-v1a.md
+
+  - id: web-v1a
+    name: Web V1A Landing Builder
+    owning_repo: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform
+    cli_entry_point: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/services/web-production-api/web_production/cli.py
+    cli_command: "python -m web_production.cli build"
+    input_schema: bounded page spec (WebPageIR)
+    outputs:
+      - landing HTML
+      - local CSS
+      - QA manifest
+    runtimes: []
+    gate_status: accepted
+    notes: >-
+      V1B AI brief adapter (2026-10-03): registered sections and copy only (no model HTML, JS,
+      or URLs); EVAL-WEB-brief30 offline gate passes; shadow-only until owner config.
+    boundary_modules: []
+    evidence:
+      - docs/superpowers/plans/2026-09-22-production-platform-next-products.md#11-web-v1a-pilot-evidence--2026-09-22
+      - docs/superpowers/plans/2026-09-22-web-v1a.md
+
+  - id: workflow-v1a
+    name: Workflow V1A Plan Builder
+    owning_repo: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform
+    cli_entry_point: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/services/workflow-production-api/workflow_production/cli.py
+    cli_command: "python -m workflow_production.cli build"
+    input_schema: typed form + bounded DAG (WorkflowIR)
+    outputs:
+      - topological plan
+      - Markdown document
+    runtimes: []
+    gate_status: accepted
+    notes: >-
+      V1B AI brief adapter (2026-10-03): WorkflowIR DAG proposals with a role allowlist and
+      the existing DAG validator; EVAL-WFL-brief30 offline gate passes; shadow-only until
+      owner config.
+    boundary_modules: []
+    evidence:
+      - docs/superpowers/plans/2026-09-22-production-platform-next-products.md#12-workflow-v1a-pilot-evidence--2026-09-22
+      - docs/superpowers/plans/2026-09-22-workflow-v1a.md
+
+  - id: video-studio
+    name: Video Post-Production Studio (desktop installer v0.1.4 candidate)
+    owning_repo: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform
+    cli_entry_point: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/services/video-postproduction/docker-compose.yml
+    cli_command: "docker compose -f services/video-postproduction/docker-compose.yml up --build"
+    input_schema: media upload + project job via local API (video_postproduction schemas)
+    outputs:
+      - transcript
+      - EDL
+      - first-cut render
+    runtimes: []
+    gate_status: needs-human-gate
+    capability_tracks: ["Mobile & Desktop Engineering"]
+    boundary_modules: []
+    notes: >-
+      Runs through Docker Compose (API, worker, web) with the Electron desktop
+      installer from apps/video-postproduction-desktop. The v0.1.4 candidate
+      includes offline newmm, Thai fonts, and migrations 0001-0003. No-cache
+      PyAV 18.x transcription, both 30-minute synthetic quality runs, and six
+      caption golden frames passed. Both full 38m12s real Thai quality runs
+      succeeded with the documented explicit th language hint; six real review
+      clips passed render/decode/preview checks. Automatic detection on an
+      opening-silence source remains a separate defect. Real Thai 60-minute
+      evidence, owner scoring, and fresh-install smoke on a new Windows user
+      remain open; not pilot-ready.
+      V2 AI highlight proposals (2026-10-03): segment-id ranges only, boundary-aligned
+      EDLProposal requiring user confirmation, private projects never dispatched; EVAL-VID-
+      highlight offline gate passes; not wired into the API or web app yet.
+    evidence:
+      - docs/superpowers/plans/2026-09-26-production-tools-roadmap.md#t4-ตรวจความทนทานของ-video-studio
+      - docs/superpowers/plans/2026-09-29-video-v1c-production-readiness.md
+      - docs/superpowers/plans/2026-09-23-video-postproduction-native-desktop.md
+      - projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/services/video-postproduction/README.md
+
+  - id: audio-batch-v1a
+    name: Book Audio Production (Audio V1A loudness + trim batch)
+    owning_repo: projects/product/engineering/book-dev/github/bookchaowalit/private/book-apps/tools/book-audio-production
+    cli_entry_point: projects/product/engineering/book-dev/github/bookchaowalit/private/book-apps/tools/book-audio-production/src/book_audio_production/cli.py
+    cli_command: "book-audio --batch batch.json"
+    input_schema: projects/product/engineering/book-dev/github/bookchaowalit/private/book-apps/tools/book-audio-production/schemas/audio-batch.v1.schema.json
+    outputs:
+      - FLAC or 24-bit PCM WAV per track
+      - batch result manifest
+    runtimes:
+      - ffmpeg
+    gate_status: needs-human-gate
+    capability_tracks: ["Specialized Product Engineering"]
+    boundary_modules: []
+    notes: >-
+      Technical acceptance passed per the implementation plan header
+      (implementation Task 0-7 committed in the product repository); the human
+      listening gate is still pending before pilot-ready (roadmap T3).
+    evidence:
+      - docs/superpowers/plans/2026-09-23-audio-v1a-implementation.md
+      - docs/superpowers/plans/2026-09-26-production-tools-roadmap.md#t3-audio--ด่านให้คนฟังตรวจ
+
+  # --- book-production-platform (nested product repository) ---
+  - id: scene3d-v1a
+    name: 3D Product Scene Composer V1A
+    owning_repo: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform
+    cli_entry_point: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/src/book_production_platform/scene3d/runtime.py
+    cli_command: "book-production scene compose|benchmark"
+    input_schema: SceneIR (scene-ir.v1) + local self-contained GLB
+    outputs:
+      - scene.blend
+      - render.png
+      - qa-manifest.json
+    runtimes:
+      - blender
+    gate_status: accepted
+    notes: >-
+      V1B AI brief adapter (2026-10-03): registered SceneIR presets only; EVAL-S3D-brief30 IR-
+      level gate passes; Blender render gate pending.
+    capability_tracks: ["Specialized Product Engineering"]
+    boundary_modules:
+      - scene3d-production
+    evidence:
+      - docs/superpowers/plans/2026-09-22-production-platform-next-products.md#13-3d-product-scene-composer--local-v1a-implementation-2026-09-23
+      - docs/superpowers/plans/2026-09-23-3d-product-scene-composer-v1a.md
+
+  - id: graphics-v1a
+    name: Graphics V1A Template Batch
+    owning_repo: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform
+    cli_entry_point: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/src/book_production_platform/graphics_production/cli.py
+    cli_command: "book-production graphics batch"
+    input_schema: GraphicIR batch request (JSON + brand tokens + local assets) naming a data-defined theme (graphics_production/themes)
+    outputs:
+      - editable SVG
+      - preview PNG
+    runtimes: []
+    gate_status: accepted
+    capability_tracks: ["Specialized Product Engineering"]
+    boundary_modules:
+      - graphics-production
+    notes: >-
+      Rasterization uses a local headless Microsoft Edge or Google Chrome
+      installation configured via GRAPHICS_PRODUCTION_BROWSER; this browser is
+      not part of the canonical runtime vocabulary above.
+      V1B AI brief adapter (2026-10-03): registry templates, grounded text, and brand refs
+      with overflow shortening inside the 2-call cap; EVAL-GFX-brief40 offline gate passes;
+      shadow-only until owner config.
+    evidence:
+      - docs/superpowers/plans/2026-09-22-production-platform-next-products.md#6-graphics-v1a--product-ที่สอง
+      - docs/superpowers/plans/2026-09-22-graphics-v1a.md
+
+  - id: spreadsheet-v1a
+    name: Spreadsheet V1A Workbook Builder
+    owning_repo: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform
+    cli_entry_point: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/src/book_production_platform/spreadsheet_production/cli.py
+    cli_command: "book-production spreadsheet build|benchmark"
+    input_schema: WorkbookIR (typed tables + template parameters), or a CSV/TSV/XLSX file via spreadsheet from-file / brief
+    outputs:
+      - editable XLSX with Summary and Detail sheets
+    runtimes: []
+    gate_status: accepted
+    notes: >-
+      V1B AI brief adapter (2026-10-03): column mapping and allowlisted formula intents
+      compiled by the engine (opt-in spreadsheet-intents.v1); EVAL-XLS-brief40 offline gate
+      passes; shadow-only until owner config.
+    boundary_modules:
+      - spreadsheet-production
+      - spreadsheet-production-ir
+    evidence:
+      - docs/superpowers/plans/2026-09-22-production-platform-next-products.md#7-spreadsheet-v1a--product-ที่สาม
+      - docs/superpowers/plans/2026-09-22-spreadsheet-v1a.md
+
+  - id: data-pipeline-v1a
+    name: Data SQL/Pipeline Builder V1A
+    owning_repo: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform
+    cli_entry_point: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/src/book_production_platform/data_pipeline/cli.py
+    cli_command: "book-production data pipeline build"
+    input_schema: pipeline-request.v1 operation graph
+    outputs:
+      - pipeline.sql
+      - parameters.json
+      - report.json
+      - qa-manifest.json
+    runtimes: []
+    gate_status: accepted
+    boundary_modules:
+      - data-sql-pipeline-builder
+    notes: >-
+      Plan-only gate: compiles and validates parameterized SQL with an
+      in-memory SQLite EXPLAIN QUERY PLAN check; it does not connect to or
+      execute against a source database.
+      V1B AI question adapter (2026-10-03): registered PipelineIR nodes only, SQL and write
+      text rejected; EVAL-DPL-question40 offline gate passes with synthetic SQLite execution;
+      join is not supported by the engine.
+    evidence:
+      - docs/superpowers/plans/2026-09-22-production-platform-next-products.md#16-data-sqlpipeline-builder-v1a--synthetic-gate-evidence-2026-09-25
+      - docs/superpowers/plans/2026-09-24-data-sql-pipeline-builder-v1a.md
+
+  - id: cad-v1a
+    name: CAD Parametric Part Generator V1A
+    owning_repo: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform
+    cli_entry_point: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/src/book_production_platform/cad_production/cli.py
+    cli_command: "book-production cad build|benchmark"
+    input_schema: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/src/book_production_platform/cad_ir/part-ir.v1.schema.json
+    outputs:
+      - part.FCStd
+      - part.step
+      - part.stl
+      - preview.png
+      - qa-manifest.json
+    runtimes:
+      - freecadcmd
+    gate_status: accepted
+    notes: >-
+      V1B AI brief adapter (2026-10-03): PartIR parameters only when every dimension is stated
+      with a unit, units converted by the engine; EVAL-CAD-brief30 IR-level gate passes;
+      FreeCAD gate pending.
+    capability_tracks: ["Specialized Product Engineering"]
+    boundary_modules:
+      - cad-parametric-part-generator
+    evidence:
+      - docs/superpowers/plans/2026-09-22-production-platform-next-products.md#17-cad-parametric-part-generator-v1a--local-pilot-evidence-2026-09-25
+      - docs/superpowers/plans/2026-09-25-cad-parametric-part-generator-v1a.md
+
+  - id: bim-v1a
+    name: BIM Quantity Takeoff V1A
+    owning_repo: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform
+    cli_entry_point: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/src/book_production_platform/bim_production/cli.py
+    cli_command: "book-production bim takeoff|benchmark"
+    input_schema: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/src/book_production_platform/bim_ir/bim-takeoff.v1.schema.json
+    outputs:
+      - takeoff.json
+      - takeoff.csv
+      - qa-manifest.json
+    runtimes:
+      - freecadcmd
+    gate_status: accepted
+    capability_tracks: ["Specialized Product Engineering"]
+    boundary_modules: []
+    notes: >-
+      Synthetic acceptance gate passed 20/20 with pinned FreeCADCmd 1.1.3 /
+      Python 3.11 / IfcOpenShell 0.8.4 (commits 3d1efc9 through e0ea113);
+      repository check suite passed (585 tests, ruff, strict mypy).
+    evidence:
+      - docs/superpowers/plans/2026-09-22-production-platform-next-products.md#18-bim-quantity-takeoff-v1a--local-synthetic-gate-evidence-2026-09-26
+      - docs/superpowers/plans/2026-09-25-bim-quantity-takeoff-v1a.md
+
+  - id: audio-master-v1a
+    name: Audio Master V1A (single-track mastering)
+    owning_repo: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform
+    cli_entry_point: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/src/book_production_platform/audio_production/cli.py
+    cli_command: "book-production audio master"
+    input_schema: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/src/book_production_platform/audio_ir/audio-ir.v1.schema.json
+    outputs:
+      - master.wav (24-bit/48 kHz)
+      - qa-manifest.json
+    runtimes:
+      - ffmpeg
+    gate_status: needs-human-gate
+    capability_tracks: ["Specialized Product Engineering"]
+    boundary_modules: []
+    notes: >-
+      Numerical loudness/true-peak QA passes, but the product README records
+      that human listening review remains a separate product gate.
+    evidence:
+      - projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/README.md#audio-master-v1a
+      - docs/superpowers/plans/2026-09-26-production-tools-roadmap.md#t3-audio--ด่านให้คนฟังตรวจ
+
+  - id: game-v1a
+    name: Game Scene Prototype Builder V1A
+    owning_repo: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform
+    cli_entry_point: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/src/book_production_platform/game_production/cli.py
+    cli_command: "book-production game build|export|benchmark"
+    input_schema: projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/src/book_production_platform/game_ir/game-ir.v1.schema.json
+    outputs:
+      - native Unity project
+      - gameplay-trace.json
+      - qa-manifest.json
+      - web (WebGL) or Windows player with export-manifest.json
+    runtimes:
+      - unity
+    gate_status: accepted
+    capability_tracks: ["Specialized Product Engineering"]
+    boundary_modules: []
+    notes: >-
+      Benchmark 2026-09-24 passed (5 builds, 5 exact replays, all 9 invalid
+      fixtures and the tampered replay rejected; EditMode 10/10, PlayMode 5/5
+      on Unity 6000.6.2f1). Agent visual review passed 2026-09-25; gameplay is
+      verified by the automated PlayMode trace, not manual keyboard input.
+      Player export (`game export --target web|windows`) verified 2026-09-30:
+      WebGL loaded and moved in Chromium, Windows exe ran on D3D12, repeats
+      replayed without Unity. Android/iOS export not yet supported.
+      V1B AI brief adapter (2026-10-03): GameIR layouts with an entity allowlist and
+      reachability check; EVAL-GAM-brief30 IR-level gate passes; Unity gate pending.
+    evidence:
+      - projects/product/engineering/book-dev/github/bookchaowalit/private/book-production-platform/README.md#game-scene-prototype-builder-v1a
+      - docs/superpowers/plans/2026-09-24-game-scene-prototype-builder-v1a.md

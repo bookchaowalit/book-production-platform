@@ -20,7 +20,7 @@ from typing import Any
 
 import yaml
 
-from .paths import CATALOG_PATH, REGISTRY_DIR, REPO_ROOT, WORKSPACE_ROOT
+from .paths import CATALOG_PATH, REGISTRY_DIR, REPO_ROOT
 
 EXTERNAL_TOOL = "external"
 HUB_TOOL = "production-hub"
@@ -55,7 +55,7 @@ def load_catalog_tool_ids(catalog_path: Path = CATALOG_PATH) -> list[str]:
     if not catalog_path.is_file():
         raise FileNotFoundError(
             f"production tools catalog not found at {catalog_path}; "
-            "set SOLO_EMPIRE_ROOT to the Solo Empire workspace that holds repository-catalog/registries/production-tools.yaml"
+            "it lives at catalog/production-tools.yaml in the book-production-platform checkout"
         )
     data = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
     return [str(tool["id"]) for tool in data["tools"]]
@@ -166,8 +166,8 @@ def _check_handoffs(
 def check_registries(
     registries: Registries, catalog_ids: list[str], repo_root: Path | None = None
 ) -> list[str]:
-    # Evidence may live in this checkout or in the Solo Empire workspace docs.
-    evidence_roots = (repo_root,) if repo_root else (REPO_ROOT, WORKSPACE_ROOT)
+    # Evidence files live in this checkout.
+    evidence_roots = (repo_root or REPO_ROOT,)
     return [
         *_check_kinds(registries.kinds),
         *_check_tools(registries.tools, registries.kinds, catalog_ids),

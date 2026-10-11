@@ -6,7 +6,7 @@ production tools. Design: Production Hub spec (Solo Empire `docs/superpowers/spe
 Phase **H0** owns the contracts; phase **H1** adds a local content-addressed
 library with lineage and ingest adapters for existing tool job manifests. The
 Hub never runs tools or imports their code; tools keep ownership of their IR,
-validators, and engines as listed in `catalog/production-tools.yaml` (Solo Empire `catalog/production-tools.yaml`).
+validators, and engines as listed in `catalog/production-tools.yaml` (owned by this repository).
 
 ## Library (H1)
 
