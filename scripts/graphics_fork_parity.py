@@ -8,7 +8,7 @@ there (and so nothing that exists only in the fork is lost on archive).
 
 Usage::
 
-    python scripts/graphics_fork_parity.py --fork ../content-graphics-cli
+    python scripts/graphics_fork_parity.py --fork ../book-graphics-production
 
 Exit status is 1 when the fork has a module this repository lacks, or, with
 ``--strict``, when any shared module differs. Import paths are normalised
