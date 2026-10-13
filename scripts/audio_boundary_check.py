@@ -15,7 +15,7 @@ version recorded in Audio Master manifests (``ffmpeg_version``).
 
 Usage::
 
-    python scripts/audio_boundary_check.py --sibling ../book-audio-production
+    python scripts/audio_boundary_check.py --sibling ../content-audio-mastering-cli
 """
 
 from __future__ import annotations
