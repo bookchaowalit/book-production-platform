@@ -8,7 +8,7 @@ there (and so nothing that exists only in the fork is lost on archive).
 
 Usage::
 
-    python scripts/graphics_fork_parity.py --fork ../book-graphics-production
+    python scripts/graphics_fork_parity.py --fork ../book-apps/tools/content-graphics-cli
 
 Exit status is 1 when the fork has a module this repository lacks, or, with
 ``--strict``, when any shared module differs. Import paths are normalised
@@ -71,7 +71,7 @@ def compare(platform_dir: Path, fork_dir: Path) -> dict[str, list[str]]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--fork", type=Path, default=ROOT.parent / "book-graphics-production", help="path to a book-graphics-production checkout")
+    parser.add_argument("--fork", type=Path, default=ROOT.parent / "book-apps" / "tools" / "content-graphics-cli", help="path to a book-graphics-production checkout (folder content-graphics-cli)")
     parser.add_argument("--strict", action="store_true", help="also fail when a shared module differs")
     args = parser.parse_args(argv)
     if not args.fork.is_dir():

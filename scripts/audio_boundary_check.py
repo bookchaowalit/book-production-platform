@@ -15,7 +15,7 @@ version recorded in Audio Master manifests (``ffmpeg_version``).
 
 Usage::
 
-    python scripts/audio_boundary_check.py --sibling ../book-audio-production
+    python scripts/audio_boundary_check.py --sibling ../book-apps/tools/content-audio-mastering-cli
 """
 
 from __future__ import annotations
@@ -83,8 +83,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--sibling",
         type=Path,
-        default=ROOT.parent / "book-audio-production",
-        help="path to a book-audio-production checkout",
+        default=ROOT.parent / "book-apps" / "tools" / "content-audio-mastering-cli",
+        help="path to a book-audio-production checkout (folder content-audio-mastering-cli)",
     )
     args = parser.parse_args(argv)
     package = args.sibling / SIBLING_PACKAGE
