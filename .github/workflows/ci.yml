@@ -41,7 +41,7 @@ jobs:
         run: book-production doctor
 
       - name: Diag
-        run: python -m pytest tests/graphics/test_campaign.py -k parallel -s -p no:cacheprovider || true
+        run: python -m pytest tests/graphics/test_campaign.py -k parallel -s -p no:cacheprovider --basetemp=/tmp/diagbt || true; cat /tmp/diag.log || true; for f in $(find /tmp/diagbt -name 'manifest-*.json'); do echo $f; python -c "import json,sys; d=json.load(open(sys.argv[1])); print(d['status'], [(i['request_id'], i.get('error_code')) for i in d['items']])" $f; done
 
       - name: Run checks
         run: python scripts/check.py
