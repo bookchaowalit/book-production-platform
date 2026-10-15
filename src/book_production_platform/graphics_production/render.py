@@ -422,6 +422,7 @@ def render_png(ir: GraphicIR, *, asset_root: str | Path | None = None) -> bytes:
         try:
             with _BROWSER_RENDER_LOCK:
                 result = subprocess.run(command, capture_output=True, check=False, timeout=60)
+                import sys as _s; print("DIAG pid", os.getpid(), "rc", result.returncode, "png", png_path.is_file(), "err", result.stderr.decode(errors="replace")[-600:], "out", result.stdout.decode(errors="replace")[-300:], file=_s.stderr, flush=True)
                 if result.returncode != 0:
                     raise RenderError("browser_render_failed")
                 deadline = time.monotonic() + 30

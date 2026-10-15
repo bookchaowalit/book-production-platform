@@ -40,6 +40,9 @@ jobs:
       - name: Show local runtimes
         run: book-production doctor
 
+      - name: Diag
+        run: python -m pytest tests/graphics/test_campaign.py -k parallel -s -p no:cacheprovider || true
+
       - name: Run checks
         run: python scripts/check.py
 
