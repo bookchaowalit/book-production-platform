@@ -22,7 +22,10 @@ from pydantic import (
 DECIMAL_STRING_PATTERN = r"^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$"
 DecimalInput = Annotated[
     Decimal,
-    WithJsonSchema({"anyOf": [{"type": "number"}, {"type": "string", "pattern": DECIMAL_STRING_PATTERN}]}),
+    WithJsonSchema(
+        {"anyOf": [{"type": "number"}, {"type": "string", "pattern": DECIMAL_STRING_PATTERN}]},
+        mode="validation",
+    ),
 ]
 
 
