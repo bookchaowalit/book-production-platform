@@ -330,6 +330,8 @@ def _find_browser() -> str | None:
 
 
 def _browser_profile() -> Path:
+    """Folder that holds one fresh profile per render (see :func:`render_png`)."""
+
     configured = os.environ.get("GRAPHICS_PRODUCTION_BROWSER_PROFILE")
     profile = Path(configured) if configured else Path(tempfile.gettempdir()) / "book-graphics-production-browser-profile"
     try:
@@ -396,7 +398,13 @@ def render_png(ir: GraphicIR, *, asset_root: str | Path | None = None) -> bytes:
     if browser is None:
         raise RenderError("browser_not_found")
     canvas = ir.canvas
-    with tempfile.TemporaryDirectory(prefix="graphics-production-") as temporary:
+    # Each render gets its own profile: Chrome exits with code 21 when another instance holds a
+    # profile's SingletonLock, and parallel campaign workers are separate processes that the
+    # thread lock below cannot serialize.
+    with (
+        tempfile.TemporaryDirectory(prefix="graphics-production-") as temporary,
+        tempfile.TemporaryDirectory(prefix="render-", dir=_browser_profile(), ignore_cleanup_errors=True) as profile,
+    ):
         root = Path(temporary)
         svg_path = root / "render.svg"
         png_path = root / "render.png"
@@ -415,14 +423,13 @@ def render_png(ir: GraphicIR, *, asset_root: str | Path | None = None) -> bytes:
             "--hide-scrollbars",
             "--force-device-scale-factor=1",
             f"--window-size={canvas.width},{canvas.height}",
-            f"--user-data-dir={_browser_profile()}",
+            f"--user-data-dir={profile}",
             f"--screenshot={png_path}",
             svg_path.as_uri(),
         ]
         try:
             with _BROWSER_RENDER_LOCK:
                 result = subprocess.run(command, capture_output=True, check=False, timeout=60)
-                import sys as _s; print("DIAG pid", os.getpid(), "rc", result.returncode, "png", png_path.is_file(), "err", result.stderr.decode(errors="replace")[-600:], "out", result.stdout.decode(errors="replace")[-300:], file=open("/tmp/diag.log","a"), flush=True)
                 if result.returncode != 0:
                     raise RenderError("browser_render_failed")
                 deadline = time.monotonic() + 30
