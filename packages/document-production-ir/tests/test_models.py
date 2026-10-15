@@ -19,3 +19,14 @@ def test_request_round_trips_decimal_and_date():
     request = DocumentRequest.model_validate(SAMPLE_REQUEST)
     assert request.line_items[0].quantity == Decimal(2)
     assert request.issue_date == date(2026, 9, 22)
+
+
+def test_line_item_decimal_schema_is_pinned_independent_of_pydantic():
+    from document_ir.models import DECIMAL_STRING_PATTERN, LineItemInput
+
+    properties = LineItemInput.model_json_schema()["properties"]
+    for field in ("quantity", "unit_price", "tax_rate"):
+        assert properties[field]["anyOf"] == [
+            {"type": "number"},
+            {"type": "string", "pattern": DECIMAL_STRING_PATTERN},
+        ]

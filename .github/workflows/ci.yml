@@ -42,3 +42,46 @@ jobs:
 
       - name: Run checks
         run: python scripts/check.py
+
+  document-production-api:
+    # The Documents service and its IR package are separate installables that
+    # the root `scripts/check.py` gate does not collect. Run both suites here
+    # with a real Thai TTF so the PDF renderer and the published-schema
+    # contract tests run for real. The font must cover Latin and digits too
+    # (PDF text QA reads totals and dates back): TLWG Garuda does, while
+    # NotoSansThai is Thai-only and fails that QA.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      DOCUMENT_PRODUCTION_FONT: /usr/share/fonts/truetype/tlwg/Garuda.ttf
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            packages/document-production-ir/pyproject.toml
+            services/document-production-api/pyproject.toml
+
+      - name: Install Thai font
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends fonts-tlwg-garuda-ttf
+          test -f "$DOCUMENT_PRODUCTION_FONT"
+
+      - name: Install packages
+        run: |
+          python -m pip install \
+            -e "packages/document-production-ir[dev]" \
+            -e "services/document-production-api[dev]"
+          python -m pip show pydantic
+
+      - name: Test document IR
+        working-directory: packages/document-production-ir
+        run: python -m pytest
+
+      - name: Test document production API
+        working-directory: services/document-production-api
+        run: python -m pytest

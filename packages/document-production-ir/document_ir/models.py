@@ -4,9 +4,29 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    WithJsonSchema,
+    field_validator,
+    model_validator,
+)
+
+# The published request contracts advertise decimals as a JSON number or a
+# plain decimal string. Pin that shape explicitly instead of inheriting
+# whatever pydantic emits for ``Decimal`` (pydantic 2.14 dropped the string
+# ``pattern``), so the committed schemas stay stable across pydantic releases.
+DECIMAL_STRING_PATTERN = r"^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$"
+DecimalInput = Annotated[
+    Decimal,
+    WithJsonSchema(
+        {"anyOf": [{"type": "number"}, {"type": "string", "pattern": DECIMAL_STRING_PATTERN}]},
+        mode="validation",
+    ),
+]
 
 
 class ContractModel(BaseModel):
@@ -15,9 +35,9 @@ class ContractModel(BaseModel):
 
 class LineItemInput(ContractModel):
     description: str
-    quantity: Decimal
-    unit_price: Decimal
-    tax_rate: Decimal = Decimal(0)
+    quantity: DecimalInput
+    unit_price: DecimalInput
+    tax_rate: DecimalInput = Decimal(0)
 
     @field_validator("quantity", "unit_price", "tax_rate", mode="before")
     @classmethod
