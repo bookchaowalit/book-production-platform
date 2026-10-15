@@ -397,14 +397,22 @@ def render_png(ir: GraphicIR, *, asset_root: str | Path | None = None) -> bytes:
     browser = _find_browser()
     if browser is None:
         raise RenderError("browser_not_found")
-    canvas = ir.canvas
     # Each render gets its own profile: Chrome exits with code 21 when another instance holds a
     # profile's SingletonLock, and parallel campaign workers are separate processes that the
     # thread lock below cannot serialize.
-    with (
-        tempfile.TemporaryDirectory(prefix="graphics-production-") as temporary,
-        tempfile.TemporaryDirectory(prefix="render-", dir=_browser_profile(), ignore_cleanup_errors=True) as profile,
-    ):
+    try:
+        profile = tempfile.mkdtemp(prefix="render-", dir=_browser_profile())
+    except OSError as exc:
+        raise RenderError("browser_profile_unavailable") from exc
+    try:
+        return _render_with_browser(ir, asset_root, browser, profile)
+    finally:
+        shutil.rmtree(profile, ignore_errors=True)
+
+
+def _render_with_browser(ir: GraphicIR, asset_root: str | Path | None, browser: str, profile: str) -> bytes:
+    canvas = ir.canvas
+    with tempfile.TemporaryDirectory(prefix="graphics-production-") as temporary:
         root = Path(temporary)
         svg_path = root / "render.svg"
         png_path = root / "render.png"

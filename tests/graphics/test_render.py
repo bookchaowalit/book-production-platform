@@ -1,4 +1,6 @@
 from io import BytesIO
+from pathlib import Path
+from typing import Any
 from xml.etree import ElementTree
 
 import pytest
@@ -46,6 +48,43 @@ def test_render_png_fails_clearly_when_no_shaping_browser_is_available(monkeypat
 
     with pytest.raises(RenderError, match="browser_not_found"):
         render_png(ir)
+
+
+def test_render_png_rejects_cleanly_when_no_browser_profile_can_be_made(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    ir = compile_template(request_for("announcement"))
+    monkeypatch.setattr(render_module, "rasterizer", lambda: "browser")
+    monkeypatch.setattr(render_module, "_find_browser", lambda: "chrome")
+    monkeypatch.setenv("GRAPHICS_PRODUCTION_BROWSER_PROFILE", str(tmp_path / "profiles"))
+
+    def unwritable(**_kwargs: object) -> str:
+        raise PermissionError("profile folder is not writable")
+
+    monkeypatch.setattr(render_module.tempfile, "mkdtemp", unwritable)
+
+    with pytest.raises(RenderError, match="browser_profile_unavailable"):
+        render_png(ir)
+
+
+def test_each_browser_render_gets_its_own_profile_and_removes_it(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    ir = compile_template(request_for("announcement"))
+    monkeypatch.setattr(render_module, "rasterizer", lambda: "browser")
+    monkeypatch.setattr(render_module, "_find_browser", lambda: "chrome")
+    monkeypatch.setenv("GRAPHICS_PRODUCTION_BROWSER_PROFILE", str(tmp_path / "profiles"))
+    profiles: list[Path] = []
+
+    def fake_chrome(command: list[str], **_kwargs: Any) -> Any:
+        argument = {part.split("=", 1)[0]: part.split("=", 1)[1] for part in command if part.startswith("--") and "=" in part}
+        profiles.append(Path(argument["--user-data-dir"]))
+        assert profiles[-1].is_dir() and profiles[-1].parent == tmp_path / "profiles"
+        Image.new("RGB", (ir.canvas.width, ir.canvas.height)).save(argument["--screenshot"], format="PNG")
+        return render_module.subprocess.CompletedProcess(command, 0, b"", b"")
+
+    monkeypatch.setattr(render_module.subprocess, "run", fake_chrome)
+
+    render_png(ir)
+    render_png(ir)
+
+    assert len(set(profiles)) == 2 and not any(path.exists() for path in profiles)
 
 
 def test_render_svg_embeds_local_image_as_data() -> None:
