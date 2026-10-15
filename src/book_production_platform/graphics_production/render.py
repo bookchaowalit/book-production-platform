@@ -330,6 +330,8 @@ def _find_browser() -> str | None:
 
 
 def _browser_profile() -> Path:
+    """Folder that holds one fresh profile per render (see :func:`render_png`)."""
+
     configured = os.environ.get("GRAPHICS_PRODUCTION_BROWSER_PROFILE")
     profile = Path(configured) if configured else Path(tempfile.gettempdir()) / "book-graphics-production-browser-profile"
     try:
@@ -395,6 +397,20 @@ def render_png(ir: GraphicIR, *, asset_root: str | Path | None = None) -> bytes:
     browser = _find_browser()
     if browser is None:
         raise RenderError("browser_not_found")
+    # Each render gets its own profile: Chrome exits with code 21 when another instance holds a
+    # profile's SingletonLock, and parallel campaign workers are separate processes that the
+    # thread lock below cannot serialize.
+    try:
+        profile = tempfile.mkdtemp(prefix="render-", dir=_browser_profile())
+    except OSError as exc:
+        raise RenderError("browser_profile_unavailable") from exc
+    try:
+        return _render_with_browser(ir, asset_root, browser, profile)
+    finally:
+        shutil.rmtree(profile, ignore_errors=True)
+
+
+def _render_with_browser(ir: GraphicIR, asset_root: str | Path | None, browser: str, profile: str) -> bytes:
     canvas = ir.canvas
     with tempfile.TemporaryDirectory(prefix="graphics-production-") as temporary:
         root = Path(temporary)
@@ -415,7 +431,7 @@ def render_png(ir: GraphicIR, *, asset_root: str | Path | None = None) -> bytes:
             "--hide-scrollbars",
             "--force-device-scale-factor=1",
             f"--window-size={canvas.width},{canvas.height}",
-            f"--user-data-dir={_browser_profile()}",
+            f"--user-data-dir={profile}",
             f"--screenshot={png_path}",
             svg_path.as_uri(),
         ]

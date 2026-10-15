@@ -403,7 +403,8 @@ adds font folders and `GRAPHICS_PRODUCTION_FALLBACK_FONT` names the family
 used when a stack has no installed font. Custom TTF/OTF files are embedded in
 SVG outputs under a content-derived family name. Configure
 `GRAPHICS_PRODUCTION_BROWSER` to select a browser executable, or
-`GRAPHICS_PRODUCTION_BROWSER_PROFILE` to relocate its isolated local profile.
+`GRAPHICS_PRODUCTION_BROWSER_PROFILE` to relocate the folder where each render
+gets its own fresh, isolated browser profile.
 
 Run a batch and the 30-output synthetic benchmark:
 

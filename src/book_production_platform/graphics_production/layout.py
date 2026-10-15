@@ -102,8 +102,8 @@ def _thai_tokenizer() -> Callable[[str], list[str]] | None:
     """PyThaiNLP ``newmm`` (dictionary-based, no model download) when installed; optional."""
 
     try:
-        from pythainlp.tokenize import (
-            word_tokenize,  # type: ignore[import-not-found,import-untyped,unused-ignore]
+        from pythainlp.tokenize import (  # type: ignore[import-not-found,import-untyped,unused-ignore]
+            word_tokenize,
         )
     except ImportError:
         return None
