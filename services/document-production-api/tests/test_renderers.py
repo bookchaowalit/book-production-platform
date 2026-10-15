@@ -1,8 +1,11 @@
+from pathlib import Path
+from typing import ClassVar
 
 import pytest
+from document_production import renderers
 from document_production.qa import qa_document
 from document_production.recipe import RequestValidationError, build_document_ir
-from document_production.renderers import RenderError, _pdf_value, render_document
+from document_production.renderers import RenderError, _missing_codepoints, _pdf_value, render_document
 from test_recipe import sample_request
 
 
@@ -115,3 +118,106 @@ def test_thai_text_with_vowels_and_tones_renders_or_fails_loudly(tmp_path):
     result = qa_document(ir, artifacts, tmp_path)
     assert result.status == "passed", result.issues
     assert all(issue["code"] != "document_text_missing" for issue in result.issues)
+
+
+THAI_ONLY = {*range(0x0E01, 0x0E3B), *range(0x0E3F, 0x0E5C)}
+LATIN_AND_THAI = {*range(0x20, 0x7F), *THAI_ONLY}
+THAI_CONSONANTS_ONLY = {*range(0x20, 0x7F), *range(0x0E01, 0x0E2F)}
+
+
+def _cmap(codepoints, glyph=1):
+    return dict.fromkeys(codepoints, glyph)
+
+
+class _FakeTTFont:
+    """Stands in for reportlab's TTFont, keyed by path to a cmap."""
+
+    cmaps: ClassVar[dict[str, set[int]]] = {}
+
+    def __init__(self, name, path):
+        self.fontName = name
+        self.face = type("Face", (), {"charToGlyph": {codepoint: 1 for codepoint in self.cmaps[path]}})()
+
+
+@pytest.fixture
+def font_selection(monkeypatch, tmp_path):
+    """Run _font_name against fake font files without touching reportlab's global registry."""
+
+    registered = []
+    monkeypatch.setattr(renderers.pdfmetrics, "getRegisteredFontNames", list)
+    monkeypatch.setattr(renderers.pdfmetrics, "registerFont", registered.append)
+    monkeypatch.setattr(renderers, "TTFont", _FakeTTFont)
+    monkeypatch.delenv("DOCUMENT_PRODUCTION_FONT", raising=False)
+
+    def install(cmaps):
+        paths = []
+        _FakeTTFont.cmaps = {}
+        for name, cmap in cmaps.items():
+            path = tmp_path / name
+            path.write_bytes(b"")
+            _FakeTTFont.cmaps[str(path)] = cmap
+            paths.append(str(path))
+        monkeypatch.setattr(renderers, "PDF_FONT_CANDIDATES", tuple(paths))
+        return paths
+
+    return install, registered
+
+
+def test_thai_only_font_is_missing_latin_and_digits():
+    missing = {chr(codepoint) for codepoint in _missing_codepoints(_cmap(THAI_ONLY))}
+    assert set("0123456789AZaz/.") <= missing
+    assert _missing_codepoints(_cmap(LATIN_AND_THAI)) == []
+
+
+def test_font_without_thai_vowels_and_tone_marks_is_incomplete():
+    missing = {chr(codepoint) for codepoint in _missing_codepoints(_cmap(THAI_CONSONANTS_ONLY))}
+    assert set("\u0e34\u0e48\u0e3f\u0e51") <= missing  # sara i, mai ek, Baht sign, Thai digit one
+
+
+def test_codepoints_mapped_to_notdef_count_as_missing():
+    cmap = {**_cmap(LATIN_AND_THAI), ord("2"): 0}
+    assert _missing_codepoints(cmap) == [ord("2")]
+
+
+def test_fallback_skips_a_thai_only_font_for_a_latin_capable_one(font_selection):
+    install, registered = font_selection
+    install({"NotoSansThai-Regular.ttf": THAI_ONLY, "Garuda.ttf": LATIN_AND_THAI})
+    assert renderers._font_name() == renderers.PDF_FONT_NAME
+    assert [set(font.face.charToGlyph) for font in registered] == [LATIN_AND_THAI]
+
+
+def test_fallback_uses_helvetica_when_only_thai_only_fonts_exist(font_selection):
+    install, registered = font_selection
+    install({"NotoSansThai-Regular.ttf": THAI_ONLY})
+    assert renderers._font_name() == "Helvetica"
+    assert registered == []
+
+
+def test_configured_font_without_latin_glyphs_fails_loudly(font_selection, monkeypatch):
+    install, registered = font_selection
+    [thai_only] = install({"NotoSansThai-Regular.ttf": THAI_ONLY})
+    monkeypatch.setenv("DOCUMENT_PRODUCTION_FONT", thai_only)
+    with pytest.raises(RenderError, match="lacks .* required glyphs"):
+        renderers._font_name()
+    assert registered == []
+
+
+def test_configured_font_that_does_not_exist_fails_loudly(font_selection, monkeypatch, tmp_path):
+    monkeypatch.setenv("DOCUMENT_PRODUCTION_FONT", str(tmp_path / "missing.ttf"))
+    with pytest.raises(RenderError, match="does not exist"):
+        renderers._font_name()
+
+
+@pytest.mark.parametrize(
+    ("path", "covers"),
+    [
+        ("/usr/share/fonts/truetype/tlwg/Garuda.ttf", True),
+        ("/usr/share/fonts/truetype/noto/NotoSansThai-Regular.ttf", False),
+    ],
+)
+def test_real_thai_fonts_glyph_coverage(path, covers):
+    if not Path(path).exists():
+        pytest.skip(f"{path} is not installed")
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    assert (_missing_codepoints(TTFont("CoverageProbe", path).face.charToGlyph) == []) is covers
