@@ -22,7 +22,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfbase.ttfonts import TTFError, TTFont
 from reportlab.platypus import (
     Image,
     Paragraph,
@@ -155,18 +155,53 @@ def _render_docx(ir: DocumentIR, output_dir: Path) -> ArtifactRef:
     return _artifact(final, "document.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 
 
+# Built-in Thai fonts, tried in order when DOCUMENT_PRODUCTION_FONT is unset.
+# Each must also cover Latin letters and digits: PDF text QA reads dates and
+# totals back, so a Thai-only face (e.g. NotoSansThai) is never a fallback.
+PDF_FONT_CANDIDATES = (
+    "C:/Windows/Fonts/LeelawUI.ttf",
+    "/usr/share/fonts/truetype/tlwg/Garuda.ttf",
+    "/usr/share/fonts/truetype/sarabun/Sarabun-Regular.ttf",
+    "/usr/share/fonts/truetype/google-fonts/Sarabun-Regular.ttf",
+    "/usr/share/fonts/truetype/tlwg/Loma.ttf",
+)
+# Printable ASCII (Latin letters, digits, punctuation) plus the Thai consonants.
+PDF_REQUIRED_CODEPOINTS = frozenset([*range(0x21, 0x7F), *range(0x0E01, 0x0E2F)])
+
+
+def _missing_codepoints(covered: Any) -> list[int]:
+    return sorted(codepoint for codepoint in PDF_REQUIRED_CODEPOINTS if codepoint not in covered)
+
+
+def _load_font(path: str) -> TTFont:
+    font = TTFont(PDF_FONT_NAME, path)
+    missing = _missing_codepoints(font.face.charToGlyph)
+    if missing:
+        sample = "".join(chr(codepoint) for codepoint in missing[:10])
+        raise RenderError(f"PDF font {path} lacks {len(missing)} required glyphs (e.g. {sample!r}); it must cover Latin, digits and Thai")
+    return font
+
+
 def _font_name() -> str:
     if PDF_FONT_NAME in pdfmetrics.getRegisteredFontNames():
         return PDF_FONT_NAME
-    candidates = [
-        os.environ.get("DOCUMENT_PRODUCTION_FONT"),
-        "C:/Windows/Fonts/LeelawUI.ttf",
-        "/usr/share/fonts/truetype/noto/NotoSansThai-Regular.ttf",
-    ]
-    for candidate in candidates:
-        if candidate and Path(candidate).exists():
-            pdfmetrics.registerFont(TTFont(PDF_FONT_NAME, candidate))
-            return PDF_FONT_NAME
+    configured = os.environ.get("DOCUMENT_PRODUCTION_FONT")
+    if configured:
+        # An explicit font that is missing or incomplete is a deployment error,
+        # not something to paper over with a built-in fallback.
+        if not Path(configured).exists():
+            raise RenderError(f"DOCUMENT_PRODUCTION_FONT {configured} does not exist")
+        pdfmetrics.registerFont(_load_font(configured))
+        return PDF_FONT_NAME
+    for candidate in PDF_FONT_CANDIDATES:
+        if not Path(candidate).exists():
+            continue
+        try:
+            font = _load_font(candidate)
+        except (RenderError, TTFError, OSError):
+            continue  # unreadable or incomplete; try the next built-in font
+        pdfmetrics.registerFont(font)
+        return PDF_FONT_NAME
     return "Helvetica"
 
 

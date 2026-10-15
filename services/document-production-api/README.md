@@ -21,6 +21,17 @@ The command prints artifact metadata, QA status, and `model_calls: 0`. The HTTP
 surface exposes `GET /health` and `POST /v1/documents/jobs`; set
 `DOCUMENT_PRODUCTION_OUTPUT_ROOT` to choose the local output root.
 
+PDFs embed one TrueType font for Thai and Latin text. Set
+`DOCUMENT_PRODUCTION_FONT` to a `.ttf` path; otherwise the renderer tries
+Leelawadee UI (`C:/Windows/Fonts/LeelawUI.ttf`), TLWG Garuda
+(`/usr/share/fonts/truetype/tlwg/Garuda.ttf`, Debian/Ubuntu package
+`fonts-tlwg-garuda-ttf`), Sarabun, then TLWG Loma, and falls back to Helvetica,
+which rejects Thai text. Every font must cover printable ASCII (Latin letters,
+digits, punctuation) as well as Thai, because PDF text QA reads dates and
+totals back: a Thai-only face such as `NotoSansThai-Regular.ttf` is skipped as
+a built-in fallback, and a configured font that is missing or lacks those
+glyphs fails the render instead of producing an unreadable PDF.
+
 The local smoke path requires no provider configuration. A fresh benchmark must
 use an empty output directory; a replay benchmark reuses its SQLite ledger and
 counts only idempotency hits:
