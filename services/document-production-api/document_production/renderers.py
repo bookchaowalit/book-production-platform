@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import os
 import tempfile
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 from xml.sax.saxutils import escape
@@ -165,12 +166,14 @@ PDF_FONT_CANDIDATES = (
     "/usr/share/fonts/truetype/google-fonts/Sarabun-Regular.ttf",
     "/usr/share/fonts/truetype/tlwg/Loma.ttf",
 )
-# Printable ASCII (Latin letters, digits, punctuation) plus the Thai consonants.
-PDF_REQUIRED_CODEPOINTS = frozenset([*range(0x21, 0x7F), *range(0x0E01, 0x0E2F)])
+# Printable ASCII (Latin letters, digits, punctuation) plus every assigned Thai
+# codepoint: consonants, vowels, tone marks, Baht sign and Thai digits.
+PDF_REQUIRED_CODEPOINTS = frozenset([*range(0x21, 0x7F), *range(0x0E01, 0x0E3B), *range(0x0E3F, 0x0E5C)])
 
 
-def _missing_codepoints(covered: Any) -> list[int]:
-    return sorted(codepoint for codepoint in PDF_REQUIRED_CODEPOINTS if codepoint not in covered)
+def _missing_codepoints(char_to_glyph: Mapping[int, int]) -> list[int]:
+    # Glyph 0 is .notdef: the cmap lists the codepoint but draws a blank box.
+    return sorted(codepoint for codepoint in PDF_REQUIRED_CODEPOINTS if not char_to_glyph.get(codepoint))
 
 
 def _load_font(path: str) -> TTFont:

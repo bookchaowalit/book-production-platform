@@ -27,7 +27,8 @@ Leelawadee UI (`C:/Windows/Fonts/LeelawUI.ttf`), TLWG Garuda
 (`/usr/share/fonts/truetype/tlwg/Garuda.ttf`, Debian/Ubuntu package
 `fonts-tlwg-garuda-ttf`), Sarabun, then TLWG Loma, and falls back to Helvetica,
 which rejects Thai text. Every font must cover printable ASCII (Latin letters,
-digits, punctuation) as well as Thai, because PDF text QA reads dates and
+digits, punctuation) and every Thai consonant, vowel, tone mark and digit with a
+real glyph (not `.notdef`), because PDF text QA reads dates and
 totals back: a Thai-only face such as `NotoSansThai-Regular.ttf` is skipped as
 a built-in fallback, and a configured font that is missing or lacks those
 glyphs fails the render instead of producing an unreadable PDF.
