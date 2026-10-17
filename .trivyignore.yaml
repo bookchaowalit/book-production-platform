@@ -1,0 +1,12 @@
+# Reviewed Trivy exceptions (DevSecOps Phase 1). Each entry needs a statement.
+misconfigurations:
+  - id: DS-0002
+    paths:
+      - services/video-postproduction-api/Dockerfile
+      - services/video-postproduction/Dockerfile.web
+    statement: >-
+      Known debt, not a false positive: both images run as root. They are built only by the
+      local docker-compose stack in services/video-postproduction (not deployed), whose
+      volumes (/app/storage, /root/.cache/huggingface) assume root. Moving to a non-root USER
+      needs matching volume ownership and cache paths in docker-compose.yml and a compose
+      run to verify; tracked as a follow-up rather than changed blind in the CI rollout.

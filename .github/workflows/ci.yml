@@ -1,8 +1,21 @@
+# CI + security baseline (DevSecOps Phase 1). Public repository: GitHub-hosted runners.
+#
+# Monorepo: the platform package at the root, Python packages under packages/, Python
+# services under services/, Node apps under apps/. One job per app.
+#   - Ruff lint runs once, in `platform`, over the whole repository (`ruff check .` honours
+#     each service's own [tool.ruff] config); the other Python jobs set lint-command "".
+#   - `ruff format --check` is off everywhere: formatting would rewrite ~530 files and move
+#     every existing Semgrep finding. Left for a dedicated change.
+#   - Sibling packages that a service imports (production-trace, brief-adapter-kit,
+#     file-intake, document-production-ir) are installed next to it, as their READMEs do via
+#     PYTHONPATH.
 name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -12,76 +25,198 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
-    # Runs the same gate as `python scripts/check.py`: the full pytest suite,
-    # Ruff on the owned modules and strict mypy. Blender, FreeCAD and Unity are
-    # not installed, so their real-runtime tests skip with an explicit reason.
-    # FFmpeg and the runner's preinstalled Google Chrome are used so the audio,
+  platform:
+    # Same gate as the previous CI's `check` job and `python scripts/check.py`: the full
+    # pytest suite, Ruff on the owned modules and strict mypy on the typed modules. Blender,
+    # FreeCAD and Unity are not installed, so their real-runtime tests skip with an explicit
+    # reason. FFmpeg and the runner's preinstalled Google Chrome are used so the audio,
     # game-asset and graphics rendering tests run for real.
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
+    uses: bookchaowalit/platform-ci-workflows/.github/workflows/ci-python.yml@c37ef9d113eefb3ed45429717cb7ca201192c3fc # v1.0.1
+    with:
+      python-version: "3.12" # requires-python >= 3.12
+      timeout-minutes: 30
+      install-command: >-
+        sudo apt-get update
+        && sudo apt-get install -y --no-install-recommends ffmpeg
+        && uv pip install -e ".[test]"
+      format-check: false
+      # scripts/check.py runs strict mypy on its MYPY_TARGETS; the auto `mypy .` would also
+      # check every service and the Blender-worker modules, which are not typed to that bar.
+      typecheck-command: ""
+      test-command: book-production doctor && python scripts/check.py
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: pyproject.toml
+  document-production:
+    # Kept from the previous CI: the Documents service and its IR package, with a real Thai
+    # TTF so the PDF renderer and the published-schema contract tests run for real. The font
+    # must cover Latin and digits too (PDF text QA reads totals and dates back): TLWG Garuda
+    # does, while NotoSansThai is Thai-only and fails that QA.
+    uses: bookchaowalit/platform-ci-workflows/.github/workflows/ci-python.yml@c37ef9d113eefb3ed45429717cb7ca201192c3fc # v1.0.1
+    with:
+      python-version: "3.12"
+      install-command: >-
+        sudo apt-get update
+        && sudo apt-get install -y --no-install-recommends fonts-tlwg-garuda-ttf
+        && test -f /usr/share/fonts/truetype/tlwg/Garuda.ttf
+        && uv pip install
+        -e "packages/document-production-ir[dev]"
+        -e "services/document-production-api[dev]"
+        -e packages/production-trace -e packages/brief-adapter-kit -e packages/file-intake
+      lint-command: ""
+      typecheck-command: ""
+      test-command: >-
+        export DOCUMENT_PRODUCTION_FONT=/usr/share/fonts/truetype/tlwg/Garuda.ttf
+        && (cd packages/document-production-ir && python -m pytest)
+        && (cd services/document-production-api && python -m pytest)
 
-      - name: Install FFmpeg
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ffmpeg
+  brief-adapter-kit:
+    uses: bookchaowalit/platform-ci-workflows/.github/workflows/ci-python.yml@c37ef9d113eefb3ed45429717cb7ca201192c3fc # v1.0.1
+    with:
+      working-directory: packages/brief-adapter-kit
+      python-version: "3.12"
+      lint-command: ""
 
-      - name: Install package
-        run: python -m pip install -e ".[test]"
+  data-production-ir:
+    uses: bookchaowalit/platform-ci-workflows/.github/workflows/ci-python.yml@c37ef9d113eefb3ed45429717cb7ca201192c3fc # v1.0.1
+    with:
+      working-directory: packages/data-production-ir
+      python-version: "3.12"
+      lint-command: ""
 
-      - name: Show local runtimes
-        run: book-production doctor
+  file-intake:
+    uses: bookchaowalit/platform-ci-workflows/.github/workflows/ci-python.yml@c37ef9d113eefb3ed45429717cb7ca201192c3fc # v1.0.1
+    with:
+      working-directory: packages/file-intake
+      python-version: "3.12"
+      lint-command: ""
 
-      - name: Run checks
-        run: python scripts/check.py
+  marketing-production-ir:
+    uses: bookchaowalit/platform-ci-workflows/.github/workflows/ci-python.yml@c37ef9d113eefb3ed45429717cb7ca201192c3fc # v1.0.1
+    with:
+      working-directory: packages/marketing-production-ir
+      python-version: "3.12"
+      lint-command: ""
 
-  document-production-api:
-    # The Documents service and its IR package are separate installables that
-    # the root `scripts/check.py` gate does not collect. Run both suites here
-    # with a real Thai TTF so the PDF renderer and the published-schema
-    # contract tests run for real. The font must cover Latin and digits too
-    # (PDF text QA reads totals and dates back): TLWG Garuda does, while
-    # NotoSansThai is Thai-only and fails that QA.
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    env:
-      DOCUMENT_PRODUCTION_FONT: /usr/share/fonts/truetype/tlwg/Garuda.ttf
-    steps:
-      - uses: actions/checkout@v4
+  production-trace:
+    uses: bookchaowalit/platform-ci-workflows/.github/workflows/ci-python.yml@c37ef9d113eefb3ed45429717cb7ca201192c3fc # v1.0.1
+    with:
+      working-directory: packages/production-trace
+      python-version: "3.12"
+      install-command: uv pip install -e ".[dev]" -e ../brief-adapter-kit
+      lint-command: ""
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: |
-            packages/document-production-ir/pyproject.toml
-            services/document-production-api/pyproject.toml
+  web-production-ir:
+    uses: bookchaowalit/platform-ci-workflows/.github/workflows/ci-python.yml@c37ef9d113eefb3ed45429717cb7ca201192c3fc # v1.0.1
+    with:
+      working-directory: packages/web-production-ir
+      python-version: "3.12"
+      lint-command: ""
 
-      - name: Install Thai font
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends fonts-tlwg-garuda-ttf
-          test -f "$DOCUMENT_PRODUCTION_FONT"
+  workflow-production-ir:
+    uses: bookchaowalit/platform-ci-workflows/.github/workflows/ci-python.yml@c37ef9d113eefb3ed45429717cb7ca201192c3fc # v1.0.1
+    with:
+      working-directory: packages/workflow-production-ir
+      python-version: "3.12"
+      lint-command: ""
 
-      - name: Install packages
-        run: |
-          python -m pip install \
-            -e "packages/document-production-ir[dev]" \
-            -e "services/document-production-api[dev]"
-          python -m pip show pydantic
+  data-production-api:
+    uses: bookchaowalit/platform-ci-workflows/.github/workflows/ci-python.yml@c37ef9d113eefb3ed45429717cb7ca201192c3fc # v1.0.1
+    with:
+      working-directory: services/data-production-api
+      python-version: "3.12"
+      install-command: >-
+        uv pip install -e ".[dev]"
+        -e ../../packages/production-trace -e ../../packages/brief-adapter-kit -e ../../packages/file-intake
+      lint-command: ""
 
-      - name: Test document IR
-        working-directory: packages/document-production-ir
-        run: python -m pytest
+  marketing-production-api:
+    uses: bookchaowalit/platform-ci-workflows/.github/workflows/ci-python.yml@c37ef9d113eefb3ed45429717cb7ca201192c3fc # v1.0.1
+    with:
+      working-directory: services/marketing-production-api
+      python-version: "3.12"
+      install-command: >-
+        uv pip install -e ".[dev]"
+        -e ../../packages/production-trace -e ../../packages/brief-adapter-kit -e ../../packages/file-intake
+      lint-command: ""
 
-      - name: Test document production API
-        working-directory: services/document-production-api
-        run: python -m pytest
+  production-hub:
+    uses: bookchaowalit/platform-ci-workflows/.github/workflows/ci-python.yml@c37ef9d113eefb3ed45429717cb7ca201192c3fc # v1.0.1
+    with:
+      working-directory: services/production-hub
+      python-version: "3.12"
+      lint-command: "" # typecheck: auto (strict mypy from its [tool.mypy])
+
+  production-pipelines:
+    uses: bookchaowalit/platform-ci-workflows/.github/workflows/ci-python.yml@c37ef9d113eefb3ed45429717cb7ca201192c3fc # v1.0.1
+    with:
+      working-directory: services/production-pipelines
+      python-version: "3.12"
+      install-command: >-
+        uv pip install -e ".[dev]"
+        -e ../../packages/production-trace -e ../../packages/brief-adapter-kit -e ../../packages/file-intake
+      lint-command: ""
+      # The package's documented strict mypy target (README); `mypy .` would include tests.
+      typecheck-command: MYPYPATH=../../packages/document-production-ir mypy production_pipelines
+      # Exception: tests/test_runner_fake_stages.py resolves stage roots from the old
+      # monorepo layout (.../book-production-platform/src) and fails outside that checkout.
+      # Every other test runs.
+      test-command: python -m pytest -q --ignore=tests/test_runner_fake_stages.py
+
+  video-postproduction:
+    uses: bookchaowalit/platform-ci-workflows/.github/workflows/ci-python.yml@c37ef9d113eefb3ed45429717cb7ca201192c3fc # v1.0.1
+    with:
+      working-directory: services/video-postproduction
+      python-version: "3.12"
+      # tests/test_compose.py reads the compose file with PyYAML, which the dev extra lacks.
+      install-command: uv pip install -e ".[dev]" pyyaml -e ../../packages/production-trace
+      lint-command: ""
+      # Typecheck debt: strict `mypy .` reports 66 errors (5 in the package itself).
+      typecheck-command: ""
+
+  video-postproduction-api:
+    uses: bookchaowalit/platform-ci-workflows/.github/workflows/ci-python.yml@c37ef9d113eefb3ed45429717cb7ca201192c3fc # v1.0.1
+    with:
+      working-directory: services/video-postproduction-api
+      python-version: "3.12" # matches its Dockerfile (python:3.12-slim)
+      install-command: uv pip install -e ".[dev]" -e ../../packages/production-trace
+      lint-command: ""
+      # Typecheck debt: `mypy .` reports 220 errors (20 in the package itself; the README
+      # records a known baseline).
+      typecheck-command: ""
+
+  web-production-api:
+    uses: bookchaowalit/platform-ci-workflows/.github/workflows/ci-python.yml@c37ef9d113eefb3ed45429717cb7ca201192c3fc # v1.0.1
+    with:
+      working-directory: services/web-production-api
+      python-version: "3.12"
+      install-command: uv pip install -e ".[dev]" -e ../../packages/production-trace -e ../../packages/brief-adapter-kit
+      lint-command: ""
+
+  workflow-production-api:
+    uses: bookchaowalit/platform-ci-workflows/.github/workflows/ci-python.yml@c37ef9d113eefb3ed45429717cb7ca201192c3fc # v1.0.1
+    with:
+      working-directory: services/workflow-production-api
+      python-version: "3.12"
+      install-command: uv pip install -e ".[dev]" -e ../../packages/production-trace -e ../../packages/brief-adapter-kit
+      lint-command: ""
+
+  production-console-web:
+    uses: bookchaowalit/platform-ci-workflows/.github/workflows/ci-node.yml@c37ef9d113eefb3ed45429717cb7ca201192c3fc # v1.0.1
+    with:
+      working-directory: apps/production-console-web
+      build-command: npm run build
+
+  video-postproduction-web:
+    uses: bookchaowalit/platform-ci-workflows/.github/workflows/ci-node.yml@c37ef9d113eefb3ed45429717cb7ca201192c3fc # v1.0.1
+    with:
+      working-directory: apps/video-postproduction-web
+      test-command: npx vitest run
+      build-command: npm run build
+
+  video-postproduction-desktop:
+    # Typecheck and `node --test` only; packaging (`electron-forge make`) targets Windows Squirrel.
+    uses: bookchaowalit/platform-ci-workflows/.github/workflows/ci-node.yml@c37ef9d113eefb3ed45429717cb7ca201192c3fc # v1.0.1
+    with:
+      working-directory: apps/video-postproduction-desktop
+
+  security:
+    uses: bookchaowalit/platform-ci-workflows/.github/workflows/security.yml@c37ef9d113eefb3ed45429717cb7ca201192c3fc # v1.0.1
