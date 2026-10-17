@@ -6,15 +6,14 @@ import json
 from pathlib import Path
 
 import pytest
-from docx import Document
-from PIL import Image
-from pypdf import PdfReader
-from test_report import GOLDEN_REQUEST
-
 from document_production.cli import main
 from document_production.jobs import run_report_job
 from document_production.recipe import RequestValidationError
 from document_production.report import build_report_ir
+from docx import Document
+from PIL import Image
+from pypdf import PdfReader
+from test_report import GOLDEN_REQUEST
 
 
 def _png(path: Path, color: tuple[int, int, int] = (37, 99, 235)) -> dict:

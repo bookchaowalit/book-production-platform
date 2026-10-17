@@ -9,7 +9,6 @@ from typing import Any
 
 from PIL import Image
 
-
 JSON_CHUNK = 0x4E4F534A
 BIN_CHUNK = 0x004E4942
 TRIANGLE_BINARY = struct.pack(

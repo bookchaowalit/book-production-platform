@@ -1,11 +1,15 @@
-from pathlib import Path
 import struct
+from pathlib import Path
 
 import pytest
 
-from book_production_platform.scene3d.errors import SceneInputError
 from book_production_platform.scene3d import glb
-from tests.helpers.glb_factory import build_glb, triangle_document, with_texture, write_glb
+from book_production_platform.scene3d.errors import SceneInputError
+from tests.helpers.glb_factory import (
+    triangle_document,
+    with_texture,
+    write_glb,
+)
 
 
 def test_inspect_glb_reports_one_embedded_triangle_mesh(tmp_path: Path) -> None:

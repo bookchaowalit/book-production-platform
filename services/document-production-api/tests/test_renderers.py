@@ -5,7 +5,12 @@ import pytest
 from document_production import renderers
 from document_production.qa import qa_document
 from document_production.recipe import RequestValidationError, build_document_ir
-from document_production.renderers import RenderError, _missing_codepoints, _pdf_value, render_document
+from document_production.renderers import (
+    RenderError,
+    _missing_codepoints,
+    _pdf_value,
+    render_document,
+)
 from test_recipe import sample_request
 
 

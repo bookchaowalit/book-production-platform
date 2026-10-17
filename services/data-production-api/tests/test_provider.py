@@ -17,7 +17,6 @@ from brief_adapter_kit.ledger import BudgetLedger
 from brief_adapter_kit.shadow import composition
 from brief_adapter_kit.testing import ScriptedTransport
 from brief_adapter_kit.transport import GatewayError
-
 from data_production import provider as provider_module
 from data_production.cli import main
 from data_production.provider import (

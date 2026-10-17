@@ -15,7 +15,6 @@ import pytest
 from brief_adapter_kit.shadow import CATEGORIES, composition, load_cases
 from brief_adapter_kit.testing import ScriptedTransport
 from brief_adapter_kit.transport import GatewayError
-
 from workflow_production import provider as provider_module
 from workflow_production.cli import main
 from workflow_production.provider import (

@@ -16,7 +16,6 @@ from typing import Any, ClassVar
 
 import pytest
 from brief_adapter_kit.ledger import BudgetExceeded, BudgetLedger, CostCaps
-
 from document_production import provider as provider_module
 from document_production.cli import main
 from document_production.extraction import BriefRequest

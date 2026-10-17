@@ -14,7 +14,6 @@ from book_production_platform.scene3d.errors import SceneInputError
 from tests.helpers.glb_factory import TRIANGLE_BINARY, triangle_document, write_glb
 from tests.test_scene_ir import valid_scene
 
-
 BLENDER_IDENTITY = ("Blender 5.2.2 LTS", "d13f752e3b9c")
 
 
@@ -26,7 +25,7 @@ def create_inputs(
 ) -> tuple[Path, Path, Path, Path]:
     input_root = root / "input"
     input_root.mkdir(parents=True, exist_ok=True)
-    asset = write_glb(input_root / "product.glb", document or triangle_document(), TRIANGLE_BINARY)
+    write_glb(input_root / "product.glb", document or triangle_document(), TRIANGLE_BINARY)
     scene_value = valid_scene()
     scene_value["render_profile"] = render_profile
     scene_path = input_root / "scene.json"

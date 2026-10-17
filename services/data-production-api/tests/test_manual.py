@@ -4,12 +4,11 @@ from decimal import Decimal
 from typing import Any
 
 from data_ir import ChartSpec, DatasetRequest
-from production_trace import render_manual_markdown
-
 from data_production.aggregation import build_chart_ir
 from data_production.manual import build_excel_guide
 from data_production.recipe import build_dataset_ir_with_stats
 from data_production.render import PIE_COLORS, pie_percentages, value_axis
+from production_trace import render_manual_markdown
 
 CSV = "region,amount,status\n BKK ,10.50,ok\nCNX,2,ok\nHKT,,void\nBKK,4,ok\nKKC,1,ok\nLPG,3,ok\n"
 COLUMNS = [

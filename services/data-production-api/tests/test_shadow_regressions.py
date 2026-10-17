@@ -14,7 +14,6 @@ from typing import Any
 
 import pytest
 from brief_adapter_kit.testing import ScriptedTransport
-
 from data_production.provider import (
     ProviderChartAdapter,
     _dataset_request,

@@ -12,7 +12,6 @@ import pytest
 from production_trace import read_history
 from production_trace.cli import main as trace_main
 from workflow_ir import compile_workflow, route_workflow, validate_request
-
 from workflow_production import jobs as jobs_module
 from workflow_production.bpmn import build_bpmn_model, render_bpmn
 from workflow_production.cli import main as cli_main

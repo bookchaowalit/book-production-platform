@@ -152,7 +152,7 @@ def _is_loopback(host: str) -> bool:
         return False
 
 
-def parse_provider_config(raw: Any, model: type[ConfigT] = ProviderConfig) -> ConfigT:  # type: ignore[assignment]
+def parse_provider_config(raw: Any, model: type[ConfigT] = ProviderConfig) -> ConfigT:  # type: ignore[assignment]  # noqa: UP047 - TypeVar keeps the package importable on Python 3.11
     """Validate a mapping into ``model`` or raise :class:`ProviderConfigError` (field names only)."""
 
     if isinstance(raw, model):
@@ -164,7 +164,7 @@ def parse_provider_config(raw: Any, model: type[ConfigT] = ProviderConfig) -> Co
         raise ProviderConfigError(f"invalid provider configuration fields: {', '.join(fields)}") from None
 
 
-def load_provider_config(path: str | Path, model: type[ConfigT] = ProviderConfig) -> ConfigT:  # type: ignore[assignment]
+def load_provider_config(path: str | Path, model: type[ConfigT] = ProviderConfig) -> ConfigT:  # type: ignore[assignment]  # noqa: UP047 - TypeVar keeps the package importable on Python 3.11
     """Load a provider configuration file; secrets never live in this file."""
 
     try:

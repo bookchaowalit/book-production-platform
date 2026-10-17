@@ -5,9 +5,9 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+from video_postproduction import models  # noqa: F401
 from video_postproduction.config import get_settings
 from video_postproduction.db import Base
-from video_postproduction import models  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:

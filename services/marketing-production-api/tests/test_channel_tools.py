@@ -5,7 +5,6 @@ from typing import Any
 
 import pytest
 from marketing_ir import compile_campaign, validate_request
-
 from marketing_production.channel_tools import (
     build_tracked_url,
     experiments,
