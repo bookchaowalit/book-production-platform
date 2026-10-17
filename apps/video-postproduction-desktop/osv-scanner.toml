@@ -1,0 +1,103 @@
+# Reviewed OSV exceptions (DevSecOps Phase 1). Each entry needs a reason and an expiry.
+#
+# All of these are devDependencies of the Electron Forge 7 packaging toolchain
+# (@electron-forge/cli 7.11.2). They run only on the developer machine when packaging
+# (`npm run make`) and are not shipped in the app. None has a fix that Forge 7 accepts:
+# @electron-forge/cli 8 resolves every one of them, but it is a major upgrade of the
+# Windows Squirrel packaging path that has to be verified with a real `npm run make`
+# on Windows, so it is a follow-up rather than part of the CI rollout.
+
+[[IgnoredVulns]]
+id = "GHSA-vfj7-8cjw-p6xm"
+ignoreUntil = 2027-01-17
+reason = "Dev-only Electron Forge 7 packaging dependency: braces (fast-glob/micromatch in @electron-forge/core): no fixed 3.x release. Fixed by the Forge 8 upgrade (follow-up)."
+
+[[IgnoredVulns]]
+id = "GHSA-7pqw-9j4j-h8q3"
+ignoreUntil = 2027-01-17
+reason = "Dev-only Electron Forge 7 packaging dependency: extract-zip (@electron/packager): no fixed release; extracts the checksum-verified Electron zip at package time. Fixed by the Forge 8 upgrade (follow-up)."
+
+[[IgnoredVulns]]
+id = "GHSA-jmr9-qjv8-65gv"
+ignoreUntil = 2027-01-17
+reason = "Dev-only Electron Forge 7 packaging dependency: extract-zip (@electron/packager): no fixed release; extracts the checksum-verified Electron zip at package time. Fixed by the Forge 8 upgrade (follow-up)."
+
+[[IgnoredVulns]]
+id = "GHSA-ch52-4w7c-c8xp"
+ignoreUntil = 2027-01-17
+reason = "Dev-only Electron Forge 7 packaging dependency: http-cache-semantics (got / make-fetch-happen in forge): no fixed release in the 4.x line forge 7 uses. Fixed by the Forge 8 upgrade (follow-up)."
+
+[[IgnoredVulns]]
+id = "GHSA-hp3w-g68c-fv3c"
+ignoreUntil = 2027-01-17
+reason = "Dev-only Electron Forge 7 packaging dependency: sprintf-js (@electron/get > global-agent > roarr): no fixed release. Fixed by the Forge 8 upgrade (follow-up)."
+
+[[IgnoredVulns]]
+id = "GHSA-52f5-9888-hmc6"
+ignoreUntil = 2027-01-17
+reason = "Dev-only Electron Forge 7 packaging dependency: tmp 0.0.33 (@inquirer/editor > external-editor): fix only in tmp 0.2.x, which external-editor 3 does not accept. Fixed by the Forge 8 upgrade (follow-up)."
+
+[[IgnoredVulns]]
+id = "GHSA-ph9p-34f9-6g65"
+ignoreUntil = 2027-01-17
+reason = "Dev-only Electron Forge 7 packaging dependency: tmp 0.0.33 (@inquirer/editor > external-editor): fix only in tmp 0.2.x, which external-editor 3 does not accept. Fixed by the Forge 8 upgrade (follow-up)."
+
+[[IgnoredVulns]]
+id = "GHSA-23hp-3jrh-7fpw"
+ignoreUntil = 2027-01-17
+reason = "Dev-only Electron Forge 7 packaging dependency: tar 6.2.1 (@electron/rebuild, node-gyp, cacache in forge 7): fixes are only in tar 7, which these packages do not accept. Fixed by the Forge 8 upgrade (follow-up)."
+
+[[IgnoredVulns]]
+id = "GHSA-34x7-hfp2-rc4v"
+ignoreUntil = 2027-01-17
+reason = "Dev-only Electron Forge 7 packaging dependency: tar 6.2.1 (@electron/rebuild, node-gyp, cacache in forge 7): fixes are only in tar 7, which these packages do not accept. Fixed by the Forge 8 upgrade (follow-up)."
+
+[[IgnoredVulns]]
+id = "GHSA-83g3-92jg-28cx"
+ignoreUntil = 2027-01-17
+reason = "Dev-only Electron Forge 7 packaging dependency: tar 6.2.1 (@electron/rebuild, node-gyp, cacache in forge 7): fixes are only in tar 7, which these packages do not accept. Fixed by the Forge 8 upgrade (follow-up)."
+
+[[IgnoredVulns]]
+id = "GHSA-8qq5-rm4j-mr97"
+ignoreUntil = 2027-01-17
+reason = "Dev-only Electron Forge 7 packaging dependency: tar 6.2.1 (@electron/rebuild, node-gyp, cacache in forge 7): fixes are only in tar 7, which these packages do not accept. Fixed by the Forge 8 upgrade (follow-up)."
+
+[[IgnoredVulns]]
+id = "GHSA-8x88-c5mf-7j5w"
+ignoreUntil = 2027-01-17
+reason = "Dev-only Electron Forge 7 packaging dependency: tar 6.2.1 (@electron/rebuild, node-gyp, cacache in forge 7): fixes are only in tar 7, which these packages do not accept. Fixed by the Forge 8 upgrade (follow-up)."
+
+[[IgnoredVulns]]
+id = "GHSA-9ppj-qmqm-q256"
+ignoreUntil = 2027-01-17
+reason = "Dev-only Electron Forge 7 packaging dependency: tar 6.2.1 (@electron/rebuild, node-gyp, cacache in forge 7): fixes are only in tar 7, which these packages do not accept. Fixed by the Forge 8 upgrade (follow-up)."
+
+[[IgnoredVulns]]
+id = "GHSA-gvwx-54wh-qm9j"
+ignoreUntil = 2027-01-17
+reason = "Dev-only Electron Forge 7 packaging dependency: tar 6.2.1 (@electron/rebuild, node-gyp, cacache in forge 7): fixes are only in tar 7, which these packages do not accept. Fixed by the Forge 8 upgrade (follow-up)."
+
+[[IgnoredVulns]]
+id = "GHSA-qffp-2rhf-9h96"
+ignoreUntil = 2027-01-17
+reason = "Dev-only Electron Forge 7 packaging dependency: tar 6.2.1 (@electron/rebuild, node-gyp, cacache in forge 7): fixes are only in tar 7, which these packages do not accept. Fixed by the Forge 8 upgrade (follow-up)."
+
+[[IgnoredVulns]]
+id = "GHSA-r292-9mhp-454m"
+ignoreUntil = 2027-01-17
+reason = "Dev-only Electron Forge 7 packaging dependency: tar 6.2.1 (@electron/rebuild, node-gyp, cacache in forge 7): fixes are only in tar 7, which these packages do not accept. Fixed by the Forge 8 upgrade (follow-up)."
+
+[[IgnoredVulns]]
+id = "GHSA-r6q2-hw4h-h46w"
+ignoreUntil = 2027-01-17
+reason = "Dev-only Electron Forge 7 packaging dependency: tar 6.2.1 (@electron/rebuild, node-gyp, cacache in forge 7): fixes are only in tar 7, which these packages do not accept. Fixed by the Forge 8 upgrade (follow-up)."
+
+[[IgnoredVulns]]
+id = "GHSA-vmf3-w455-68vh"
+ignoreUntil = 2027-01-17
+reason = "Dev-only Electron Forge 7 packaging dependency: tar 6.2.1 (@electron/rebuild, node-gyp, cacache in forge 7): fixes are only in tar 7, which these packages do not accept. Fixed by the Forge 8 upgrade (follow-up)."
+
+[[IgnoredVulns]]
+id = "GHSA-w8wr-v893-vjvp"
+ignoreUntil = 2027-01-17
+reason = "Dev-only Electron Forge 7 packaging dependency: tar 6.2.1 (@electron/rebuild, node-gyp, cacache in forge 7): fixes are only in tar 7, which these packages do not accept. Fixed by the Forge 8 upgrade (follow-up)."

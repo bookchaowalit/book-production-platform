@@ -4,10 +4,9 @@ import json
 from pathlib import Path
 
 import pytest
-from docx import Document
-
 from document_production.cli import main
 from document_production.recipe import RequestValidationError, build_document_ir
+from docx import Document
 
 QUOTATION = {
     "schema_version": "document-request.v1",

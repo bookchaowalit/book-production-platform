@@ -9,10 +9,11 @@ import math
 import os
 import tempfile
 import time
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Any, Iterator
+from typing import Any
 
 from book_production_platform.scene3d.errors import SceneInputError
 from book_production_platform.scene3d.glb import GlbSummary

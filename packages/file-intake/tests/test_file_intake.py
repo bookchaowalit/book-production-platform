@@ -5,7 +5,6 @@ import zipfile
 from pathlib import Path
 
 import pytest
-
 from file_intake import TableReadError, detect, read_table, routes_for
 from file_intake.__main__ import main
 

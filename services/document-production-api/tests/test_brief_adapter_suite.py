@@ -22,8 +22,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from fake_adapter import ScriptedBriefAdapter
-
 from document_production.budget import BudgetLedger
 from document_production.extraction import (
     REQUIRED_FIELDS,
@@ -33,6 +31,7 @@ from document_production.extraction import (
 from document_production.jobs import run_document_brief_job, run_document_job
 from document_production.recipe import build_document_ir
 from document_production.routing import route_brief
+from fake_adapter import ScriptedBriefAdapter
 
 FIXTURES = Path(__file__).parent / "fixtures"
 CENT = Decimal("0.01")

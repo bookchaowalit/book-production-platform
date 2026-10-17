@@ -6,11 +6,10 @@ import json
 from pathlib import Path
 
 import docx
+from document_production.jobs import run_document_job
 from production_trace import read_history, verify_trace
 from pypdf import PdfReader
 from test_recipe import sample_request
-
-from document_production.jobs import run_document_job
 
 CANARY = "CANARY-trace-customer"
 

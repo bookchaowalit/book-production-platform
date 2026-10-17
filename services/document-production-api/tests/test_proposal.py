@@ -4,9 +4,6 @@ import json
 from pathlib import Path
 
 import pytest
-from docx import Document
-from pydantic import ValidationError
-
 from document_production.cli import main
 from document_production.jobs import run_proposal_job
 from document_production.proposal import (
@@ -14,6 +11,8 @@ from document_production.proposal import (
     load_proposal_request_schema,
     proposal_request_schema,
 )
+from docx import Document
+from pydantic import ValidationError
 
 PROPOSAL = {
     "schema_version": "proposal-request.v1",

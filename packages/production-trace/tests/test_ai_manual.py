@@ -12,7 +12,6 @@ if str(KIT) not in sys.path:
     sys.path.insert(0, str(KIT))
 
 from brief_adapter_kit.testing import ScriptedTransport
-
 from production_trace import (
     ManualGuide,
     TraceRecorder,

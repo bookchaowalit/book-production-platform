@@ -15,7 +15,6 @@ import pytest
 from brief_adapter_kit.shadow import CATEGORIES, composition, load_cases
 from brief_adapter_kit.testing import ScriptedTransport
 from brief_adapter_kit.transport import GatewayError
-
 from web_production import provider as provider_module
 from web_production.cli import main
 from web_production.provider import (

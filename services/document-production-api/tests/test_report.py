@@ -3,9 +3,6 @@
 import json
 
 import pytest
-from jsonschema import Draft202012Validator
-from pydantic import ValidationError
-
 from document_production.cli import main
 from document_production.jobs import run_report_job
 from document_production.qa import qa_document
@@ -15,6 +12,8 @@ from document_production.report import (
     REPORT_RECIPE_ID,
     build_report_ir,
 )
+from jsonschema import Draft202012Validator
+from pydantic import ValidationError
 
 GOLDEN_REQUEST: dict = {
     "schema_version": "report-document-request.v1",

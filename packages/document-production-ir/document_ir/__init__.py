@@ -23,8 +23,8 @@ from .validation import validate_request
 
 __all__ = [
     "ArtifactRef",
-    "DocumentImage",
     "DocumentIR",
+    "DocumentImage",
     "DocumentRequest",
     "DocumentRow",
     "DocumentSection",

@@ -7,14 +7,13 @@ from typing import Any
 
 import pytest
 from marketing_ir import CampaignIR
-from production_trace import read_history, sha256_json
-from production_trace.cli import main as trace_cli
-
 from marketing_production import jobs
 from marketing_production.cli import main as marketing_cli
 from marketing_production.jobs import run_campaign_job
 from marketing_production.manual import FRAME_SIZES, build_marketing_guide, export_name
 from marketing_production.proposal_trace import trace_proposal
+from production_trace import read_history, sha256_json
+from production_trace.cli import main as trace_cli
 
 CANARY = "CANARY-mkt-trace-41d2"
 

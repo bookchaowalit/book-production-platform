@@ -6,11 +6,6 @@ import json
 from pathlib import Path
 
 import pytest
-from docx import Document
-from PIL import Image
-from pydantic import ValidationError
-from pypdf import PdfReader
-
 from document_production.cli import main
 from document_production.jobs import run_spec_sheet_job
 from document_production.recipe import RequestValidationError
@@ -19,6 +14,10 @@ from document_production.spec_sheet import (
     load_spec_sheet_request_schema,
     spec_sheet_request_schema,
 )
+from docx import Document
+from PIL import Image
+from pydantic import ValidationError
+from pypdf import PdfReader
 
 REQUEST = {
     "schema_version": "spec-sheet-request.v1",

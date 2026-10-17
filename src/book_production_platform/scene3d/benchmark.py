@@ -15,7 +15,11 @@ from typing import Any
 
 from book_production_platform.scene3d.errors import SceneInputError
 from book_production_platform.scene3d.qa import verify_png
-from book_production_platform.scene3d.runtime import MAX_TIMEOUT_SECONDS, _run_worker, compose_scene
+from book_production_platform.scene3d.runtime import (
+    MAX_TIMEOUT_SECONDS,
+    _run_worker,
+    compose_scene,
+)
 from book_production_platform.scene3d.scene_builder import RENDER_PROFILES
 
 CASE_SCHEMA = "scene3d.acceptance-cases.v1"
@@ -118,9 +122,10 @@ def _load_cases(fixtures_dir: Path) -> list[dict[str, Any]]:
     if len(cases) != 20 or counts != CASE_COUNTS:
         _reject_fixture("acceptance suite must contain five accepts, five replays, eight rejects and two tamper cases")
     for case in cases:
-        if case["kind"] in {"replay", "tamper_replay"}:
-            if not isinstance(case["reference"], str) or case["reference"] not in accept_ids:
-                _reject_fixture("replay case references a missing accepted case")
+        if case["kind"] in {"replay", "tamper_replay"} and (
+            not isinstance(case["reference"], str) or case["reference"] not in accept_ids
+        ):
+            _reject_fixture("replay case references a missing accepted case")
     return cases
 
 

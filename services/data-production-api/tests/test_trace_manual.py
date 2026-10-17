@@ -8,13 +8,12 @@ from typing import Any
 import pytest
 from data_ir import DatasetRequest
 from data_ir.models import CHART_DISPLAY_DEFAULTS
-from production_trace import read_history, sha256_json
-from production_trace.cli import main as trace_cli
-
 from data_production import jobs
 from data_production.cli import main as data_cli
 from data_production.jobs import run_data_job
 from data_production.proposal_trace import split_proposal, trace_proposal
+from production_trace import read_history, sha256_json
+from production_trace.cli import main as trace_cli
 
 CANARY = "CANARY-dvz-trace-7c1f"
 

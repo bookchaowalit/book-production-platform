@@ -10,7 +10,6 @@ from PIL import Image
 from tests.helpers.glb_factory import with_texture, write_glb
 from tests.test_scene_ir import valid_scene
 
-
 BLENDER_CANDIDATE = (
     Path.home()
     / ".codex"
@@ -34,7 +33,7 @@ def blender_executable() -> Path:
 
 def test_blender_builds_editable_scene_and_renders_after_fresh_reopen(tmp_path: Path) -> None:
     blender = blender_executable()
-    version = subprocess.run([str(blender), "--version"], capture_output=True, text=True, timeout=15)
+    version = subprocess.run([str(blender), "--version"], check=False, capture_output=True, text=True, timeout=15)
     assert version.returncode == 0, version.stdout + version.stderr
     assert "Blender 5.2.2 LTS" in version.stdout
 
@@ -68,6 +67,7 @@ def test_blender_builds_editable_scene_and_renders_after_fresh_reopen(tmp_path: 
             "--blend",
             str(blend_file),
         ],
+        check=False,
         capture_output=True,
         text=True,
         timeout=300,
@@ -90,6 +90,7 @@ def test_blender_builds_editable_scene_and_renders_after_fresh_reopen(tmp_path: 
             "--png",
             str(render_file),
         ],
+        check=False,
         capture_output=True,
         text=True,
         timeout=300,

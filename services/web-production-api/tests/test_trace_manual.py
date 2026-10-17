@@ -11,7 +11,6 @@ import pytest
 from production_trace import read_history
 from production_trace.cli import main as trace_main
 from web_ir import compile_page
-
 from web_production import jobs as jobs_module
 from web_production.manual import alpha_rgba, build_webflow_guide, mix_hex
 from web_production.provider import SECTION_TYPES, ground_page_proposal

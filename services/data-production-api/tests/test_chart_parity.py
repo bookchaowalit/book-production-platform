@@ -8,7 +8,6 @@ from xml.etree import ElementTree
 
 import pytest
 from data_ir import ChartSpec
-
 from data_production.aggregation import ChartBuildError, build_chart_ir
 from data_production.chart_checks import ALLOWED_CHART_TYPES
 from data_production.qa import qa_outputs

@@ -22,7 +22,6 @@ from typing import Any
 
 import pytest
 from brief_adapter_kit.testing import ScriptedTransport
-
 from marketing_production import shadow as shadow_module
 from marketing_production.provider import (
     CopyProposalResult,

@@ -5,7 +5,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from web_production.cli import main
 from web_production.jobs import run_page_job
 from web_production.qa import run_page_qa
